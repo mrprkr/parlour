@@ -32,6 +32,12 @@ that is not an event is log output, which is where a failure to start shows up.
 Stopping sends SIGINT rather than SIGKILL, because the agent shuts ffmpeg down
 on it and an orphaned ffmpeg holds the microphone.
 
+## Tabs
+
+Status, Connectors, Settings and Logs. Connectors shells out to the agent's own
+`pnpm connectors`, and the dependency check to its `pnpm doctor`, so the app
+and the terminal cannot end up with different ideas about the same house.
+
 ## Deliberate choices
 
 - **No Tauri plugins.** Everything the app does happens in Rust, where it can

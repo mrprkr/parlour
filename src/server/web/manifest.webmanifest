@@ -1,0 +1,9 @@
+{
+  "name": "Home agent",
+  "short_name": "Agent",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#16181d",
+  "theme_color": "#16181d",
+  "description": "Push to talk to the house"
+}

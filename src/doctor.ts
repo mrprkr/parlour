@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { loadConfig } from "./config.ts";
+import { ConnectorStore } from "./connectors/store.ts";
 
 /**
  * Checks every moving part the agent depends on and says which one is broken.
@@ -76,6 +77,37 @@ export async function diagnose(configPath?: string): Promise<Check[]> {
       : "ANTHROPIC_API_KEY is not set. The agent runs local only.",
     false,
   );
+
+  if (config.server.enabled) {
+    const reachableServer = await reachable(`http://127.0.0.1:${config.server.port}/health`);
+    add(
+      "network",
+      reachableServer,
+      reachableServer
+        ? secrets.agentToken
+          ? `port ${config.server.port}, and the house can reach it`
+          : `port ${config.server.port}, loopback only: set AGENT_TOKEN to let the house in`
+        : `nothing is listening on port ${config.server.port}. That is expected when the agent is not running.`,
+      false,
+    );
+  }
+
+  const connectors = await new ConnectorStore(config.connectorsFile).list();
+  if (connectors.length) {
+    const store = new ConnectorStore(config.connectorsFile);
+    const out: string[] = [];
+    for (const connector of connectors) {
+      if (!(await store.secrets(connector.name)).tokens) out.push(connector.name);
+    }
+    add(
+      "connectors",
+      out.length === 0,
+      out.length
+        ? `signed out: ${out.join(", ")}. Run pnpm connectors add <name> <url> again.`
+        : `${connectors.length} connected`,
+      false,
+    );
+  }
 
   if (config.search.provider === "searxng") {
     add(

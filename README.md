@@ -16,7 +16,8 @@ Then, day to day:
 ```sh
 pnpm text            # everything but the microphone
 pnpm start           # the real thing, in the foreground
-pnpm doctor          # which of the six moving parts is down
+pnpm doctor          # which of the moving parts is down
+pnpm connectors      # the household's connected accounts
 ```
 
 ## Layout
@@ -33,6 +34,9 @@ pnpm doctor          # which of the six moving parts is down
 | `src/tts/` | Kokoro, with macOS `say` as the fallback. |
 | `src/llm/` | The two back ends, the tool loop, and the local-first router. |
 | `src/tools/` | MCP clients, Home Assistant REST, search, timers. |
+| `src/voice/` | The wake-to-answer state machine, shared by every client. |
+| `src/server/` | The agent on the network, and the phone page it serves. |
+| `src/connectors/` | Signing in to remote MCP servers, and where the tokens go. |
 | `src/prompt.ts` | The persona, and the rule for when to hand over. |
 | `desktop/` | The menu bar app: Tauri and Rust around the same agent. |
 

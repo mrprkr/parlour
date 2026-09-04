@@ -156,6 +156,22 @@ echo "    The local model hands over anything it is not confident about."
 echo "    Leave this empty to run local only."
 ANTHROPIC_VALUE="$(secret "Anthropic API key" "$EXISTING_ANTHROPIC")"
 
+step "The rest of the house"
+echo "    The agent listens on the network so that Home Assistant, a phone or a"
+echo "    satellite can all reach it. That needs a shared token, or it answers"
+echo "    this machine only."
+EXISTING_AGENT_TOKEN="${AGENT_TOKEN:-}"
+if [ -n "$EXISTING_AGENT_TOKEN" ]; then
+  AGENT_TOKEN_VALUE="$EXISTING_AGENT_TOKEN"
+  echo "    keeping the existing token"
+elif confirm "Generate an access token and let the house in?"; then
+  AGENT_TOKEN_VALUE="$(openssl rand -hex 24)"
+  echo "    generated"
+else
+  AGENT_TOKEN_VALUE=""
+  warn "Loopback only. Re-run this to change your mind."
+fi
+
 # ---------------------------------------------------------------------- voice
 
 step "Voice"
@@ -187,6 +203,7 @@ else
 # Written by install.sh. Secrets only; everything else is in agent.config.json.
 HA_TOKEN=$HA_TOKEN_VALUE
 ANTHROPIC_API_KEY=$ANTHROPIC_VALUE
+AGENT_TOKEN=$AGENT_TOKEN_VALUE
 BRAVE_API_KEY=
 LOG_LEVEL=info
 ENV
@@ -320,6 +337,16 @@ if [ $DOCTOR -eq 0 ]; then
 else
   bold "Set up, with the failures above still to fix."
 fi
+if [ -n "$AGENT_TOKEN_VALUE" ]; then
+  PORT="$(node -p "(require('./agent.config.json').server||{}).port||8765" 2>/dev/null || echo 8765)"
+  echo
+  bold "The rest of the house"
+  echo "    Phones:          http://$(hostname):$PORT"
+  echo "    Home Assistant:  http://$(hostname):$PORT/v1  (OpenAI Conversation integration)"
+  echo "    The token is in .env as AGENT_TOKEN."
+fi
+
+echo
 echo "    pnpm text      try it without the microphone"
 echo "    pnpm start     run it in the foreground"
 echo "    pnpm doctor    check again"

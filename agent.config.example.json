@@ -8,7 +8,9 @@
   },
   "wake": {
     "modelDir": "models/openwakeword",
-    "words": ["hey_jarvis"],
+    "words": [
+      "hey_jarvis"
+    ],
     "threshold": 0.5
   },
   "stt": {
@@ -37,11 +39,20 @@
     "provider": "searxng",
     "searxngUrl": "http://searxng.home:8080"
   },
+  "server": {
+    "enabled": true,
+    "port": 8765,
+    "host": "0.0.0.0",
+    "web": true
+  },
   "mcpServers": {
     "calendar": {
       "transport": "stdio",
       "command": "npx",
-      "args": ["-y", "@some/calendar-mcp-server"]
+      "args": [
+        "-y",
+        "@some/calendar-mcp-server"
+      ]
     }
   }
 }

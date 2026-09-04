@@ -37,10 +37,21 @@ impl AppState {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct Network {
+    /// What to type into a phone, or point Home Assistant at.
+    url: String,
+    /// Without a token the agent answers loopback only, so nothing else can reach it.
+    token_set: bool,
+    port: u16,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct SecretsPresent {
     ha_token: bool,
     anthropic_key: bool,
     brave_key: bool,
+    agent_token: bool,
 }
 
 #[tauri::command]
@@ -120,6 +131,7 @@ fn secrets_present(state: State<'_, AppState>) -> SecretsPresent {
         ha_token: set("HA_TOKEN"),
         anthropic_key: set("ANTHROPIC_API_KEY"),
         brave_key: set("BRAVE_API_KEY"),
+        agent_token: set("AGENT_TOKEN"),
     }
 }
 
@@ -131,6 +143,7 @@ fn write_secrets(
     ha_token: Option<String>,
     anthropic_key: Option<String>,
     brave_key: Option<String>,
+    agent_token: Option<String>,
 ) -> Result<(), String> {
     let path = state.agent_path(".env");
     let existing = std::fs::read_to_string(&path).unwrap_or_default();
@@ -138,6 +151,7 @@ fn write_secrets(
         ("HA_TOKEN", ha_token),
         ("ANTHROPIC_API_KEY", anthropic_key),
         ("BRAVE_API_KEY", brave_key),
+        ("AGENT_TOKEN", agent_token),
     ];
 
     let mut lines: Vec<String> = existing.lines().map(str::to_owned).collect();
@@ -162,6 +176,113 @@ fn write_secrets(
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Where the rest of the house should point. The hostname comes from the
+/// machine rather than the config, because that is the part a person has to
+/// type into a phone and the part they always get wrong.
+#[tauri::command]
+fn network(state: State<'_, AppState>) -> Network {
+    let config: serde_json::Value = read_agent_config(state.clone())
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or(serde_json::Value::Null);
+    let port = config
+        .get("server")
+        .and_then(|s| s.get("port"))
+        .and_then(|p| p.as_u64())
+        .unwrap_or(8765) as u16;
+
+    let host = Command::new("hostname")
+        .output()
+        .ok()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| "localhost".into());
+
+    let env = std::fs::read_to_string(state.agent_path(".env")).unwrap_or_default();
+    let token_set = env
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .any(|(k, v)| k.trim() == "AGENT_TOKEN" && !v.trim().is_empty());
+
+    Network {
+        url: format!("http://{host}:{port}"),
+        token_set,
+        port,
+    }
+}
+
+/// The household's connected accounts, read and written through the agent's
+/// own `connectors` command so the app and the terminal cannot disagree.
+#[tauri::command]
+async fn connectors(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let output = agent_command(&state, &["src/connectors/cli.ts", "list", "--json"])
+        .await?
+        .map_err(|e| e.to_string())?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let line = stdout
+        .lines()
+        .rev()
+        .find(|line| line.starts_with('['))
+        .ok_or_else(|| String::from_utf8_lossy(&output.stderr).trim().to_string())?;
+    serde_json::from_str(line).map_err(|e| e.to_string())
+}
+
+/// Starts a sign in. The browser opens, the agent's loopback listener catches
+/// the redirect, and the tokens land in the Keychain; this returns as soon as
+/// the flow is under way rather than waiting for a person to finish typing
+/// their password.
+#[tauri::command]
+fn connector_add(state: State<'_, AppState>, name: String, url: String, scope: Option<String>) -> Result<(), String> {
+    if name.is_empty() || url.is_empty() {
+        return Err("a name and a URL are needed".into());
+    }
+    let settings = state.settings();
+    let mut args = vec![
+        "--experimental-strip-types".to_string(),
+        "--env-file-if-exists=.env".to_string(),
+        "src/connectors/cli.ts".to_string(),
+        "add".to_string(),
+        name,
+        url,
+    ];
+    if let Some(scope) = scope.filter(|s| !s.is_empty()) {
+        args.push(format!("--scope={scope}"));
+    }
+    Command::new(&settings.node_path)
+        .current_dir(&settings.agent_dir)
+        .args(args)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn connector_remove(state: State<'_, AppState>, name: String) -> Result<(), String> {
+    agent_command(&state, &["src/connectors/cli.ts", "remove", &name])
+        .await?
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Runs one of the agent's own scripts and waits for it.
+async fn agent_command(
+    state: &State<'_, AppState>,
+    args: &[&str],
+) -> Result<std::io::Result<std::process::Output>, String> {
+    let settings = state.settings();
+    let owned: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+    tauri::async_runtime::spawn_blocking(move || {
+        Command::new(&settings.node_path)
+            .current_dir(&settings.agent_dir)
+            .arg("--experimental-strip-types")
+            .arg("--env-file-if-exists=.env")
+            .args(&owned)
+            .output()
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 /// Runs the agent's own doctor rather than reimplementing its checks here, so
@@ -307,6 +428,10 @@ fn main() {
             write_secrets,
             run_doctor,
             audio_devices,
+            network,
+            connectors,
+            connector_add,
+            connector_remove,
         ])
         .run(tauri::generate_context!())
         .expect("could not start the app");

@@ -93,3 +93,31 @@ export function toWav(frames: Int16Array[], sampleRate: number): Buffer {
   header.writeUInt32LE(data.length, 40);
   return Buffer.concat([header, data]);
 }
+
+/** WAV bytes back to frames, for clients that hand over whole utterances. */
+export function wavToFrames(wav: Buffer): Int16Array[] {
+  // Walk the RIFF chunks rather than assuming a 44 byte header: ffmpeg writes
+  // a LIST chunk before the data, and browsers write stranger things still.
+  let offset = 12;
+  let start = 44;
+  let length = wav.length - 44;
+  while (offset + 8 <= wav.length) {
+    const id = wav.toString("ascii", offset, offset + 4);
+    const size = wav.readUInt32LE(offset + 4);
+    if (id === "data") {
+      start = offset + 8;
+      length = Math.min(size, wav.length - start);
+      break;
+    }
+    offset += 8 + size + (size % 2);
+  }
+
+  const frames: Int16Array[] = [];
+  for (let at = start; at + 2 <= start + length; at += FRAME_SAMPLES * 2) {
+    const samples = Math.min(FRAME_SAMPLES, Math.floor((start + length - at) / 2));
+    const frame = new Int16Array(FRAME_SAMPLES);
+    for (let i = 0; i < samples; i++) frame[i] = wav.readInt16LE(at + i * 2);
+    frames.push(frame);
+  }
+  return frames;
+}

@@ -1,23 +1,23 @@
 import { createInterface } from "node:readline/promises";
-import { loadConfig, type McpServerConfig } from "./config.ts";
+import { loadConfig, type Config, type McpServerConfig } from "./config.ts";
 import { logger } from "./logger.ts";
-import { FRAME_SAMPLES, Microphone, toWav } from "./audio/capture.ts";
-import { Endpointer } from "./audio/endpoint.ts";
-import { WakeWord } from "./audio/wake.ts";
-import { isNoise, transcribe } from "./stt/whisper.ts";
-import { createSpeaker, sentences, type Speaker } from "./tts/index.ts";
+import { Microphone } from "./audio/capture.ts";
+import { WakeModels } from "./audio/wake.ts";
+import { createSpeaker, createSynthesiser, sentences, type Speaker } from "./tts/index.ts";
 import { OpenAiCompatibleModel } from "./llm/openai.ts";
 import { ClaudeModel } from "./llm/anthropic.ts";
 import { Router } from "./llm/router.ts";
 import { ToolRegistry } from "./tools/registry.ts";
 import { McpTools } from "./tools/mcp.ts";
-import { createHomeAssistant } from "./tools/homeassistant.ts";
+import { createHomeAssistant, type HomeAssistant } from "./tools/homeassistant.ts";
 import { searchTool } from "./tools/websearch.ts";
 import { Timers } from "./tools/timers.ts";
+import { connectorTools } from "./connectors/index.ts";
+import { VoiceSession, type VoiceSink, type VoiceState } from "./voice/session.ts";
+import { startServer } from "./server/index.ts";
 import { emit } from "./events.ts";
 
 const log = logger("agent");
-const FRAME_MS = (FRAME_SAMPLES / 16000) * 1000;
 
 async function main(): Promise<void> {
   const { config, secrets } = loadConfig(process.env.AGENT_CONFIG ?? "agent.config.json");
@@ -36,6 +36,7 @@ async function main(): Promise<void> {
     };
   }
   registry.add(...(await mcp.connect(servers)));
+  registry.add(...(await connectorTools(config, mcp)));
 
   const ha = createHomeAssistant(config, secrets.haToken);
   if (ha) registry.add(...ha.tools());
@@ -45,7 +46,7 @@ async function main(): Promise<void> {
   if (search) registry.add(search);
 
   const speaker = createSpeaker(config);
-  const voice = new Voice(speaker);
+  const voice = new LocalVoice(speaker);
   registry.add(...new Timers((text) => void voice.say(text)).tools());
 
   const local = new OpenAiCompatibleModel(config.llm.local);
@@ -61,28 +62,51 @@ async function main(): Promise<void> {
   if (!cloud) log.warn("no cloud model: ANTHROPIC_API_KEY unset or cloud disabled");
 
   const router = new Router(config, local, cloud, registry);
+  const status = () => ({ tools: registry.specs().length, cloud: cloud !== null });
   log.info(`${registry.specs().length} tools ready`);
-  emit({ type: "ready", tools: registry.specs().length, cloud: cloud !== null });
+  emit({ type: "ready", ...status() });
 
-  const done = process.argv.includes("--text")
-    ? textMode(router)
-    : voiceMode({ config, router, voice, ha });
+  if (process.argv.includes("--text")) {
+    await textMode(router);
+    await mcp.close();
+    return;
+  }
 
-  await done;
+  // The wake word models are loaded once and shared: the Mac's microphone and
+  // every satellite on the network get their own detector over the same
+  // weights.
+  const wake = await WakeModels.load(config.wake);
+  const muted = async () => {
+    if (!ha || !(await ha.isOn(config.muteEntity))) return false;
+    emit({ type: "muted" });
+    return true;
+  };
+
+  const server = await startServer({
+    config,
+    secrets,
+    router,
+    wake,
+    synth: createSynthesiser(config),
+    muted,
+    status,
+  });
+
+  await micMode({ config, router, wake, voice, muted, ha });
+  await server?.close();
   await mcp.close();
 }
 
-/** Speaks a reply sentence by sentence, and can be cut off mid-flow. */
-class Voice {
+/** Speaks a reply through this machine, sentence by sentence, interruptibly. */
+class LocalVoice implements VoiceSink {
   #controller: AbortController | undefined;
-
   readonly #speaker: Speaker;
 
   constructor(speaker: Speaker) {
     this.#speaker = speaker;
   }
 
-  get speaking(): boolean {
+  isSpeaking(): boolean {
     return this.#controller !== undefined;
   }
 
@@ -105,18 +129,23 @@ class Voice {
     this.#controller = undefined;
     this.#speaker.stop();
   }
+
+  onState(state: VoiceState, detail?: string): void {
+    if (state === "thinking" && detail) emit({ type: "heard", text: detail });
+    else emit({ type: "state", value: state });
+  }
 }
 
-type State = "idle" | "listening" | "thinking";
-
-async function voiceMode(deps: {
-  config: ReturnType<typeof loadConfig>["config"];
+/** The microphone attached to this machine, as one client among several. */
+async function micMode(deps: {
+  config: Config;
   router: Router;
-  voice: Voice;
-  ha: ReturnType<typeof createHomeAssistant>;
+  wake: WakeModels;
+  voice: LocalVoice;
+  muted: () => Promise<boolean>;
+  ha: HomeAssistant | null;
 }): Promise<void> {
-  const { config, router, voice, ha } = deps;
-  const wake = await WakeWord.load(config.wake);
+  const { config, router, wake, voice, muted } = deps;
   const mic = new Microphone(config.audio.inputDevice, config.audio.sampleRate);
   const abort = new AbortController();
   process.on("SIGINT", () => {
@@ -125,84 +154,18 @@ async function voiceMode(deps: {
     abort.abort();
   });
 
-  let state: State = "idle";
-  let endpointer: Endpointer | undefined;
+  const session = new VoiceSession({
+    config,
+    router,
+    wake: wake.detector("here"),
+    sink: voice,
+    id: "here",
+    muted,
+  });
 
   log.info(`listening for "${config.wake.words.join('", "')}"`);
-
   for await (const frame of mic.frames(abort.signal)) {
-    if (state === "thinking") continue;
-
-    // While the agent is talking, its own voice is in the microphone. Unless
-    // there is a separate mic, the only safe thing is to stop listening.
-    if (voice.speaking && !config.audio.bargeIn) {
-      wake.reset();
-      continue;
-    }
-
-    if (state === "idle") {
-      if (!(await wake.push(frame))) continue;
-      if (ha && (await ha.isOn(config.muteEntity))) {
-        log.info("muted, ignoring");
-        emit({ type: "muted" });
-        continue;
-      }
-      voice.stop();
-      state = "listening";
-      emit({ type: "state", value: "listening" });
-      endpointer = new Endpointer({
-        frameMs: FRAME_MS,
-        silenceMs: config.audio.silenceMs,
-        maxUtteranceMs: config.audio.maxUtteranceMs,
-        silenceThreshold: config.audio.silenceThreshold,
-        leadingSilenceMs: 2500,
-      });
-      continue;
-    }
-
-    const verdict = endpointer!.push(frame);
-    if (verdict === "listening") continue;
-
-    const frames = endpointer!.frames;
-    endpointer = undefined;
-    if (verdict === "empty") {
-      state = "idle";
-      emit({ type: "state", value: "idle" });
-      wake.reset();
-      continue;
-    }
-
-    state = "thinking";
-    emit({ type: "state", value: "thinking" });
-    // Deliberately not awaited: the microphone must keep draining, or ffmpeg
-    // backs up and the next utterance arrives seconds late.
-    void handle(frames)
-      .catch((error) => {
-        log.error(error);
-        emit({ type: "error", message: error instanceof Error ? error.message : String(error) });
-      })
-      .finally(() => {
-        wake.reset();
-        state = "idle";
-        emit({ type: "state", value: "idle" });
-      });
-  }
-
-  async function handle(frames: Int16Array[]): Promise<void> {
-    const started = Date.now();
-    const text = await transcribe(toWav(frames, config.audio.sampleRate), config);
-    if (!text || isNoise(text)) {
-      log.info("nothing said");
-      return;
-    }
-    log.info("heard:", text);
-    emit({ type: "heard", text });
-    const answer = await router.ask(text);
-    const ms = Date.now() - started;
-    log.info(`replied in ${ms}ms via ${answer.via}:`, answer.text);
-    emit({ type: "reply", text: answer.text, via: answer.via, ms });
-    emit({ type: "state", value: "speaking" });
-    await voice.say(answer.text);
+    await session.push(frame);
   }
 }
 
@@ -217,7 +180,8 @@ async function textMode(router: Router): Promise<void> {
       router.reset();
       continue;
     }
-    console.log((await router.ask(line)).text);
+    const answer = await router.ask(line, { session: "terminal" });
+    console.log(answer.text);
   }
   rl.close();
 }

@@ -72,6 +72,75 @@ $("check").addEventListener("click", async () => {
   }
 });
 
+// ---------------------------------------------------------------- connectors
+
+async function loadNetwork() {
+  try {
+    const net = await invoke("network");
+    $("network-url").textContent = net.url;
+    $("network-note").textContent = net.tokenSet
+      ? "Phones open that address. Home Assistant points at it with /v1 on the end."
+      : "No AGENT_TOKEN is set, so the agent only answers this machine. Add one in Settings to let the house in.";
+  } catch (error) {
+    $("network-url").textContent = String(error);
+  }
+}
+
+async function loadConnectors() {
+  const list = $("connector-list");
+  try {
+    const connectors = await invoke("connectors");
+    list.innerHTML = "";
+    if (!connectors.length) {
+      list.innerHTML = '<li class="muted">Nothing connected yet.</li>';
+      return;
+    }
+    for (const connector of connectors) {
+      const item = document.createElement("li");
+      item.innerHTML =
+        '<span class="mark"></span><span class="name"></span>' +
+        '<span class="detail"></span><button class="ghost" type="button">Remove</button>';
+      item.querySelector(".mark").className = `mark ${connector.signedIn ? "ok" : "bad"}`;
+      item.querySelector(".mark").textContent = connector.signedIn ? "✓" : "✗";
+      item.querySelector(".name").textContent = connector.name;
+      item.querySelector(".detail").textContent = connector.signedIn
+        ? connector.url
+        : `${connector.url}, signed out. Connect it again.`;
+      item.querySelector("button").addEventListener("click", async () => {
+        await invoke("connector_remove", { name: connector.name });
+        await loadConnectors();
+      });
+      list.append(item);
+    }
+  } catch (error) {
+    list.innerHTML = "";
+    const item = document.createElement("li");
+    item.className = "muted";
+    item.textContent = String(error);
+    list.append(item);
+  }
+}
+
+$("connector-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  const status = $("connector-status");
+  try {
+    await invoke("connector_add", {
+      name: form.name.value.trim(),
+      url: form.url.value.trim(),
+      scope: form.scope.value.trim() || null,
+    });
+    status.textContent = "Finish the sign in in your browser, then refresh.";
+    form.reset();
+    // The browser round trip takes as long as it takes; check back rather than
+    // pretending to know when someone has finished typing a password.
+    setTimeout(loadConnectors, 8000);
+  } catch (error) {
+    status.textContent = String(error);
+  }
+});
+
 // ------------------------------------------------------------------ settings
 
 async function loadSettings() {
@@ -110,6 +179,7 @@ async function loadSettings() {
   const present = await invoke("secrets_present");
   form.haToken.placeholder = present.haToken ? "set, leave blank to keep" : "not set";
   form.anthropicKey.placeholder = present.anthropicKey ? "set, leave blank to keep" : "not set";
+  form.agentToken.placeholder = present.agentToken ? "set, leave blank to keep" : "not set, so nothing on the network can reach it";
 }
 
 /** ffmpeg names devices by index, which is what the agent wants. */
@@ -161,11 +231,14 @@ form.addEventListener("submit", async (event) => {
       haToken: form.haToken.value || null,
       anthropicKey: form.anthropicKey.value || null,
       braveKey: null,
+      agentToken: form.agentToken.value || null,
     });
     form.haToken.value = "";
     form.anthropicKey.value = "";
+    form.agentToken.value = "";
     flash("Saved.");
     await loadSettings();
+    await loadNetwork();
   } catch (error) {
     flash(String(error));
   }
@@ -189,6 +262,7 @@ function appendLog(line) {
 // ---------------------------------------------------------------------- tabs
 
 function switchTab(name) {
+  if (name === "connectors") void loadConnectors();
   for (const tab of document.querySelectorAll(".tab")) {
     tab.classList.toggle("active", tab.dataset.tab === name);
   }
@@ -212,3 +286,4 @@ await listen("agent://error", (event) => {
 $("log").textContent = (await invoke("logs")).join("\n");
 paint(await invoke("status"));
 await loadSettings();
+await loadNetwork();

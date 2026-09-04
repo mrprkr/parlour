@@ -2,6 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { McpServerConfig } from "../config.ts";
 import type { JsonSchema } from "../llm/types.ts";
 import { defineTool, type Tool } from "./registry.ts";
@@ -22,7 +23,7 @@ export class McpTools {
     const tools: Tool[] = [];
     for (const [name, server] of Object.entries(servers)) {
       try {
-        tools.push(...(await this.#connectOne(name, server)));
+        tools.push(...(await this.connectServer(name, await transportFor(server))));
       } catch (error) {
         // One dead server must not take the house's voice down with it.
         log.error(`${name} unavailable:`, error instanceof Error ? error.message : error);
@@ -31,9 +32,13 @@ export class McpTools {
     return tools;
   }
 
-  async #connectOne(name: string, server: McpServerConfig): Promise<Tool[]> {
+  /**
+   * Connects one server over a transport the caller has built. Connectors use
+   * this to hand over a transport that already carries their OAuth provider.
+   */
+  async connectServer(name: string, transport: Transport): Promise<Tool[]> {
     const client = new Client({ name: "home-agent", version: "0.1.0" });
-    await client.connect(await transportFor(server));
+    await client.connect(transport);
     this.#clients.push(client);
 
     const { tools } = await client.listTools();

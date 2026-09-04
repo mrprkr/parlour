@@ -102,6 +102,30 @@ export const ConfigSchema = z.object({
 
   mcpServers: z.record(McpServer).default({}),
 
+  /**
+   * The agent as a service on the house network, so that the Mac mini's
+   * microphone is one client among several rather than the only way in.
+   */
+  server: z.object({
+    enabled: z.boolean().default(true),
+    port: z.number().int().positive().default(8765),
+    /**
+     * Listening beyond loopback requires AGENT_TOKEN to be set. An open
+     * endpoint on the house network can turn the heating on, so the default
+     * refuses rather than asks.
+     */
+    host: z.string().default("0.0.0.0"),
+    /** Serve the push to talk page at / for phones. */
+    web: z.boolean().default(true),
+  }).default({}),
+
+  /**
+   * Remote MCP servers the household has signed in to. Written by
+   * `pnpm connectors`, not by hand: the tokens live in the Keychain and only
+   * the metadata is here.
+   */
+  connectorsFile: z.string().default("connectors.json"),
+
   /** Speak nothing and do nothing while this is true. Toggled by the UI. */
   muteEntity: z.string().default("input_boolean.home_agent_muted"),
 });
@@ -113,6 +137,7 @@ export interface Secrets {
   haToken: string | undefined;
   anthropicKey: string | undefined;
   braveKey: string | undefined;
+  agentToken: string | undefined;
 }
 
 export function loadConfig(path = "agent.config.json"): { config: Config; secrets: Secrets } {
@@ -125,6 +150,8 @@ export function loadConfig(path = "agent.config.json"): { config: Config; secret
       haToken: process.env.HA_TOKEN,
       anthropicKey: process.env.ANTHROPIC_API_KEY,
       braveKey: process.env.BRAVE_API_KEY,
+      /** Required before the server will listen anywhere but loopback. */
+      agentToken: process.env.AGENT_TOKEN,
     },
   };
 }

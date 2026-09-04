@@ -20,6 +20,7 @@
 
     <nav class="tabs" role="tablist">
       <button class="tab active" data-tab="status" role="tab">Status</button>
+      <button class="tab" data-tab="connectors" role="tab">Connectors</button>
       <button class="tab" data-tab="settings" role="tab">Settings</button>
       <button class="tab" data-tab="logs" role="tab">Logs</button>
     </nav>
@@ -42,6 +43,12 @@
           <div><dt>Cloud escalation</dt><dd id="cloud">-</dd></div>
         </dl>
 
+        <article class="card">
+          <h2>On the network</h2>
+          <p id="network-url" class="quote">-</p>
+          <p id="network-note" class="muted"></p>
+        </article>
+
         <div class="section-head">
           <h2>Dependencies</h2>
           <button id="check" class="ghost">Check</button>
@@ -49,6 +56,31 @@
         <ul id="checks" class="checks">
           <li class="muted">Not checked yet.</li>
         </ul>
+      </section>
+
+      <section id="connectors" class="panel">
+        <p class="muted">
+          A connector is a remote MCP server the house has signed in to. Its tools
+          appear alongside the lights at the next start; its tokens live in the
+          Keychain, never in the config.
+        </p>
+
+        <ul id="connector-list" class="checks">
+          <li class="muted">Loading...</li>
+        </ul>
+
+        <form id="connector-form">
+          <fieldset>
+            <legend>Add one</legend>
+            <label>Name <input name="name" placeholder="calendar" spellcheck="false" /></label>
+            <label>Server URL <input name="url" placeholder="https://example.com/mcp" spellcheck="false" /></label>
+            <label>Scopes, if the service needs them named <input name="scope" spellcheck="false" /></label>
+            <div class="actions">
+              <button type="submit" class="primary">Connect</button>
+              <span id="connector-status" class="muted"></span>
+            </div>
+          </fieldset>
+        </form>
       </section>
 
       <section id="settings" class="panel">
@@ -102,6 +134,15 @@
             <label>Home Assistant <input name="haBaseUrl" spellcheck="false" /></label>
             <label>Token <input name="haToken" type="password" placeholder="unchanged" autocomplete="off" /></label>
             <label>Anthropic key <input name="anthropicKey" type="password" placeholder="unchanged" autocomplete="off" /></label>
+          </fieldset>
+
+          <fieldset>
+            <legend>The network</legend>
+            <label>Access token <input name="agentToken" type="password" placeholder="unchanged" autocomplete="off" /></label>
+            <p class="muted">
+              Phones, satellites and Home Assistant all send this. Without it the
+              agent answers this machine only.
+            </p>
           </fieldset>
 
           <div class="actions">

@@ -11,6 +11,13 @@ const EMBED_STRIDE = 8;    // mel frames between embeddings
 const EMBED_DIM = 96;
 const CONTEXT = 16;        // embeddings the wake word model consumes
 
+export interface WakeOptions {
+  modelDir: string;
+  words: string[];
+  threshold: number;
+  refractoryMs: number;
+}
+
 /**
  * openWakeWord, in three ONNX stages: audio to mel spectrogram, mel to a 96
  * dimensional speech embedding, then a small per-word classifier over the last
@@ -18,40 +25,61 @@ const CONTEXT = 16;        // embeddings the wake word model consumes
  * whole loop in one process, which matters because barge-in needs the wake
  * word detector to stay live while the agent is speaking.
  *
- * Models come from scripts/fetch-models.sh.
+ * The models are loaded once and shared; the rolling state is per stream, so
+ * a room full of satellites costs one copy of the weights and one small ring
+ * buffer each. Models come from scripts/fetch-models.sh.
  */
-export class WakeWord {
+export class WakeModels {
   #mel!: ort.InferenceSession;
   #embed!: ort.InferenceSession;
-  #words = new Map<string, ort.InferenceSession>();
+  readonly #words = new Map<string, ort.InferenceSession>();
+  readonly #options: WakeOptions;
 
-  #melBuffer: Float32Array[] = [];
-  #embedBuffer: Float32Array[] = [];
-  #mutedUntil = 0;
-
-  readonly #threshold: number;
-  readonly #refractoryMs: number;
-
-  private constructor(threshold: number, refractoryMs: number) {
-    this.#threshold = threshold;
-    this.#refractoryMs = refractoryMs;
+  private constructor(options: WakeOptions) {
+    this.#options = options;
   }
 
-  static async load(opts: {
-    modelDir: string;
-    words: string[];
-    threshold: number;
-    refractoryMs: number;
-  }): Promise<WakeWord> {
-    const self = new WakeWord(opts.threshold, opts.refractoryMs);
-    const open = (file: string) => ort.InferenceSession.create(join(opts.modelDir, file));
+  static async load(options: WakeOptions): Promise<WakeModels> {
+    const self = new WakeModels(options);
+    const open = (file: string) => ort.InferenceSession.create(join(options.modelDir, file));
     self.#mel = await open("melspectrogram.onnx");
     self.#embed = await open("embedding_model.onnx");
-    for (const word of opts.words) {
+    for (const word of options.words) {
       self.#words.set(word, await open(`${word}.onnx`));
       log.info("loaded wake word", word);
     }
     return self;
+  }
+
+  /** One detector per audio stream. They share the weights, not the state. */
+  detector(label = "local"): WakeWord {
+    return new WakeWord(this.#mel, this.#embed, this.#words, this.#options, label);
+  }
+}
+
+export class WakeWord {
+  #melBuffer: Float32Array[] = [];
+  #embedBuffer: Float32Array[] = [];
+  #mutedUntil = 0;
+
+  readonly #mel: ort.InferenceSession;
+  readonly #embed: ort.InferenceSession;
+  readonly #words: Map<string, ort.InferenceSession>;
+  readonly #options: WakeOptions;
+  readonly #label: string;
+
+  constructor(
+    mel: ort.InferenceSession,
+    embed: ort.InferenceSession,
+    words: Map<string, ort.InferenceSession>,
+    options: WakeOptions,
+    label: string,
+  ) {
+    this.#mel = mel;
+    this.#embed = embed;
+    this.#words = words;
+    this.#options = options;
+    this.#label = label;
   }
 
   /** Ignore audio for a while, for example while the agent is speaking. */
@@ -91,10 +119,10 @@ export class WakeWord {
 
     for (const [word, session] of this.#words) {
       const [score] = await run(session, [1, CONTEXT, EMBED_DIM], context);
-      if (score! >= this.#threshold) {
-        log.info(`"${word}" fired at ${score!.toFixed(2)}`);
+      if (score! >= this.#options.threshold) {
+        log.info(`"${word}" fired at ${score!.toFixed(2)} on ${this.#label}`);
         this.reset();
-        this.#mutedUntil = Date.now() + this.#refractoryMs;
+        this.#mutedUntil = Date.now() + this.#options.refractoryMs;
         return word;
       }
     }
