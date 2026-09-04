@@ -1,0 +1,35 @@
+{
+  "name": "@home/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Voice agent for the house, running on a Mac mini",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --experimental-strip-types --env-file-if-exists=.env --watch src/index.ts",
+    "start": "node --experimental-strip-types --env-file-if-exists=.env src/index.ts",
+    "text": "pnpm start --text",
+    "typecheck": "tsc --noEmit",
+    "models": "sh scripts/fetch-models.sh"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.123.0",
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "kokoro-js": "^1.2.1",
+    "onnxruntime-node": "^1.23.0",
+    "zod": "^3.25.76"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "onnxruntime-node",
+      "sharp",
+      "protobufjs"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.9.2"
+  }
+}

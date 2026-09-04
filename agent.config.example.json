@@ -1,0 +1,47 @@
+{
+  "name": "Assistant",
+  "audio": {
+    "inputDevice": ":0",
+    "silenceMs": 800,
+    "silenceThreshold": 0.012,
+    "bargeIn": false
+  },
+  "wake": {
+    "modelDir": "models/openwakeword",
+    "words": ["hey_jarvis"],
+    "threshold": 0.5
+  },
+  "stt": {
+    "url": "http://127.0.0.1:8910/inference"
+  },
+  "tts": {
+    "engine": "kokoro",
+    "voice": "bf_emma"
+  },
+  "llm": {
+    "local": {
+      "baseUrl": "http://127.0.0.1:1234/v1",
+      "model": "qwen3-8b-mlx",
+      "temperature": 0.3
+    },
+    "cloud": {
+      "enabled": true,
+      "model": "claude-opus-5"
+    }
+  },
+  "homeAssistant": {
+    "baseUrl": "http://homeassistant.home:8123",
+    "useMcp": true
+  },
+  "search": {
+    "provider": "searxng",
+    "searxngUrl": "http://searxng.home:8080"
+  },
+  "mcpServers": {
+    "calendar": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@some/calendar-mcp-server"]
+    }
+  }
+}
