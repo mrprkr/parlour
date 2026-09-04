@@ -12,7 +12,9 @@
     "start": "node --experimental-strip-types --env-file-if-exists=.env src/index.ts",
     "text": "pnpm start --text",
     "typecheck": "tsc --noEmit",
-    "models": "sh scripts/fetch-models.sh"
+    "models": "sh scripts/fetch-models.sh",
+    "doctor": "node --experimental-strip-types --env-file-if-exists=.env src/doctor.ts",
+    "setup": "bash install.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.123.0",

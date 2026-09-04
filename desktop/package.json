@@ -1,0 +1,14 @@
+{
+  "name": "@home/agent-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Menu bar app that runs and configures the house agent",
+  "scripts": {
+    "icons": "tauri icon src-tauri/icons/icon.png",
+    "dev": "pnpm icons && tauri dev",
+    "build": "pnpm icons && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.0"
+  }
+}

@@ -16,6 +16,12 @@ const MAX_HISTORY = 12;
  * model is fast, free and private; the cloud one is right more often. Sending
  * "turn the hall light off" to a data centre is a waste of both.
  */
+export interface Answer {
+  text: string;
+  /** Which model actually produced the answer. */
+  via: "local" | "cloud";
+}
+
 export class Router {
   #history: Message[] = [];
   #lastSpoke = 0;
@@ -32,7 +38,7 @@ export class Router {
     this.#registry = registry;
   }
 
-  async ask(text: string): Promise<string> {
+  async ask(text: string): Promise<Answer> {
     if (Date.now() - this.#lastSpoke > CONTEXT_TTL_MS) this.#history = [];
     this.#lastSpoke = Date.now();
 
@@ -41,6 +47,7 @@ export class Router {
     const tools = this.#registry.specs();
     const localTools = this.#cloud ? [...tools, escalateSpec] : tools;
 
+    let via: "local" | "cloud" = "local";
     let result;
     try {
       result = await runTurn({
@@ -54,12 +61,13 @@ export class Router {
     } catch (error) {
       log.warn(`${this.#local.label} failed:`, error instanceof Error ? error.message : error);
       if (!this.#cloud || !this.#config.llm.cloud.onLocalFailure) {
-        return "My local model is not answering. Try again in a moment.";
+          return { text: "My local model is not answering. Try again in a moment.", via: "local" };
       }
       result = { text: "", escalateTo: text, messages };
     }
 
     if (result.escalateTo && this.#cloud) {
+      via = "cloud";
       const handover: Message[] = [system, ...this.#history, { role: "user", content: result.escalateTo }];
       try {
         result = await runTurn({
@@ -72,7 +80,7 @@ export class Router {
         });
       } catch (error) {
         log.error(`${this.#cloud.label} failed:`, error instanceof Error ? error.message : error);
-        return "I could not reach the cloud model, and I did not want to guess.";
+        return { text: "I could not reach the cloud model, and I did not want to guess.", via: "cloud" };
       }
     }
 
@@ -84,7 +92,7 @@ export class Router {
     ];
     this.#history = [...this.#history, ...turn].slice(-MAX_HISTORY);
 
-    return result.text || "Done.";
+    return { text: result.text || "Done.", via };
   }
 
   reset(): void {

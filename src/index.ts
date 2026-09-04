@@ -14,6 +14,7 @@ import { McpTools } from "./tools/mcp.ts";
 import { createHomeAssistant } from "./tools/homeassistant.ts";
 import { searchTool } from "./tools/websearch.ts";
 import { Timers } from "./tools/timers.ts";
+import { emit } from "./events.ts";
 
 const log = logger("agent");
 const FRAME_MS = (FRAME_SAMPLES / 16000) * 1000;
@@ -61,6 +62,7 @@ async function main(): Promise<void> {
 
   const router = new Router(config, local, cloud, registry);
   log.info(`${registry.specs().length} tools ready`);
+  emit({ type: "ready", tools: registry.specs().length, cloud: cloud !== null });
 
   const done = process.argv.includes("--text")
     ? textMode(router)
@@ -142,10 +144,12 @@ async function voiceMode(deps: {
       if (!(await wake.push(frame))) continue;
       if (ha && (await ha.isOn(config.muteEntity))) {
         log.info("muted, ignoring");
+        emit({ type: "muted" });
         continue;
       }
       voice.stop();
       state = "listening";
+      emit({ type: "state", value: "listening" });
       endpointer = new Endpointer({
         frameMs: FRAME_MS,
         silenceMs: config.audio.silenceMs,
@@ -163,18 +167,24 @@ async function voiceMode(deps: {
     endpointer = undefined;
     if (verdict === "empty") {
       state = "idle";
+      emit({ type: "state", value: "idle" });
       wake.reset();
       continue;
     }
 
     state = "thinking";
+    emit({ type: "state", value: "thinking" });
     // Deliberately not awaited: the microphone must keep draining, or ffmpeg
     // backs up and the next utterance arrives seconds late.
     void handle(frames)
-      .catch((error) => log.error(error))
+      .catch((error) => {
+        log.error(error);
+        emit({ type: "error", message: error instanceof Error ? error.message : String(error) });
+      })
       .finally(() => {
         wake.reset();
         state = "idle";
+        emit({ type: "state", value: "idle" });
       });
   }
 
@@ -186,9 +196,13 @@ async function voiceMode(deps: {
       return;
     }
     log.info("heard:", text);
-    const reply = await router.ask(text);
-    log.info(`replied in ${Date.now() - started}ms:`, reply);
-    await voice.say(reply);
+    emit({ type: "heard", text });
+    const answer = await router.ask(text);
+    const ms = Date.now() - started;
+    log.info(`replied in ${ms}ms via ${answer.via}:`, answer.text);
+    emit({ type: "reply", text: answer.text, via: answer.via, ms });
+    emit({ type: "state", value: "speaking" });
+    await voice.say(answer.text);
   }
 }
 
@@ -203,7 +217,7 @@ async function textMode(router: Router): Promise<void> {
       router.reset();
       continue;
     }
-    console.log(await router.ask(line));
+    console.log((await router.ask(line)).text);
   }
   rl.close();
 }

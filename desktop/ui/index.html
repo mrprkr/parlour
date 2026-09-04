@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Home Agent</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <div class="identity">
+        <span id="dot" class="dot stopped" aria-hidden="true"></span>
+        <div>
+          <h1>Home agent</h1>
+          <p id="state">stopped</p>
+        </div>
+      </div>
+      <button id="power" class="primary">Start</button>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="status" role="tab">Status</button>
+      <button class="tab" data-tab="settings" role="tab">Settings</button>
+      <button class="tab" data-tab="logs" role="tab">Logs</button>
+    </nav>
+
+    <main>
+      <section id="status" class="panel active">
+        <div class="cards">
+          <article class="card">
+            <h2>Last heard</h2>
+            <p id="heard" class="quote">Nothing yet.</p>
+          </article>
+          <article class="card">
+            <h2>Last reply <span id="via" class="badge hidden"></span></h2>
+            <p id="reply" class="quote">Nothing yet.</p>
+          </article>
+        </div>
+
+        <dl class="facts">
+          <div><dt>Tools</dt><dd id="tools">-</dd></div>
+          <div><dt>Cloud escalation</dt><dd id="cloud">-</dd></div>
+        </dl>
+
+        <div class="section-head">
+          <h2>Dependencies</h2>
+          <button id="check" class="ghost">Check</button>
+        </div>
+        <ul id="checks" class="checks">
+          <li class="muted">Not checked yet.</li>
+        </ul>
+      </section>
+
+      <section id="settings" class="panel">
+        <form id="form">
+          <fieldset>
+            <legend>Where things are</legend>
+            <label>Agent directory <input name="agentDir" spellcheck="false" /></label>
+            <label>Node binary <input name="nodePath" spellcheck="false" /></label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Listening</legend>
+            <label>Wake word
+              <select name="wakeWord">
+                <option value="hey_jarvis">hey jarvis</option>
+                <option value="alexa">alexa</option>
+                <option value="hey_mycroft">hey mycroft</option>
+              </select>
+            </label>
+            <label>Sensitivity <input name="wakeThreshold" type="range" min="0.2" max="0.9" step="0.05" />
+              <output id="wakeThresholdOut"></output>
+            </label>
+            <label>Microphone
+              <select name="inputDevice" id="inputDevice"></select>
+            </label>
+            <label>Silence before it answers (ms) <input name="silenceMs" type="number" min="200" max="3000" step="50" /></label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Speaking</legend>
+            <label>Voice
+              <select name="voice">
+                <option value="bf_emma">Emma, British</option>
+                <option value="bf_isabella">Isabella, British</option>
+                <option value="bm_george">George, British</option>
+                <option value="bm_lewis">Lewis, British</option>
+              </select>
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Models</legend>
+            <label>Local server <input name="localBaseUrl" spellcheck="false" /></label>
+            <label>Local model <input name="localModel" spellcheck="false" /></label>
+            <label class="row"><input name="cloudEnabled" type="checkbox" /> Hand hard questions to the cloud</label>
+            <label>Cloud model <input name="cloudModel" spellcheck="false" /></label>
+          </fieldset>
+
+          <fieldset>
+            <legend>The house</legend>
+            <label>Home Assistant <input name="haBaseUrl" spellcheck="false" /></label>
+            <label>Token <input name="haToken" type="password" placeholder="unchanged" autocomplete="off" /></label>
+            <label>Anthropic key <input name="anthropicKey" type="password" placeholder="unchanged" autocomplete="off" /></label>
+          </fieldset>
+
+          <div class="actions">
+            <button type="submit" class="primary">Save</button>
+            <span id="saved" class="muted"></span>
+          </div>
+          <p class="muted">Saving while it is running takes effect at the next start.</p>
+        </form>
+      </section>
+
+      <section id="logs" class="panel">
+        <pre id="log"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
