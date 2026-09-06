@@ -4,10 +4,12 @@
   "version": "0.1.0",
   "identifier": "io.stuntdouble.home-agent",
   "build": {
-    "frontendDist": "../ui"
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build:ui"
   },
   "app": {
-    "withGlobalTauri": true,
     "windows": [
       {
         "label": "main",

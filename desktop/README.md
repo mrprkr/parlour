@@ -17,7 +17,11 @@ pnpm build           # Home Agent.app and a dmg, in src-tauri/target/release/bun
 ## How it fits together
 
 ```text
-ui/                 plain HTML, CSS and one module. No framework, no bundler.
+src/
+  App.tsx           the header, the tabs, and the state the panels read
+  panels/           one file per tab, plus the first run overlay
+  lib/bridge.ts     every Rust command, typed. Nothing else calls invoke()
+  components/ui/    shadcn primitives
   |  invoke()
 src-tauri/src/
   main.rs           commands, the tray, and the window
