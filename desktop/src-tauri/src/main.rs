@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod settings;
+mod setup;
 mod supervisor;
 
 use std::path::PathBuf;
@@ -13,7 +14,8 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 
-use settings::Settings;
+use settings::{found, Settings};
+use setup::Readiness;
 use supervisor::{Status, Supervisor};
 
 /// The app owns two things: where the agent is, and the process itself. Its
@@ -314,6 +316,102 @@ async fn run_doctor(state: State<'_, AppState>) -> Result<serde_json::Value, Str
     serde_json::from_str(line).map_err(|e| e.to_string())
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Microphone {
+    granted: bool,
+    detail: String,
+}
+
+/// macOS asks about the microphone once, and only when something actually opens
+/// it. Recording a fraction of a second is what makes the prompt appear, and
+/// because ffmpeg is a child of this app the permission granted is this app's,
+/// which is the one the agent inherits when the app starts it.
+///
+/// This blocks for as long as the prompt is on screen, which is the point: the
+/// answer is the return value.
+#[tauri::command]
+async fn microphone_check(device: Option<String>) -> Microphone {
+    let Some(ffmpeg) = found("ffmpeg") else {
+        return Microphone {
+            granted: false,
+            detail: "ffmpeg is not installed yet, and it is what opens the microphone".into(),
+        };
+    };
+    let device = device.filter(|d| !d.is_empty()).unwrap_or_else(|| ":0".into());
+
+    let output = tauri::async_runtime::spawn_blocking(move || {
+        Command::new(ffmpeg)
+            .args([
+                "-hide_banner",
+                "-nostdin",
+                "-f",
+                "avfoundation",
+                "-i",
+                &device,
+                "-t",
+                "0.4",
+                "-f",
+                "null",
+                "-",
+            ])
+            .output()
+    })
+    .await;
+
+    let Ok(Ok(output)) = output else {
+        return Microphone {
+            granted: false,
+            detail: "could not run ffmpeg".into(),
+        };
+    };
+    if output.status.success() {
+        return Microphone {
+            granted: true,
+            detail: "the microphone answered".into(),
+        };
+    }
+
+    // ffmpeg says a great deal; the last line it managed is the useful part.
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let detail = stderr
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or("the microphone did not open")
+        .trim()
+        .to_owned();
+    Microphone {
+        granted: false,
+        detail,
+    }
+}
+
+/// Straight to the Privacy pane, for when the answer was no and the only way
+/// back is a checkbox in System Settings.
+#[tauri::command]
+fn open_privacy_settings() {
+    let _ = Command::new("open")
+        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+        .spawn();
+}
+
+/// What the onboarding draws: which pieces are in place and which are not.
+#[tauri::command]
+fn setup_status(state: State<'_, AppState>) -> Readiness {
+    setup::inspect(&state.settings())
+}
+
+/// Installs everything that needs no answer, reporting as it goes. The work is
+/// the agent's own setup script, so the app and a terminal do the same thing.
+#[tauri::command]
+async fn run_setup(app: AppHandle, state: State<'_, AppState>, wake_word: Option<String>) -> Result<bool, String> {
+    let settings = state.settings();
+    tauri::async_runtime::spawn_blocking(move || setup::run(&app, &settings, wake_word))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// ffmpeg lists avfoundation devices on stderr and exits non-zero. That is
 /// normal, which is why the exit status is ignored.
 #[tauri::command]
@@ -427,6 +525,10 @@ fn main() {
             secrets_present,
             write_secrets,
             run_doctor,
+            setup_status,
+            run_setup,
+            microphone_check,
+            open_privacy_settings,
             audio_devices,
             network,
             connectors,

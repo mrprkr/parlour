@@ -84,6 +84,10 @@
       </section>
 
       <section id="settings" class="panel">
+        <div class="section-head">
+          <h2>Settings</h2>
+          <button id="reopen-setup" class="ghost" type="button">Run setup again</button>
+        </div>
         <form id="form">
           <fieldset>
             <legend>Where things are</legend>
@@ -157,6 +161,110 @@
         <pre id="log"></pre>
       </section>
     </main>
+
+    <div id="onboarding" class="onboarding hidden">
+      <div class="sheet">
+        <div class="sheet-head">
+          <h1>Setting up the house agent</h1>
+          <button id="ob-close" class="ghost" type="button">Close</button>
+        </div>
+        <p class="muted">
+          Four steps. It remembers where it got to, so this can be closed and
+          come back to.
+        </p>
+
+        <ol class="steps">
+          <li class="step">
+            <h2>Where the agent lives</h2>
+            <p class="muted">
+              The <code>agent</code> directory inside your Home Assistant
+              checkout, and the node that runs it.
+            </p>
+            <label>Agent directory
+              <input id="ob-dir" list="ob-candidates" spellcheck="false" placeholder="~/Developer/home-assistant/agent" />
+            </label>
+            <datalist id="ob-candidates"></datalist>
+            <label>Node <input id="ob-node" spellcheck="false" /></label>
+            <p id="ob-where" class="muted"></p>
+          </li>
+
+          <li class="step">
+            <h2>What is missing</h2>
+            <ul id="ob-checks" class="checks">
+              <li class="muted">Looking...</li>
+            </ul>
+            <div class="actions">
+              <button id="ob-run" class="primary" type="button">Install what is missing</button>
+              <span id="ob-run-note" class="muted"></span>
+            </div>
+            <pre id="ob-log" class="log hidden"></pre>
+          </li>
+
+          <li class="step">
+            <h2>The things it cannot work out</h2>
+            <label>Home Assistant
+              <input id="ob-ha-url" spellcheck="false" placeholder="http://homeassistant.home:8123" />
+            </label>
+            <label>Home Assistant token
+              <input id="ob-ha-token" type="password" autocomplete="off" placeholder="not set" />
+            </label>
+            <p class="muted">
+              Your profile page in Home Assistant, Security tab, right at the
+              bottom. It is the whole house, so it goes in .env and never into
+              git.
+            </p>
+            <label>Anthropic key, for the questions the local model hands over
+              <input id="ob-anthropic" type="password" autocomplete="off" placeholder="not set" />
+            </label>
+            <label>Wake word
+              <select id="ob-wake">
+                <option value="hey_jarvis">hey jarvis</option>
+                <option value="alexa">alexa</option>
+                <option value="hey_mycroft">hey mycroft</option>
+              </select>
+            </label>
+            <label>Microphone <select id="ob-mic"></select></label>
+            <ul id="ob-mic-state" class="checks">
+              <li>
+                <span class="mark warn">!</span>
+                <span class="name">Permission</span>
+                <span class="detail">Not asked for yet.</span>
+              </li>
+            </ul>
+            <div class="actions">
+              <button id="ob-mic-ask" class="ghost" type="button">Allow the microphone</button>
+              <button id="ob-mic-settings" class="ghost hidden" type="button">Open System Settings</button>
+            </div>
+            <p class="muted">
+              macOS asks once, for this app. The agent hears through it, so a no
+              here is silence later.
+            </p>
+            <label class="row">
+              <input id="ob-network" type="checkbox" /> Let the rest of the house in
+            </label>
+            <p class="muted">
+              Phones, satellites and Home Assistant all send one shared token.
+              Without it the agent answers this machine only.
+            </p>
+            <div class="actions">
+              <button id="ob-save" class="primary" type="button">Save</button>
+              <span id="ob-save-note" class="muted"></span>
+            </div>
+          </li>
+
+          <li class="step">
+            <h2>Check it over</h2>
+            <ul id="ob-doctor" class="checks">
+              <li class="muted">Not checked yet.</li>
+            </ul>
+            <div class="actions">
+              <button id="ob-check" class="ghost" type="button">Check</button>
+              <button id="ob-start" class="primary" type="button">Start listening</button>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </div>
 
     <script type="module" src="app.js"></script>
   </body>

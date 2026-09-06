@@ -9,7 +9,7 @@ import { ConnectorStore } from "./connectors/store.ts";
  * Checks every moving part the agent depends on and says which one is broken.
  *
  * There are six of them and they fail in ways that look identical from the
- * outside: the agent hears you and says nothing. `pnpm doctor` is what turns
+ * outside: the agent hears you and says nothing. `pnpm run doctor` is what turns
  * that into one line naming the thing to fix. The installer runs it at the
  * end, and the desktop app runs it behind its Check button.
  */
@@ -151,7 +151,7 @@ async function json<T>(url: string): Promise<T | null> {
   }
 }
 
-/** `pnpm doctor`, and the same output the installer prints at the end. */
+/** `pnpm run doctor`, and the same output the installer prints at the end. */
 if (process.argv[1]?.endsWith("doctor.ts")) {
   const checks = await diagnose();
   if (process.argv.includes("--json")) {

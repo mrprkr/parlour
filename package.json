@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "models": "sh scripts/fetch-models.sh",
     "doctor": "node --experimental-strip-types --env-file-if-exists=.env src/doctor.ts",
-    "setup": "bash install.sh",
+    "first-run": "bash install.sh",
     "connectors": "node --experimental-strip-types --env-file-if-exists=.env src/connectors/cli.ts"
   },
   "dependencies": {
@@ -24,13 +24,6 @@
     "onnxruntime-node": "^1.23.0",
     "zod": "^3.25.76",
     "ws": "^8.18.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "onnxruntime-node",
-      "sharp",
-      "protobufjs"
-    ]
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

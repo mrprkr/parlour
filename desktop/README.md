@@ -3,7 +3,7 @@
 The menu bar app: a Tauri shell that starts, stops, configures and watches the
 agent in the directory above. It is an interface, not a second implementation.
 Every setting it writes is the same `agent.config.json` and `.env` the terminal
-uses, and its dependency check runs the agent's own `pnpm doctor`.
+uses, and its dependency check runs the agent's own `pnpm run doctor`.
 
 ```sh
 pnpm install
@@ -35,7 +35,7 @@ on it and an orphaned ffmpeg holds the microphone.
 ## Tabs
 
 Status, Connectors, Settings and Logs. Connectors shells out to the agent's own
-`pnpm connectors`, and the dependency check to its `pnpm doctor`, so the app
+`pnpm connectors`, and the dependency check to its `pnpm run doctor`, so the app
 and the terminal cannot end up with different ideas about the same house.
 
 ## Deliberate choices

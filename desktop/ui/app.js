@@ -1,6 +1,8 @@
 // The window is a thin face on the Rust side: every capability lives there,
 // and this file only reads state and posts edits back.
 
+import * as setup from "./setup.js";
+
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
@@ -283,7 +285,17 @@ await listen("agent://error", (event) => {
   switchTab("logs");
 });
 
+$("reopen-setup").addEventListener("click", setup.open);
+
 $("log").textContent = (await invoke("logs")).join("\n");
 paint(await invoke("status"));
 await loadSettings();
 await loadNetwork();
+
+// Last, because it opens itself over the top of everything when the machine
+// has not been set up yet, and it hands the answers back to the two loaders
+// above once they are saved.
+await setup.init(async () => {
+  await loadSettings();
+  await loadNetwork();
+});

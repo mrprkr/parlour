@@ -16,7 +16,7 @@ Then, day to day:
 ```sh
 pnpm text            # everything but the microphone
 pnpm start           # the real thing, in the foreground
-pnpm doctor          # which of the moving parts is down
+pnpm run doctor      # which of the moving parts is down
 pnpm connectors      # the household's connected accounts
 ```
 
@@ -25,6 +25,7 @@ pnpm connectors      # the household's connected accounts
 | Path | What it is |
 | --- | --- |
 | `install.sh` | The whole setup, idempotent. Run it again to change your mind. |
+| `scripts/setup.sh` | The half of it that needs no answers. What the app's Install button runs. |
 | `src/index.ts` | Wiring, and the idle/listening/thinking state machine. |
 | `src/config.ts` | The schema for `agent.config.json`. Secrets come from the environment instead. |
 | `src/doctor.ts` | Checks every dependency and names the broken one. |
@@ -43,3 +44,7 @@ pnpm connectors      # the household's connected accounts
 Nothing here is written to at runtime, and none of it is read by Home
 Assistant. It sits in this repository because it is part of how the house
 works, not because the house runs it.
+
+`pnpm doctor` and `pnpm setup` are pnpm's own commands and shadow any script of
+the same name, silently. That is why it is `pnpm run doctor`, and why the
+installer script is `first-run`.

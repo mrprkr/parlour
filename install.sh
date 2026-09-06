@@ -63,32 +63,16 @@ secret() { # secret "question" "current value"
 bold "Home agent setup"
 echo "    $AGENT_DIR"
 
-# ---------------------------------------------------------------- dependencies
+# ---------------------------------------------------------------- the mechanics
 
-if $SKIP_DEPS; then
-  step "Skipping Homebrew (--no-deps)"
-else
-  step "Dependencies"
-  if ! have brew; then
-    warn "Homebrew is not installed. It is how the other four arrive."
-    if confirm "Install Homebrew now?"; then
-      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-      # A fresh install is not on PATH yet in this shell.
-      [ -x /opt/homebrew/bin/brew ] && eval "$(/opt/homebrew/bin/brew shellenv)"
-    else
-      fail "Nothing else can be installed without it. Re-run with --no-deps once node, ffmpeg and whisper-cpp are on PATH."
-    fi
-  fi
+# Everything that needs no answer lives in setup.sh, so that the app's Set up
+# button and this installer cannot drift apart. The questions stay here.
+step "Tools, packages and models"
+SETUP_ARGS=(--no-config)
+if $SKIP_DEPS; then SETUP_ARGS+=(--no-deps); fi
+bash scripts/setup.sh "${SETUP_ARGS[@]}" || warn "Some of the setup did not finish. The check at the end will say what."
 
-  for formula in node ffmpeg whisper-cpp; do
-    if brew list --formula "$formula" >/dev/null 2>&1; then
-      echo "    have $formula"
-    else
-      echo "    installing $formula"
-      brew install "$formula"
-    fi
-  done
-
+if ! $SKIP_DEPS && have brew; then
   if [ -d "/Applications/LM Studio.app" ]; then
     echo "    have LM Studio"
   elif confirm "Install LM Studio? It is what runs the local model."; then
@@ -99,26 +83,7 @@ else
 fi
 
 have node || fail "node is not on PATH."
-NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-[ "$NODE_MAJOR" -ge 22 ] || fail "node 22 or newer is needed for type stripping. Found $(node -v)."
 NODE_BIN="$(command -v node)"
-
-if ! have pnpm; then
-  step "pnpm"
-  corepack enable >/dev/null 2>&1 || npm install -g pnpm
-fi
-
-step "Packages"
-pnpm install
-
-# --------------------------------------------------------------------- models
-
-step "Models"
-if [ -f models/openwakeword/melspectrogram.onnx ]; then
-  echo "    already downloaded"
-else
-  sh scripts/fetch-models.sh
-fi
 
 # --------------------------------------------------------------------- secrets
 
@@ -147,7 +112,7 @@ if [ -n "$HA_TOKEN_VALUE" ]; then
   if curl -fsS -m 6 -H "Authorization: Bearer $HA_TOKEN_VALUE" "$HA_URL/api/" >/dev/null 2>&1; then
     echo "    reached $HA_URL"
   else
-    warn "Could not reach $HA_URL with that token. Carrying on; pnpm doctor will say so too."
+    warn "Could not reach $HA_URL with that token. Carrying on; pnpm run doctor will say so too."
   fi
 fi
 
@@ -243,7 +208,6 @@ echo "    kept warm."
 
 LAUNCH_DIR="$HOME/Library/LaunchAgents"
 mkdir -p "$LAUNCH_DIR"
-WHISPER_MODEL="$(ls models/whisper/*.bin 2>/dev/null | head -1 || true)"
 
 write_plist() { # write_plist label program-args...
   local label="$1"; shift
@@ -272,14 +236,6 @@ write_plist() { # write_plist label program-args...
   echo "    loaded $label"
 }
 
-if [ -n "$WHISPER_MODEL" ] && have whisper-server; then
-  write_plist io.stuntdouble.home-agent-whisper \
-    "$(command -v whisper-server)" --host 127.0.0.1 --port 8910 \
-    --model "$AGENT_DIR/$WHISPER_MODEL" --language en --threads 6 --no-timestamps --convert
-else
-  warn "No whisper model or no whisper-server, so speech to text is not set up."
-fi
-
 if confirm "Also run the agent itself at login? Say no if you want the menu bar app to own it."; then
   write_plist io.stuntdouble.home-agent \
     "$NODE_BIN" --experimental-strip-types "--env-file-if-exists=$AGENT_DIR/.env" "$AGENT_DIR/src/index.ts"
@@ -292,17 +248,7 @@ fi
 # ------------------------------------------------------------------ the app
 
 step "Menu bar app"
-# Written whether or not the app is built, so that installing it later opens
-# it already pointed at this directory.
-APP_SUPPORT="$HOME/Library/Application Support/io.stuntdouble.home-agent"
-mkdir -p "$APP_SUPPORT"
-cat > "$APP_SUPPORT/settings.json" <<SETTINGS
-{
-  "agentDir": "$AGENT_DIR",
-  "nodePath": "$NODE_BIN"
-}
-SETTINGS
-echo "    pointed at $AGENT_DIR"
+echo "    pointed at $AGENT_DIR by setup.sh"
 
 if [ -d "/Applications/Home Agent.app" ]; then
   echo "    already installed"
@@ -327,7 +273,7 @@ fi
 
 step "Checking"
 set +e
-pnpm doctor
+pnpm run doctor
 DOCTOR=$?
 set -e
 
@@ -349,5 +295,5 @@ fi
 echo
 echo "    pnpm text      try it without the microphone"
 echo "    pnpm start     run it in the foreground"
-echo "    pnpm doctor    check again"
+echo "    pnpm run doctor    check again"
 echo "    desktop/       the menu bar app, if you want a face on it"
