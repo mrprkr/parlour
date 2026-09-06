@@ -4,7 +4,7 @@
   "private": true,
   "description": "Menu bar app that runs and configures the house agent",
   "scripts": {
-    "icons": "tauri icon src-tauri/icons/icon.png",
+    "icons": "tauri icon src-tauri/icon.png",
     "dev": "pnpm icons && tauri dev",
     "build": "pnpm icons && tauri build"
   },

@@ -47,3 +47,9 @@ and the terminal cannot end up with different ideas about the same house.
   machine rather than two that can disagree.
 - **Icons are generated.** `src-tauri/icons/icon.png` is the only one in git;
   `pnpm icons` derives the rest, and both `dev` and `build` run it first.
+
+The icon is `src-tauri/icon.png`. Everything in `src-tauri/icons/` is generated
+from it by `pnpm icons`, which the build runs first, and none of it is in git.
+The source sits outside that directory on purpose: `tauri icon` writes an
+`icon.png` into its output, so a source kept there would rewrite itself on
+every build and leave the working tree dirty.
