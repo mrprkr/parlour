@@ -63,6 +63,27 @@ secret() { # secret "question" "current value"
 bold "Home agent setup"
 echo "    $AGENT_DIR"
 
+# ------------------------------------------------------------------- the role
+
+step "What this machine is"
+echo "    One box in the house runs the models and answers. Everything else"
+echo "    with a microphone is a satellite: it streams to that box and plays"
+echo "    back what it says. A satellite needs no models, no keys and no GPU."
+EXISTING_ROLE="server"
+if [ -f agent.config.json ]; then
+  EXISTING_ROLE="$(node -p "require('./agent.config.json').role||'server'" 2>/dev/null || echo server)"
+fi
+ROLE="$(ask "server or satellite" "$EXISTING_ROLE")"
+case "$ROLE" in
+  server | satellite) ;;
+  *) fail "That is not a role. It is \"server\" or \"satellite\"." ;;
+esac
+
+ROOM=""
+if [ "$ROLE" = "satellite" ]; then
+  ROOM="$(ask "Which room is it in" "${ROOM:-kitchen}")"
+fi
+
 # ---------------------------------------------------------------- the mechanics
 
 # Everything that needs no answer lives in setup.sh, so that the app's Set up
@@ -87,66 +108,83 @@ NODE_BIN="$(command -v node)"
 
 # --------------------------------------------------------------------- secrets
 
-step "Home Assistant"
-echo "    A long lived access token: your profile page in Home Assistant,"
-echo "    Security tab, right at the bottom. It is the whole house, so it goes"
-echo "    in .env and never into git."
-
+# Read once, for both roles: a satellite needs the server's token and nothing
+# else, and losing that distinction is how a satellite ends up generating a
+# token of its own and never being let in.
 EXISTING_HA_URL="http://homeassistant.home:8123"
 EXISTING_HA_TOKEN=""
 EXISTING_ANTHROPIC=""
+EXISTING_AGENT_TOKEN=""
 if [ -f .env ]; then
   # shellcheck disable=SC1091
   set +u; . ./.env; set -u
   EXISTING_HA_TOKEN="${HA_TOKEN:-}"
   EXISTING_ANTHROPIC="${ANTHROPIC_API_KEY:-}"
+  EXISTING_AGENT_TOKEN="${AGENT_TOKEN:-}"
 fi
 if [ -f agent.config.json ]; then
   EXISTING_HA_URL="$(node -p "(require('./agent.config.json').homeAssistant||{}).baseUrl||'$EXISTING_HA_URL'")"
 fi
 
-HA_URL="$(ask "Home Assistant address" "$EXISTING_HA_URL")"
-HA_TOKEN_VALUE="$(secret "Home Assistant token" "$EXISTING_HA_TOKEN")"
+HA_URL="$EXISTING_HA_URL"
+HA_TOKEN_VALUE=""
+ANTHROPIC_VALUE=""
+SERVER_URL=""
 
-if [ -n "$HA_TOKEN_VALUE" ]; then
-  if curl -fsS -m 6 -H "Authorization: Bearer $HA_TOKEN_VALUE" "$HA_URL/api/" >/dev/null 2>&1; then
-    echo "    reached $HA_URL"
-  else
-    warn "Could not reach $HA_URL with that token. Carrying on; pnpm run doctor will say so too."
+if [ "$ROLE" = "satellite" ]; then
+  step "The server"
+  echo "    A satellite finds the server with Bonjour, so all it needs is the"
+  echo "    same access token the server was given. Leave the address blank"
+  echo "    unless this network does not carry multicast."
+  SERVER_URL="$(ask "Server address, or blank to find it automatically" "")"
+  AGENT_TOKEN_VALUE="$(secret "The server's access token" "$EXISTING_AGENT_TOKEN")"
+  if [ -z "$AGENT_TOKEN_VALUE" ]; then
+    warn "Without it the server will refuse this satellite."
   fi
-fi
-
-step "Cloud escalation"
-echo "    The local model hands over anything it is not confident about."
-echo "    Leave this empty to run local only."
-ANTHROPIC_VALUE="$(secret "Anthropic API key" "$EXISTING_ANTHROPIC")"
-
-step "The rest of the house"
-echo "    The agent listens on the network so that Home Assistant, a phone or a"
-echo "    satellite can all reach it. That needs a shared token, or it answers"
-echo "    this machine only."
-EXISTING_AGENT_TOKEN="${AGENT_TOKEN:-}"
-if [ -n "$EXISTING_AGENT_TOKEN" ]; then
-  AGENT_TOKEN_VALUE="$EXISTING_AGENT_TOKEN"
-  echo "    keeping the existing token"
-elif confirm "Generate an access token and let the house in?"; then
-  AGENT_TOKEN_VALUE="$(openssl rand -hex 24)"
-  echo "    generated"
 else
-  AGENT_TOKEN_VALUE=""
-  warn "Loopback only. Re-run this to change your mind."
+  step "Home Assistant"
+  echo "    A long lived access token: your profile page in Home Assistant,"
+  echo "    Security tab, right at the bottom. It is the whole house, so it goes"
+  echo "    in .env and never into git."
+  HA_URL="$(ask "Home Assistant address" "$EXISTING_HA_URL")"
+  HA_TOKEN_VALUE="$(secret "Home Assistant token" "$EXISTING_HA_TOKEN")"
+
+  if [ -n "$HA_TOKEN_VALUE" ]; then
+    if curl -fsS -m 6 -H "Authorization: Bearer $HA_TOKEN_VALUE" "$HA_URL/api/" >/dev/null 2>&1; then
+      echo "    reached $HA_URL"
+    else
+      warn "Could not reach $HA_URL with that token. Carrying on; pnpm run doctor will say so too."
+    fi
+  fi
+
+  step "Cloud escalation"
+  echo "    The local model hands over anything it is not confident about."
+  echo "    Leave this empty to run local only."
+  ANTHROPIC_VALUE="$(secret "Anthropic API key" "$EXISTING_ANTHROPIC")"
+
+  step "The rest of the house"
+  echo "    The agent listens on the network so that Home Assistant, a phone or"
+  echo "    a satellite can all reach it. That needs a shared token, or it"
+  echo "    answers this machine only."
+  if [ -n "$EXISTING_AGENT_TOKEN" ]; then
+    AGENT_TOKEN_VALUE="$EXISTING_AGENT_TOKEN"
+    echo "    keeping the existing token"
+  elif confirm "Generate an access token and let the house in?"; then
+    AGENT_TOKEN_VALUE="$(openssl rand -hex 24)"
+    echo "    generated"
+  else
+    AGENT_TOKEN_VALUE=""
+    warn "Loopback only. Re-run this to change your mind."
+  fi
 fi
 
 # ---------------------------------------------------------------------- voice
 
 step "Voice"
-WAKE_WORD="$(ask "Wake word (hey_jarvis, alexa, hey_mycroft)" "hey_jarvis")"
-if [ ! -f "models/openwakeword/$WAKE_WORD.onnx" ]; then
-  warn "No model for $WAKE_WORD. Fetching it."
-  WAKE_WORDS="$WAKE_WORD" sh scripts/fetch-models.sh
-fi
-VOICE="$(ask "Speaking voice (bf_emma, bf_isabella, bm_george, bm_lewis)" "bf_emma")"
 
+# Both roles need a microphone. Only the server needs a wake word, a speaking
+# voice and a model: a satellite streams what it hears and plays back what it
+# is sent.
 if have ffmpeg; then
   echo "    Audio inputs:"
   ffmpeg -f avfoundation -list_devices true -i "" 2>&1 |
@@ -154,7 +192,18 @@ if have ffmpeg; then
 fi
 INPUT_DEVICE="$(ask "Input device (\":0\" is the default microphone)" ":0")"
 
-LOCAL_MODEL="$(ask "Local model id, as LM Studio reports it" "qwen3-8b-mlx")"
+WAKE_WORD="hey_jarvis"
+VOICE="bf_emma"
+LOCAL_MODEL=""
+if [ "$ROLE" = "server" ]; then
+  WAKE_WORD="$(ask "Wake word (hey_jarvis, alexa, hey_mycroft)" "$WAKE_WORD")"
+  if [ ! -f "models/openwakeword/$WAKE_WORD.onnx" ]; then
+    warn "No model for $WAKE_WORD. Fetching it."
+    WAKE_WORDS="$WAKE_WORD" sh scripts/fetch-models.sh
+  fi
+  VOICE="$(ask "Speaking voice (bf_emma, bf_isabella, bm_george, bm_lewis)" "$VOICE")"
+  LOCAL_MODEL="$(ask "Local model id, as LM Studio reports it" "qwen3-8b-mlx")"
+fi
 
 # ---------------------------------------------------------------------- write
 
@@ -181,6 +230,7 @@ if [ -f agent.config.json ] && ! $ASSUME_YES && ! confirm "agent.config.json exi
 else
   HA_URL="$HA_URL" WAKE_WORD="$WAKE_WORD" VOICE="$VOICE" INPUT_DEVICE="$INPUT_DEVICE" \
     LOCAL_MODEL="$LOCAL_MODEL" CLOUD_ENABLED="$([ -n "$ANTHROPIC_VALUE" ] && echo true || echo false)" \
+    ROLE="$ROLE" ROOM="$ROOM" SERVER_URL="${SERVER_URL:-}" \
     node -e '
       const fs = require("node:fs");
       const base = JSON.parse(fs.readFileSync("agent.config.example.json", "utf8"));
@@ -190,6 +240,12 @@ else
       base.llm.local.model = process.env.LOCAL_MODEL;
       base.llm.cloud.enabled = process.env.CLOUD_ENABLED === "true";
       base.homeAssistant.baseUrl = process.env.HA_URL;
+      base.role = process.env.ROLE;
+      base.satellite = {
+        serverUrl: process.env.SERVER_URL || "",
+        room: process.env.ROOM || "",
+        localWake: false,
+      };
       // The example carries a placeholder MCP server to show the shape. A real
       // config should start with none rather than one that cannot start.
       base.mcpServers = {};
@@ -198,51 +254,21 @@ else
   echo "    agent.config.json"
 fi
 
-# ------------------------------------------------------------------- launchd
+# ------------------------------------------------------------------ services
 
 step "Running it"
-echo "    1. From the menu bar app, which starts and stops it for you."
-echo "    2. As a background service that starts at login."
-echo "    Either way whisper.cpp runs as a service, because it is just a model"
-echo "    kept warm."
+echo "    launchd starts it at login and restarts it if it falls over."
+echo "    The plists come from src/service.ts, which is also what"
+echo "    pnpm service status reads."
 
-LAUNCH_DIR="$HOME/Library/LaunchAgents"
-mkdir -p "$LAUNCH_DIR"
-
-write_plist() { # write_plist label program-args...
-  local label="$1"; shift
-  local file="$LAUNCH_DIR/$label.plist"
-  {
-    echo '<?xml version="1.0" encoding="UTF-8"?>'
-    echo '<plist version="1.0">'
-    echo '<dict>'
-    echo "  <key>Label</key><string>$label</string>"
-    echo '  <key>ProgramArguments</key><array>'
-    for part in "$@"; do echo "    <string>$part</string>"; done
-    echo '  </array>'
-    echo "  <key>WorkingDirectory</key><string>$AGENT_DIR</string>"
-    echo '  <key>EnvironmentVariables</key><dict>'
-    echo "    <key>PATH</key><string>$(dirname "$NODE_BIN"):/usr/bin:/bin:/usr/sbin</string>"
-    echo '  </dict>'
-    echo '  <key>RunAtLoad</key><true/>'
-    echo '  <key>KeepAlive</key><true/>'
-    echo "  <key>StandardOutPath</key><string>$HOME/Library/Logs/$label.log</string>"
-    echo "  <key>StandardErrorPath</key><string>$HOME/Library/Logs/$label.err</string>"
-    echo '</dict>'
-    echo '</plist>'
-  } > "$file"
-  launchctl unload "$file" >/dev/null 2>&1 || true
-  launchctl load -w "$file"
-  echo "    loaded $label"
-}
-
-if confirm "Also run the agent itself at login? Say no if you want the menu bar app to own it."; then
-  write_plist io.stuntdouble.home-agent \
-    "$NODE_BIN" --experimental-strip-types "--env-file-if-exists=$AGENT_DIR/.env" "$AGENT_DIR/src/index.ts"
-  warn "The first time it runs, macOS asks for microphone permission. Approve it, or it hears nothing."
+if [ "$ROLE" = "satellite" ] || confirm "Run the agent at login? Say no if you want the menu bar app to own it."; then
+  node --experimental-strip-types --env-file-if-exists=.env src/service.ts install |
+    sed 's/^/    /'
+  warn "The first run asks for the microphone. Approve it, or it hears nothing."
 else
-  rm -f "$LAUNCH_DIR/io.stuntdouble.home-agent.plist"
-  echo "    left to the app"
+  node --experimental-strip-types --env-file-if-exists=.env src/service.ts install --only=whisper |
+    sed 's/^/    /'
+  echo "    the agent itself is left to the app"
 fi
 
 # ------------------------------------------------------------------ the app
@@ -279,21 +305,35 @@ set -e
 
 echo
 if [ $DOCTOR -eq 0 ]; then
-  bold "Ready. Say \"${WAKE_WORD//_/ }\"."
+  if [ "$ROLE" = "satellite" ]; then
+    bold "Ready. It will find the server and stay connected to it."
+  else
+    bold "Ready. Say \"${WAKE_WORD//_/ }\"."
+  fi
 else
   bold "Set up, with the failures above still to fix."
 fi
-if [ -n "$AGENT_TOKEN_VALUE" ]; then
+
+if [ "$ROLE" = "server" ] && [ -n "$AGENT_TOKEN_VALUE" ]; then
   PORT="$(node -p "(require('./agent.config.json').server||{}).port||8765" 2>/dev/null || echo 8765)"
   echo
   bold "The rest of the house"
   echo "    Phones:          http://$(hostname):$PORT"
   echo "    Home Assistant:  http://$(hostname):$PORT/v1  (OpenAI Conversation integration)"
-  echo "    The token is in .env as AGENT_TOKEN."
+  echo "    Satellites:      nothing to type. They find this machine by name."
+  echo "    The token is in .env as AGENT_TOKEN. Satellites need the same one."
+elif [ "$ROLE" = "satellite" ]; then
+  echo
+  bold "This satellite"
+  echo "    Room:            ${ROOM:-not set}"
+  echo "    Server:          ${SERVER_URL:-found automatically}"
 fi
 
 echo
-echo "    pnpm text      try it without the microphone"
-echo "    pnpm start     run it in the foreground"
-echo "    pnpm run doctor    check again"
-echo "    desktop/       the menu bar app, if you want a face on it"
+echo "    pnpm service status   is it running, and does it start at login"
+echo "    pnpm service logs     what it has been saying"
+echo "    pnpm run doctor       check again"
+if [ "$ROLE" = "server" ]; then
+  echo "    pnpm text             try it without the microphone"
+  echo "    desktop/              the menu bar app, if you want a face on it"
+fi

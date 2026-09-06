@@ -177,54 +177,24 @@ fi
 
 # ------------------------------------------------------------------- whisper
 
+# One place knows how to write a LaunchAgent, and it is src/service.ts. This
+# used to be a heredoc here and a second one in install.sh, which is exactly
+# how two machines end up with services that differ in ways nobody can see.
+# Only whisper is installed here: whether the agent itself runs as a service
+# or under the app is a question, and this script does not ask questions.
 if $SKIP_WHISPER; then
   :
 else
   step "Speech to text"
-  WHISPER_MODEL="$(ls models/whisper/*.bin 2>/dev/null | head -1)"
-  if [ -z "$WHISPER_MODEL" ] || ! have whisper-server; then
-    warn "No whisper model or no whisper-server, so this is not set up yet."
+  if [ "$(uname -s)" != "Darwin" ]; then
+    warn "launchd is a Mac thing, so whisper was not set up to start at login."
   else
-    # whisper-server shells out to ffmpeg for --convert, and a LaunchAgent has
-    # no PATH worth the name, so it has to be told where both of them are.
-    TOOL_PATH="$(dirname "$(command -v whisper-server)")"
-    FFMPEG_DIR="$(dirname "$(command -v ffmpeg || echo /usr/bin/ffmpeg)")"
-    [ "$FFMPEG_DIR" = "$TOOL_PATH" ] || TOOL_PATH="$TOOL_PATH:$FFMPEG_DIR"
-
-    LABEL=io.stuntdouble.home-agent-whisper
-    PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-    mkdir -p "$HOME/Library/LaunchAgents"
-    cat > "$PLIST" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>$LABEL</string>
-  <key>ProgramArguments</key><array>
-    <string>$(command -v whisper-server)</string>
-    <string>--host</string><string>127.0.0.1</string>
-    <string>--port</string><string>8910</string>
-    <string>--model</string><string>$AGENT_DIR/$WHISPER_MODEL</string>
-    <string>--language</string><string>en</string>
-    <string>--threads</string><string>6</string>
-    <string>--no-timestamps</string>
-    <string>--convert</string>
-  </array>
-  <key>WorkingDirectory</key><string>$AGENT_DIR</string>
-  <key>EnvironmentVariables</key><dict>
-    <key>PATH</key><string>$TOOL_PATH:/usr/bin:/bin:/usr/sbin</string>
-  </dict>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>$HOME/Library/Logs/$LABEL.log</string>
-  <key>StandardErrorPath</key><string>$HOME/Library/Logs/$LABEL.err</string>
-</dict>
-</plist>
-PLIST
-    launchctl unload "$PLIST" >/dev/null 2>&1
-    if launchctl load -w "$PLIST" >/dev/null 2>&1; then
-      ok "whisper is running on 127.0.0.1:8910"
+    SERVICE_OUT="$(node --experimental-strip-types --env-file-if-exists=.env \
+      src/service.ts install --only=whisper 2>&1)" && SERVICE_OK=0 || SERVICE_OK=1
+    if [ $SERVICE_OK -eq 0 ]; then
+      printf '%s\n' "$SERVICE_OUT" | while IFS= read -r line; do [ -n "$line" ] && ok "$line"; done
     else
-      warn "wrote the LaunchAgent but launchctl would not load it"
+      warn "could not install whisper: $(printf '%s' "$SERVICE_OUT" | tail -1)"
     fi
   fi
 fi

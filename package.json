@@ -15,19 +15,21 @@
     "models": "sh scripts/fetch-models.sh",
     "doctor": "node --experimental-strip-types --env-file-if-exists=.env src/doctor.ts",
     "first-run": "bash install.sh",
-    "connectors": "node --experimental-strip-types --env-file-if-exists=.env src/connectors/cli.ts"
+    "connectors": "node --experimental-strip-types --env-file-if-exists=.env src/connectors/cli.ts",
+    "service": "node --experimental-strip-types --env-file-if-exists=.env src/service.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.123.0",
     "@modelcontextprotocol/sdk": "^1.20.0",
+    "bonjour-service": "^1.4.4",
     "kokoro-js": "^1.2.1",
     "onnxruntime-node": "^1.23.0",
-    "zod": "^3.25.76",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
-    "typescript": "^5.9.2",
-    "@types/ws": "^8.5.13"
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.9.2"
   }
 }

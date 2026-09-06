@@ -1,5 +1,6 @@
 {
   "name": "Assistant",
+  "role": "server",
   "audio": {
     "inputDevice": ":0",
     "silenceMs": 800,
@@ -44,6 +45,15 @@
     "port": 8765,
     "host": "0.0.0.0",
     "web": true
+  },
+  "discovery": {
+    "enabled": true,
+    "name": ""
+  },
+  "satellite": {
+    "serverUrl": "",
+    "room": "",
+    "localWake": false
   },
   "mcpServers": {
     "calendar": {

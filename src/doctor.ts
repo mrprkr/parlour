@@ -2,8 +2,10 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { loadConfig } from "./config.ts";
+import { loadConfig, type Config } from "./config.ts";
 import { ConnectorStore } from "./connectors/store.ts";
+import { findServer } from "./discovery/index.ts";
+import { statusAll, AGENT_LABEL } from "./service.ts";
 
 /**
  * Checks every moving part the agent depends on and says which one is broken.
@@ -32,14 +34,28 @@ export async function diagnose(configPath?: string): Promise<Check[]> {
 
   add("ffmpeg", await onPath("ffmpeg"), "brew install ffmpeg. It is how the microphone is read.");
 
-  const wakeDir = config.wake.modelDir;
-  const missing = ["melspectrogram.onnx", "embedding_model.onnx", ...config.wake.words.map((w) => `${w}.onnx`)]
-    .filter((file) => !existsSync(join(wakeDir, file)));
-  add(
-    "wake word models",
-    missing.length === 0,
-    missing.length ? `missing from ${wakeDir}: ${missing.join(", ")}. Run pnpm models.` : `${wakeDir}`,
-  );
+  if (config.role === "satellite") {
+    const target = config.satellite.serverUrl || (await findServer(4000))?.url;
+    add(
+      "the server",
+      Boolean(target) && (await reachable(`${target}/health`)),
+      target
+        ? `${target}. A failure here is the server being down, or this network dropping multicast.`
+        : "nothing is advertising _home-agent._tcp. Is the server running, and on this network?",
+    );
+    add(
+      "access token",
+      Boolean(secrets.agentToken),
+      secrets.agentToken
+        ? "set, and it has to be the same one the server has"
+        : "AGENT_TOKEN is not set in .env, so the server will refuse this satellite.",
+    );
+    if (config.satellite.localWake) add(...wakeModels(config));
+    add(...serviceCheck(await statusAll(process.cwd())));
+    return checks;
+  }
+
+  add(...wakeModels(config));
 
   add(
     "whisper server",
@@ -92,6 +108,20 @@ export async function diagnose(configPath?: string): Promise<Check[]> {
     );
   }
 
+  add(...serviceCheck(await statusAll(process.cwd())));
+
+  if (config.server.enabled && config.discovery.enabled) {
+    const found = await findServer(4000);
+    add(
+      "discoverable",
+      Boolean(found),
+      found
+        ? `advertised as "${found.name}" at ${found.url}`
+        : "nothing is advertising _home-agent._tcp yet, which is expected while the agent is stopped.",
+      false,
+    );
+  }
+
   const connectors = await new ConnectorStore(config.connectorsFile).list();
   if (connectors.length) {
     const store = new ConnectorStore(config.connectorsFile);
@@ -119,6 +149,34 @@ export async function diagnose(configPath?: string): Promise<Check[]> {
   }
 
   return checks;
+}
+
+/** Used by both roles, because a satellite with local wake needs them too. */
+function wakeModels(config: Config): [string, boolean, string] {
+  const dir = config.wake.modelDir;
+  const missing = ["melspectrogram.onnx", "embedding_model.onnx", ...config.wake.words.map((w) => `${w}.onnx`)]
+    .filter((file) => !existsSync(join(dir, file)));
+  return [
+    "wake word models",
+    missing.length === 0,
+    missing.length ? `missing from ${dir}: ${missing.join(", ")}. Run pnpm models.` : dir,
+  ];
+}
+
+/** Whether launchd is keeping it alive, which is the difference between a
+ * thing that runs and a thing that keeps running. */
+function serviceCheck(states: Awaited<ReturnType<typeof statusAll>>): [string, boolean, string, boolean] {
+  const agent = states.find((service) => service.label === AGENT_LABEL);
+  return [
+    "service",
+    Boolean(agent?.running),
+    agent?.running
+      ? `running as pid ${agent.pid}, and it starts at login`
+      : agent?.installed
+        ? `installed but not running${agent.lastExit ? `, last exit ${agent.lastExit}` : ""}. pnpm service logs.`
+        : "not installed. pnpm service install, or let the menu bar app own it.",
+    false,
+  ];
 }
 
 async function onPath(binary: string): Promise<boolean> {

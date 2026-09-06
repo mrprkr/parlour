@@ -103,6 +103,12 @@ export const ConfigSchema = z.object({
   mcpServers: z.record(McpServer).default({}),
 
   /**
+   * What this machine is. One box in the house runs the models and answers;
+   * anything else that has a microphone is a satellite that streams to it.
+   */
+  role: z.enum(["server", "satellite"]).default("server"),
+
+  /**
    * The agent as a service on the house network, so that the Mac mini's
    * microphone is one client among several rather than the only way in.
    */
@@ -117,6 +123,31 @@ export const ConfigSchema = z.object({
     host: z.string().default("0.0.0.0"),
     /** Serve the push to talk page at / for phones. */
     web: z.boolean().default(true),
+  }).default({}),
+
+  /**
+   * Bonjour, so that a satellite or a phone finds the server by looking rather
+   * than by being told an address that changes with the router's mood.
+   */
+  discovery: z.object({
+    enabled: z.boolean().default(true),
+    /** How it appears when browsing. Empty means the machine's own name. */
+    name: z.string().default(""),
+  }).default({}),
+
+  /** Only read when role is "satellite". */
+  satellite: z.object({
+    /** Empty means find the server with Bonjour. */
+    serverUrl: z.string().default(""),
+    /** Which room this box is in. The server puts it in the prompt. */
+    room: z.string().default(""),
+    /**
+     * Run the wake word here and stream only what follows it. Costs a copy of
+     * the models on the satellite and saves a constant 32 KB/s on the network.
+     */
+    localWake: z.boolean().default(false),
+    /** Backoff ceiling when the server is down, in ms. */
+    retryMs: z.number().int().positive().default(15000),
   }).default({}),
 
   /**

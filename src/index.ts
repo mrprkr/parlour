@@ -15,12 +15,20 @@ import { Timers } from "./tools/timers.ts";
 import { connectorTools } from "./connectors/index.ts";
 import { VoiceSession, type VoiceSink, type VoiceState } from "./voice/session.ts";
 import { startServer } from "./server/index.ts";
+import { runSatellite } from "./satellite/index.ts";
 import { emit } from "./events.ts";
 
 const log = logger("agent");
 
 async function main(): Promise<void> {
   const { config, secrets } = loadConfig(process.env.AGENT_CONFIG ?? "agent.config.json");
+
+  // A satellite is a microphone and a speaker for the server in the other
+  // room: no models, no tools, no keys. Everything below this is the server.
+  if (config.role === "satellite") {
+    await runSatellite(config, secrets);
+    return;
+  }
 
   const registry = new ToolRegistry();
   const mcp = new McpTools();

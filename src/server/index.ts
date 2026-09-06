@@ -11,6 +11,7 @@ import type { Synthesiser } from "../tts/index.ts";
 import { FRAME_SAMPLES, wavToFrames } from "../audio/capture.ts";
 import { decodeToWav } from "../audio/decode.ts";
 import { VoiceSession, type VoiceState } from "../voice/session.ts";
+import { advertise } from "../discovery/index.ts";
 import { logger } from "../logger.ts";
 
 const log = logger("server");
@@ -69,12 +70,26 @@ export async function startServer(deps: ServerDeps): Promise<{ close(): Promise<
   await new Promise<void>((resolve) => server.listen(config.server.port, host, resolve));
   log.info(`listening on http://${host}:${config.server.port}`);
 
+  // Only advertise what the house can actually reach. A loopback-only server
+  // that announces itself is an invitation to a satellite that will never
+  // connect.
+  const announcement =
+    host === "127.0.0.1"
+      ? null
+      : advertise(config, {
+          port: config.server.port,
+          needsToken: Boolean(token),
+          tools: deps.status().tools,
+        });
+
   return {
-    close: () =>
-      new Promise((resolve) => {
+    close: async () => {
+      await announcement?.stop();
+      await new Promise<void>((resolve) => {
         for (const client of sockets.clients) client.terminate();
         server.close(() => resolve());
-      }),
+      });
+    },
   };
 }
 
@@ -303,6 +318,7 @@ function listen(socket: WebSocket, url: URL, deps: ServerDeps): void {
     if (!isBinary) {
       const message = parse(data.toString());
       if (message?.type === "start") pending = [];
+      if (message?.type === "cancel") pending = null;
       if (message?.type === "end" && pending) {
         const frames = pending;
         pending = null;

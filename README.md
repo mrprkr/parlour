@@ -17,6 +17,7 @@ Then, day to day:
 pnpm text            # everything but the microphone
 pnpm start           # the real thing, in the foreground
 pnpm run doctor      # which of the moving parts is down
+pnpm service status  # is it running, and does it start at login
 pnpm connectors      # the household's connected accounts
 ```
 
@@ -37,6 +38,9 @@ pnpm connectors      # the household's connected accounts
 | `src/tools/` | MCP clients, Home Assistant REST, search, timers. |
 | `src/voice/` | The wake-to-answer state machine, shared by every client. |
 | `src/server/` | The agent on the network, and the phone page it serves. |
+| `src/service.ts` | The only thing that writes a LaunchAgent. `pnpm service`. |
+| `src/discovery/` | Bonjour: the server advertises, satellites look. |
+| `src/satellite/` | The other role. A microphone, a speaker and a socket. |
 | `src/connectors/` | Signing in to remote MCP servers, and where the tokens go. |
 | `src/prompt.ts` | The persona, and the rule for when to hand over. |
 | `desktop/` | The menu bar app: Tauri and Rust around the same agent. |
