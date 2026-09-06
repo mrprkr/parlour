@@ -450,6 +450,12 @@ async fn audio_devices() -> Vec<String> {
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
+            // A menu bar app, so no Dock icon and no menu bar of its own. The
+            // tray is the way back to the window, which is why closing the
+            // window only hides it.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             let settings_path = app
                 .path()
                 .app_config_dir()
@@ -468,6 +474,14 @@ fn main() {
             let stop = MenuItem::with_id(app, "stop", "Stop", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &start, &stop, &quit])?;
+
+            // Nothing activates an Accessory app for you, so a window that is
+            // meant to be seen at launch has to ask.
+            if let Some(window) = app.get_webview_window("main") {
+                if window.is_visible().unwrap_or(false) {
+                    let _ = window.set_focus();
+                }
+            }
 
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())

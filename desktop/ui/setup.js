@@ -54,6 +54,11 @@ export async function refresh() {
   paintChecks();
   markDone();
   await loadAnswers();
+
+  // Nobody should have to know to press a button for this. ffmpeg is what
+  // opens the device, so there is nothing to ask with until it is installed,
+  // and after the first yes this is a silent quarter of a second.
+  if (readiness.ffmpeg && micGranted === undefined) void askForMicrophone();
 }
 
 function paintChecks() {
@@ -202,7 +207,7 @@ function paintMic(state) {
   $("ob-mic-settings").classList.toggle("hidden", !state.asked || state.granted);
 }
 
-$("ob-mic-ask").addEventListener("click", async () => {
+async function askForMicrophone() {
   const button = $("ob-mic-ask");
   button.disabled = true;
   paintMic({ granted: false, asked: false, detail: "Asking. Answer the prompt macOS puts up." });
@@ -211,12 +216,19 @@ $("ob-mic-ask").addEventListener("click", async () => {
     micGranted = result.granted;
     paintMic({ granted: result.granted, asked: true, detail: result.detail });
   } catch (error) {
+    micGranted = false;
     paintMic({ granted: false, asked: true, detail: String(error) });
   } finally {
     button.disabled = false;
     markMicDone();
   }
-});
+}
+
+$("ob-mic-ask").addEventListener("click", askForMicrophone);
+
+// A different microphone is a different question only in so far as the device
+// has to open; the permission itself is the app's.
+$("ob-mic").addEventListener("change", askForMicrophone);
 
 $("ob-mic-settings").addEventListener("click", () => invoke("open_privacy_settings"));
 
