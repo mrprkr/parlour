@@ -1,4 +1,22 @@
 node_modules/
-models/
+dist/
+.nx/
+*.log
+.DS_Store
+
+# A checkout is not a home. Config, secrets and models live under
+# ~/.config/parlour and ~/Library/Caches/parlour, never here.
 .env
-agent.config.json
+secrets.env
+config.json
+models/
+
+# Tauri
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
+# Every size, the .icns and the platform sets, all generated from
+# src-tauri/icon.png by `pnpm icons`, which the build runs first. The source
+# lives outside this directory because `tauri icon` writes icon.png into it,
+# and a source that is also an output rewrites itself on every build.
+apps/desktop/src-tauri/icons/

@@ -1,0 +1,56 @@
+{
+  "name": "parlour",
+  "version": "0.1.0",
+  "description": "A local-first voice agent for the house: wake word, speech to text, a local model with tools, and a cloud model behind it",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mrprkr/parlour.git"
+  },
+  "homepage": "https://github.com/mrprkr/parlour#readme",
+  "keywords": [
+    "voice-assistant",
+    "home-assistant",
+    "wake-word",
+    "whisper",
+    "local-first",
+    "mcp"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "parlour": "dist/cli/main.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./testing": "./dist/testing/index.js"
+  },
+  "scripts": {
+    "dev": "node --experimental-strip-types --watch src/cli/main.ts start",
+    "build": "tsc -p tsconfig.build.json && cp -R src/server/web dist/server/web",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.123.0",
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "bonjour-service": "^1.4.4",
+    "kokoro-js": "^1.2.1",
+    "onnxruntime-node": "^1.23.0",
+    "ws": "^8.18.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.9.2"
+  }
+}

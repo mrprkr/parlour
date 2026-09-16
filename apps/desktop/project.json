@@ -1,0 +1,12 @@
+{
+  "name": "desktop",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/desktop/src",
+  "targets": {
+    "build": { "command": "pnpm run build:ui", "options": { "cwd": "apps/desktop" }, "outputs": ["{projectRoot}/dist"] },
+    "typecheck": { "command": "pnpm run typecheck", "options": { "cwd": "apps/desktop" } },
+    "lint": { "command": "pnpm exec biome check src", "options": { "cwd": "apps/desktop" } },
+    "cargo-check": { "command": "cargo check --manifest-path src-tauri/Cargo.toml", "options": { "cwd": "apps/desktop" } }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "parlour",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/parlour/src",
+  "targets": {
+    "build": { "command": "pnpm run build", "options": { "cwd": "packages/parlour" } },
+    "typecheck": { "command": "pnpm run typecheck", "options": { "cwd": "packages/parlour" } },
+    "lint": { "command": "pnpm exec biome check .", "options": { "cwd": "packages/parlour" } },
+    "test": { "command": "pnpm run test", "options": { "cwd": "packages/parlour" } }
+  }
+}

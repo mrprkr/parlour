@@ -1,35 +1,20 @@
 {
-  "name": "@home/agent",
-  "version": "0.1.0",
+  "name": "parlour-workspace",
   "private": true,
-  "type": "module",
-  "description": "Voice agent for the house, running on a Mac mini",
+  "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "dev": "node --experimental-strip-types --env-file-if-exists=.env --watch src/index.ts",
-    "start": "node --experimental-strip-types --env-file-if-exists=.env src/index.ts",
-    "text": "pnpm start --text",
-    "typecheck": "tsc --noEmit",
-    "models": "sh scripts/fetch-models.sh",
-    "doctor": "node --experimental-strip-types --env-file-if-exists=.env src/doctor.ts",
-    "first-run": "bash install.sh",
-    "connectors": "node --experimental-strip-types --env-file-if-exists=.env src/connectors/cli.ts",
-    "service": "node --experimental-strip-types --env-file-if-exists=.env src/service.ts"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.123.0",
-    "@modelcontextprotocol/sdk": "^1.20.0",
-    "bonjour-service": "^1.4.4",
-    "kokoro-js": "^1.2.1",
-    "onnxruntime-node": "^1.23.0",
-    "ws": "^8.18.0",
-    "zod": "^3.25.76"
+    "build": "nx run-many -t build",
+    "typecheck": "nx run-many -t typecheck",
+    "lint": "nx run-many -t lint",
+    "test": "nx run-many -t test",
+    "check": "nx run-many -t typecheck lint test",
+    "version:set": "node scripts/set-version.mjs"
   },
   "devDependencies": {
-    "@types/node": "^22.15.3",
-    "@types/ws": "^8.5.13",
-    "typescript": "^5.9.2"
+    "@biomejs/biome": "^2.5.13",
+    "nx": "^21.6.11"
   }
 }
