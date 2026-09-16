@@ -1,20 +1,20 @@
 import { hostname } from "node:os";
 import { Bonjour, type Service } from "bonjour-service";
-import type { Config } from "../config.ts";
-import { logger } from "../logger.ts";
+import type { Config } from "../core/config.ts";
+import { logger } from "../core/logger.ts";
 
 const log = logger("discovery");
 
 /**
  * Bonjour, so that nothing in the house has to be told an IP address.
  *
- * The server advertises `_home-agent._tcp`; satellites and phones browse for
+ * The server advertises `_parlour._tcp`; satellites and phones browse for
  * it. This is the same mechanism Home Assistant, printers and AirPlay use, so
  * it works on the network people already have, survives the router handing out
  * a different address, and needs nothing configured on either end.
  */
 
-export const SERVICE_TYPE = "home-agent";
+export const SERVICE_TYPE = "parlour";
 
 export interface Found {
   name: string;

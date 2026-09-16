@@ -1,5 +1,5 @@
 {
-  "name": "Home agent",
+  "name": "Parlour",
   "short_name": "Agent",
   "start_url": ".",
   "display": "standalone",

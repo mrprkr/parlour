@@ -1,0 +1,4 @@
+#!/bin/sh
+# Runs the CLI from source, for contributors and for the desktop app when it is
+# pointed at a checkout. The published package runs dist/cli/main.js instead.
+exec node --experimental-strip-types --disable-warning=ExperimentalWarning "$(dirname "$0")/../src/cli/main.ts" "$@"

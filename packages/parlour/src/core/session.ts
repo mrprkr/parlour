@@ -1,18 +1,19 @@
-import { FRAME_SAMPLES, toWav } from "../audio/capture.ts";
-import { Endpointer } from "../audio/endpoint.ts";
-import type { WakeWord } from "../audio/wake.ts";
-import type { Config } from "../config.ts";
-import type { Answer, Router } from "../llm/router.ts";
-import { logger } from "../logger.ts";
-import { isNoise, transcribe } from "../stt/whisper.ts";
+import { FRAME_MS, toWav } from "./audio.ts";
+import type { Config } from "./config.ts";
+import { Endpointer } from "./endpoint.ts";
+import { type AgentEvent, emit } from "./events.ts";
+import { logger } from "./logger.ts";
+import type { SpeechToText, WakeWordDetector } from "./ports.ts";
+import type { Answer, Router } from "./router.ts";
+import type { Speaker } from "./speaker.ts";
+import { isNoise } from "./text.ts";
 
 const log = logger("voice");
-const FRAME_MS = (FRAME_SAMPLES / 16000) * 1000;
 
 export type VoiceState = "idle" | "listening" | "thinking" | "speaking";
 
 /**
- * Where a reply goes. The Mac's own microphone speaks through Kokoro and the
+ * Where a reply goes. This machine's own microphone speaks through its
  * speakers; a satellite gets the same text and the same audio over a socket.
  * Keeping this an interface is what makes one pipeline serve both.
  */
@@ -25,21 +26,22 @@ export interface VoiceSink {
 }
 
 export interface VoiceSessionOptions {
-  config: Config;
+  audio: Config["audio"];
   router: Router;
-  wake: WakeWord;
+  wake: WakeWordDetector;
+  stt: SpeechToText;
   sink: VoiceSink;
   /** Conversation key and log label. One per client. */
   id: string;
   room?: string;
-  /** Checked after the wake word and before anything is acted on. */
-  muted?: () => Promise<boolean>;
+  /** Asked after the wake word and before anything is acted on. True means ignore it. */
+  gate?: () => Promise<boolean>;
 }
 
 /**
  * Wake word, endpointing, transcription, the model, and the reply, as one
  * state machine over a stream of 80 ms frames. It does not know where the
- * frames come from, which is the point: the Mac's microphone, a Voice PE
+ * frames come from, which is the point: this machine's microphone, a Voice PE
  * satellite relaying audio, a phone or a piece of custom hardware all feed the
  * same object and get the same behaviour.
  */
@@ -58,20 +60,20 @@ export class VoiceSession {
 
   /** Feed one frame. Returns immediately; answering happens in the background. */
   async push(frame: Int16Array): Promise<void> {
-    const { config, wake, sink } = this.#options;
+    const { audio, wake, sink } = this.#options;
     if (this.#state === "thinking" || this.#state === "speaking") return;
 
     // While the agent is talking, its own voice is in the microphone. Unless
     // the client has a microphone that cannot hear its speaker, the only safe
     // thing is to stop listening.
-    if (sink.isSpeaking() && !config.audio.bargeIn) {
+    if (sink.isSpeaking() && !audio.bargeIn) {
       wake.reset();
       return;
     }
 
     if (this.#state === "idle") {
       if (!(await wake.push(frame))) return;
-      if (await this.#options.muted?.()) {
+      if (await this.#options.gate?.()) {
         log.info(`${this.#options.id}: muted, ignoring`);
         return;
       }
@@ -79,9 +81,9 @@ export class VoiceSession {
       this.#enter("listening");
       this.#endpointer = new Endpointer({
         frameMs: FRAME_MS,
-        silenceMs: config.audio.silenceMs,
-        maxUtteranceMs: config.audio.maxUtteranceMs,
-        silenceThreshold: config.audio.silenceThreshold,
+        silenceMs: audio.silenceMs,
+        maxUtteranceMs: audio.maxUtteranceMs,
+        silenceThreshold: audio.silenceThreshold,
         leadingSilenceMs: 2500,
       });
       return;
@@ -122,10 +124,10 @@ export class VoiceSession {
   }
 
   async #answer(frames: Int16Array[]): Promise<Answer | null> {
-    const { config, router, sink, id, room } = this.#options;
+    const { audio, router, stt, sink, id, room } = this.#options;
     const started = Date.now();
     try {
-      const text = await transcribe(toWav(frames, config.audio.sampleRate), config);
+      const text = await stt.transcribe(toWav(frames, audio.sampleRate));
       if (!text || isNoise(text)) {
         log.info(`${id}: nothing said`);
         return null;
@@ -148,5 +150,41 @@ export class VoiceSession {
   #enter(state: VoiceState): void {
     this.#state = state;
     this.#options.sink.onState?.(state);
+  }
+}
+
+/**
+ * This machine's own speakers as a sink, with the session's state going out
+ * as events for the desktop app. The CLI's microphone loop and the server
+ * both speak through it, so a timer set from a phone still sounds in the room.
+ */
+export class LocalVoice implements VoiceSink {
+  readonly #speaker: Speaker;
+  readonly #emit: (event: AgentEvent) => void;
+
+  constructor(speaker: Speaker, emitter: (event: AgentEvent) => void = emit) {
+    this.#speaker = speaker;
+    this.#emit = emitter;
+  }
+
+  /**
+   * The speaker already cuts sentences and cancels the previous turn. The
+   * answer is for sinks that send it over a socket; the room only hears it.
+   */
+  say(text: string, _answer?: Answer): Promise<void> {
+    return this.#speaker.say(text);
+  }
+
+  isSpeaking(): boolean {
+    return this.#speaker.isSpeaking();
+  }
+
+  stop(): void {
+    this.#speaker.stop();
+  }
+
+  onState(state: VoiceState, detail?: string): void {
+    if (state === "thinking" && detail) this.#emit({ type: "heard", text: detail });
+    else this.#emit({ type: "state", value: state });
   }
 }

@@ -4,15 +4,12 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type WebSocket, WebSocketServer } from "ws";
-import { FRAME_SAMPLES, wavToFrames } from "../audio/capture.ts";
-import { decodeToWav } from "../audio/decode.ts";
-import type { WakeModels } from "../audio/wake.ts";
-import type { Config, Secrets } from "../config.ts";
-import { advertise } from "../discovery/index.ts";
-import type { Router } from "../llm/router.ts";
-import { logger } from "../logger.ts";
-import type { Synthesiser } from "../tts/index.ts";
-import { VoiceSession, type VoiceState } from "../voice/session.ts";
+import type { Agent } from "../core/agent.ts";
+import { decodeToWav, FRAME_SAMPLES, wavToFrames } from "../core/audio.ts";
+import type { Config } from "../core/config.ts";
+import { logger } from "../core/logger.ts";
+import { VoiceSession, type VoiceState } from "../core/session.ts";
+import { advertise } from "./discovery.ts";
 
 const log = logger("server");
 const WEB_DIR = fileURLToPath(new URL("./web/", import.meta.url));
@@ -20,34 +17,38 @@ const MAX_BODY = 8 * 1024 * 1024;
 
 export interface ServerDeps {
   config: Config;
-  secrets: Secrets;
-  router: Router;
-  wake: WakeModels;
-  synth: Synthesiser;
-  muted: () => Promise<boolean>;
-  status: () => { tools: number; cloud: boolean };
+  /** PARLOUR_TOKEN. Without it the server answers loopback only. */
+  token: string | undefined;
+  /** The parts of the assembled agent the network reaches. The microphone is not one of them. */
+  agent: Pick<Agent, "router" | "wake" | "stt" | "tts" | "gate" | "status">;
+}
+
+export interface RunningServer {
+  close(): Promise<void>;
+  /** The port actually bound, which differs from config when that asked for 0. */
+  port: number;
+  host: string;
 }
 
 /**
  * The agent, as a service on the house network.
  *
- * The Mac's own microphone is one client of this and not a privileged one.
- * Everything else in the house reaches the same brain the same way: Home
+ * This machine's own microphone is one client of this and not a privileged
+ * one. Everything else in the house reaches the same brain the same way: Home
  * Assistant through the OpenAI-compatible endpoint, so every Voice PE
  * satellite works with no new firmware; phones through the page at /; custom
  * hardware through the socket at /listen, which is the same pipeline the local
  * microphone runs, wake word and all.
  */
-export async function startServer(deps: ServerDeps): Promise<{ close(): Promise<void> } | null> {
-  const { config, secrets } = deps;
+export async function startServer(deps: ServerDeps): Promise<RunningServer | null> {
+  const { config, token } = deps;
   if (!config.server.enabled) return null;
 
   // A voice agent on an open port can turn the heating on and read the
   // shopping list. Without a token it answers loopback only.
-  const token = secrets.agentToken;
   const host = token ? config.server.host : "127.0.0.1";
   if (!token && config.server.host !== "127.0.0.1") {
-    log.warn("AGENT_TOKEN is not set, so the server is bound to loopback and the house cannot reach it");
+    log.warn("PARLOUR_TOKEN is not set, so the server is bound to loopback and the house cannot reach it");
   }
 
   const server = createServer((request, response) => {
@@ -68,7 +69,9 @@ export async function startServer(deps: ServerDeps): Promise<{ close(): Promise<
   });
 
   await new Promise<void>((resolve) => server.listen(config.server.port, host, resolve));
-  log.info(`listening on http://${host}:${config.server.port}`);
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : config.server.port;
+  log.info(`listening on http://${host}:${port}`);
 
   // Only advertise what the house can actually reach. A loopback-only server
   // that announces itself is an invitation to a satellite that will never
@@ -77,12 +80,14 @@ export async function startServer(deps: ServerDeps): Promise<{ close(): Promise<
     host === "127.0.0.1"
       ? null
       : advertise(config, {
-          port: config.server.port,
+          port,
           needsToken: Boolean(token),
-          tools: deps.status().tools,
+          tools: deps.agent.status().tools,
         });
 
   return {
+    port,
+    host,
     close: async () => {
       await announcement?.stop();
       await new Promise<void>((resolve) => {
@@ -110,7 +115,7 @@ async function handle(
   }
 
   if (route === "GET /health") {
-    send(response, 200, { ok: true, ...deps.status() });
+    send(response, 200, { ok: true, ...deps.agent.status() });
     return;
   }
 
@@ -127,7 +132,7 @@ async function handle(
     case "GET /v1/models":
       return send(response, 200, {
         object: "list",
-        data: [{ id: "home-agent", object: "model", created: 0, owned_by: "house" }],
+        data: [{ id: "parlour", object: "model", created: 0, owned_by: "parlour" }],
       });
     case "POST /v1/chat/completions":
       return completions(request, response, deps);
@@ -141,7 +146,7 @@ async function ask(request: IncomingMessage, response: ServerResponse, deps: Ser
   const body = (await json(request)) as { text?: string; client?: string; room?: string };
   if (!body.text) return send(response, 400, { error: "text is required" });
 
-  const answer = await deps.router.ask(body.text, {
+  const answer = await deps.agent.router.ask(body.text, {
     session: body.client ?? "api",
     room: body.room,
   });
@@ -170,12 +175,8 @@ async function voice(
   let reply = "";
   let via = "local";
   const session = new VoiceSession({
-    config: deps.config,
-    router: deps.router,
-    wake: deps.wake.detector(client),
-    id: client,
+    ...pipeline(deps, client),
     room,
-    muted: deps.muted,
     sink: {
       say: async (text, answer) => {
         reply = text;
@@ -192,7 +193,7 @@ async function voice(
   const answer = await session.utterance(wavToFrames(wav));
   if (!answer) return send(response, 200, { heard, reply: "", via, audio: null });
 
-  const speech = await deps.synth.render(reply);
+  const speech = await deps.agent.tts.render(reply);
   send(response, 200, { heard, reply, via, audio: speech.toString("base64") });
 }
 
@@ -224,7 +225,7 @@ async function completions(
   // The caller's own system prompt and tools are ignored on purpose: this
   // agent has its own persona and its own tools, and the point of pointing
   // Home Assistant at it is to get them.
-  const answer = await deps.router.ask(text, { session: `ha:${payload.user ?? "default"}` });
+  const answer = await deps.agent.router.ask(text, { session: `ha:${payload.user ?? "default"}` });
   const id = `chatcmpl-${Date.now()}`;
   const created = Math.floor(Date.now() / 1000);
 
@@ -233,7 +234,7 @@ async function completions(
       id,
       object: "chat.completion",
       created,
-      model: "home-agent",
+      model: "parlour",
       choices: [{ index: 0, message: { role: "assistant", content: answer.text }, finish_reason: "stop" }],
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
     });
@@ -251,7 +252,7 @@ async function completions(
         id,
         object: "chat.completion.chunk",
         created,
-        model: "home-agent",
+        model: "parlour",
         choices: [{ index: 0, delta, finish_reason: finish }],
       })}\n\n`,
     );
@@ -284,18 +285,14 @@ function listen(socket: WebSocket, url: URL, deps: ServerDeps): void {
   };
 
   const session = new VoiceSession({
-    config: deps.config,
-    router: deps.router,
-    wake: deps.wake.detector(client),
-    id: client,
+    ...pipeline(deps, client),
     room,
-    muted: deps.muted,
     sink: {
       say: async (text, answer) => {
         tell({ type: "reply", text, via: answer.via });
         speaking = true;
         try {
-          const wav = await deps.synth.render(text);
+          const wav = await deps.agent.tts.render(text);
           if (socket.readyState === socket.OPEN) socket.send(wav);
         } finally {
           // The client tells us when playback finished; until then assume it
@@ -346,6 +343,23 @@ function listen(socket: WebSocket, url: URL, deps: ServerDeps): void {
 }
 
 // --------------------------------------------------------------------- plumbing
+
+/**
+ * What every network client's session has in common. Each client gets a wake
+ * word detector of its own so two rooms do not share a refractory period,
+ * and the gate is the agent's, so a muted house is muted for phones too.
+ */
+function pipeline(deps: ServerDeps, client: string) {
+  const { agent } = deps;
+  return {
+    audio: deps.config.audio,
+    router: agent.router,
+    wake: agent.wake.detector(client),
+    stt: agent.stt,
+    id: client,
+    gate: () => agent.gate(),
+  };
+}
 
 function authorised(request: IncomingMessage, url: URL, token: string | undefined): boolean {
   if (!token) return true; // Loopback only in this case; see startServer.

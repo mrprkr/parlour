@@ -1,16 +1,18 @@
 import { hostname } from "node:os";
 import WebSocket from "ws";
-import { FRAME_SAMPLES, Microphone } from "../audio/capture.ts";
-import { Endpointer } from "../audio/endpoint.ts";
-import { WakeModels } from "../audio/wake.ts";
-import type { Config, Secrets } from "../config.ts";
-import { findServer } from "../discovery/index.ts";
-import { emit } from "../events.ts";
-import { logger } from "../logger.ts";
-import { playWav } from "../tts/play.ts";
+import "../core/builtins.ts";
+import { FRAME_MS } from "../core/audio.ts";
+import type { Config } from "../core/config.ts";
+import { Endpointer } from "../core/endpoint.ts";
+import { emit } from "../core/events.ts";
+import { logger } from "../core/logger.ts";
+import type { Paths } from "../core/paths.ts";
+import type { AudioSink, AudioSource, WakeWordEngine } from "../core/ports.ts";
+import { type ProviderKind, resolveProvider } from "../core/providers.ts";
+import type { Secrets } from "../core/secrets.ts";
+import { findServer } from "./discovery.ts";
 
 const log = logger("satellite");
-const FRAME_MS = (FRAME_SAMPLES / 16000) * 1000;
 
 /**
  * A box with a microphone and a speaker, and no opinions.
@@ -20,20 +22,33 @@ const FRAME_MS = (FRAME_SAMPLES / 16000) * 1000;
  * back what comes back, and reconnects for as long as it is switched on. No
  * model runs here, so it is happy on a Mac mini too old for anything else, and
  * a second one in another room costs nothing but the hardware.
+ *
+ * It resolves its own microphone, speaker and wake word rather than taking an
+ * `Agent`: building one would create a speech and a language model this box
+ * will never use, and fail on the keys it does not have.
  */
-export async function runSatellite(config: Config, secrets: Secrets): Promise<void> {
+export async function runSatellite(config: Config, secrets: Secrets, paths: Paths): Promise<void> {
   const name = config.discovery.name || hostname().replace(/\.local$/, "");
   const room = config.satellite.room;
 
+  const resolve = <T>(kind: ProviderKind, provider: string, slice: unknown) =>
+    resolveProvider<T>(kind, provider, slice, { paths, secrets, log: logger(provider), emit, config });
+  const mic = await resolve<AudioSource>("audioSource", config.audio.source, config.audio);
+  const speaker = await resolve<AudioSink>("audioSink", config.audio.sink, config.audio);
+
   // Local wake is optional: it saves streaming the room to the server all day,
   // at the cost of keeping the models on this box too.
-  const wake = config.satellite.localWake ? await WakeModels.load(config.wake) : null;
-  if (wake) log.info(`wake word runs here, listening for "${config.wake.words.join('", "')}"`);
+  let wake: WakeWordEngine | null = null;
+  if (config.satellite.localWake) {
+    wake = await resolve<WakeWordEngine>("wake", config.wake.provider, config.wake);
+    await wake.load();
+    log.info(`wake word runs here, listening for "${config.wake.words.join('", "')}"`);
+  }
 
-  const mic = new Microphone(config.audio.inputDevice, config.audio.sampleRate);
   const abort = new AbortController();
   process.on("SIGINT", () => {
     mic.close();
+    speaker.stop();
     abort.abort();
   });
 
@@ -48,7 +63,7 @@ export async function runSatellite(config: Config, secrets: Secrets): Promise<vo
     }
 
     try {
-      await session({ url, name, room, config, secrets, mic, wake, abort: abort.signal });
+      await session({ url, name, room, config, secrets, mic, speaker, wake, abort: abort.signal });
       delay = 1000; // A clean disconnection is not a reason to back off.
     } catch (error) {
       log.warn(error instanceof Error ? error.message : error);
@@ -72,17 +87,18 @@ function session(deps: {
   room: string;
   config: Config;
   secrets: Secrets;
-  mic: Microphone;
-  wake: WakeModels | null;
+  mic: AudioSource;
+  speaker: AudioSink;
+  wake: WakeWordEngine | null;
   abort: AbortSignal;
 }): Promise<void> {
-  const { url, name, room, config, secrets, mic, wake, abort } = deps;
+  const { url, name, room, config, secrets, mic, speaker, wake, abort } = deps;
   const socket = new URL(url.replace(/^http/, "ws"));
   socket.pathname = "/listen";
   socket.searchParams.set("client", name);
   if (room) socket.searchParams.set("room", room);
   if (wake) socket.searchParams.set("mode", "push");
-  if (secrets.agentToken) socket.searchParams.set("token", secrets.agentToken);
+  if (secrets.token) socket.searchParams.set("token", secrets.token);
 
   return new Promise<void>((resolve, reject) => {
     const ws = new WebSocket(socket);
@@ -112,7 +128,8 @@ function session(deps: {
         // The server has answered. Stop sending while it plays, or the reply
         // is transcribed as the next question.
         playing = true;
-        void playWav(data)
+        void speaker
+          .play(data)
           .catch((error: unknown) => log.warn("could not play the reply:", error))
           .finally(() => {
             playing = false;
