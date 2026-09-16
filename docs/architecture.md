@@ -1,0 +1,194 @@
+# Architecture
+
+One npm package, `parlour`, holds a pure core, the built-in providers behind
+its ports, the integrations, the network server and the CLI. The desktop app
+in `apps/desktop` drives the CLI and knows nothing else.
+
+```text
+packages/parlour/src/
+  core/          ports.ts, providers.ts, config.ts, paths.ts, secrets.ts, agent.ts,
+                 session.ts, router.ts, loop.ts, speaker.ts, registry.ts, timers.ts,
+                 prompt.ts, events.ts, logger.ts, services.ts
+  providers/     audio/ffmpeg, audio/afplay, wake/openwakeword, stt/whisper-cpp,
+                 tts/kokoro, tts/macos-say, llm/openai-compatible, llm/anthropic,
+                 search/searxng, search/brave, secrets/macos-keychain, secrets/file,
+                 service/launchd
+  integrations/  home-assistant/, mcp/, connectors/
+  server/        the HTTP and WebSocket server, discovery.ts, satellite.ts, web/
+  cli/           one file per command
+  testing/       fakes for every port, published as parlour/testing
+```
+
+Nothing in `core/` imports from `providers/` except `core/builtins.ts`, which
+exists to register the built-ins and is the one seam a program embedding
+Parlour with providers of its own can leave out.
+
+## Ports
+
+`core/ports.ts` declares the seams between core and everything that touches
+hardware, a model or the network. Each interface is small enough to fake in a
+test and to fill from an npm package.
+
+| Port | What it does | Built in |
+| --- | --- | --- |
+| `AudioSource` | Yields 16 kHz mono frames of 1280 samples (80 ms). | `ffmpeg` on avfoundation |
+| `AudioSink` | Plays a WAV, stoppably. | `afplay` |
+| `WakeWordEngine` | Loads once, hands out one `WakeWordDetector` per stream. | `openwakeword` |
+| `SpeechToText` | WAV in, text out. | `whisper-cpp` |
+| `TextToSpeech` | Text in, WAV out, with a `warm()` to load before the first reply. | `kokoro`, `macos-say` |
+| `ChatModel` | Messages and tool specs in, a completion out. | `openai-compatible`, `anthropic` |
+| `SearchProvider` | A query in, results out. | `searxng`, `brave` |
+| `SecretStore` | Where connector tokens go. | `macos-keychain`, `file` |
+| `ServiceManager` | Keeps the agent running at login. | `launchd` |
+| `Integration` | A named source of tools, prompt lines and a gate. | `home-assistant`, `mcp`, `connectors` |
+
+Every one of them may also expose `doctor(): Promise<Check[]>`, and
+`parlour doctor` is the concatenation of every configured part's checks plus
+three of core's own: the config parses, the network is let in, and something
+keeps the agent running.
+
+Two things are composed in core rather than left to a provider:
+
+- **Speaking.** `Speaker` is a `TextToSpeech` plus an `AudioSink` plus
+  sentence splitting and abort. The reply is rendered and played one sentence
+  at a time, so the first words come out while the rest is still being
+  synthesised. `FallbackTextToSpeech` wraps two voices and uses the second
+  when the first throws, warning once and retrying the first on the next
+  sentence. `tts.fallback` in config names the second; the default is
+  `macos-say`, so a Kokoro that has not downloaded yet still speaks.
+- **Timers.** The one tool that must keep working when the network does not,
+  so it lives in core and announces through the `Speaker`.
+
+## Providers
+
+`core/providers.ts` is a registry keyed by `(kind, name)`, where kind is one
+of `audioSource`, `audioSink`, `wake`, `stt`, `tts`, `llm`, `search`,
+`secrets`, `service` or `integration`. Built-ins call `registerProvider` at
+import. Config selects each slot by name:
+
+```json
+{ "tts": { "provider": "kokoro", "voice": "bf_emma" } }
+```
+
+Core knows only the `provider` key of each slice. The rest (`voice`, `url`,
+`model`...) passes through and is validated by the provider's own Zod schema
+when it is created, so core does not know that Kokoro has a voice or that
+whisper has a URL.
+
+A name that is not registered is tried as a package: `await import(name)`,
+and the default export is accepted when its `kind` matches. That is the whole
+extension mechanism; [providers.md](providers.md) walks through it.
+
+`secrets` and `service` are not chosen in config. Core picks them by
+platform: the Keychain when `security` is on the PATH, a file otherwise;
+launchd on macOS, and elsewhere an error saying that a systemd provider would
+be a welcome contribution.
+
+## Assembly
+
+`buildAgent(config, secrets, paths)` in `core/agent.ts` resolves every
+provider, wires the fallback voice, builds the tool registry (every
+integration's tools, the search tool unless `search.provider` is `"none"`,
+and the timers), builds the `Router`, and returns an `Agent`. The
+microphone loop, the text REPL, the doctor and the network server all take
+one of these rather than building their own, so a timer set from a phone
+still sounds in the room and every client shares one tool list.
+
+The cloud model and web search are the two slots the house runs without. A
+provider that cannot start (nearly always a missing key) is reported by the
+doctor and left out. A name that leads nowhere is a mistake in config and is
+thrown, because a house that quietly answers with the wrong model is worse
+than one that refuses to start.
+
+## The session
+
+`core/session.ts` is one state machine over a stream of 80 ms frames. It does
+not know where the frames come from: this machine's microphone, a satellite
+relaying audio, a phone or custom hardware all feed the same object.
+
+```text
+idle ---wake word---> listening ---silence---> thinking ---answer---> speaking ---> idle
+  ^                       |                        |
+  |     nothing said      |     nothing heard      |
+  +-----------------------+------------------------+
+```
+
+- **idle.** Every frame goes to the wake word detector. When it fires, every
+  integration's `gate()` is asked; any one saying true (the house is muted)
+  ends the wake there. Otherwise whatever is being said is stopped and the
+  session starts listening.
+- **listening.** Frames go to the endpointer, which gives up after 2.5 s of
+  leading silence, finishes after `audio.silenceMs` of silence once speech
+  has started, and caps an utterance at `audio.maxUtteranceMs`.
+- **thinking.** The frames become a WAV, the WAV becomes text, whisper's
+  hallucinations (`[BLANK_AUDIO]`, a lone "Thank you.") are dropped, and the
+  text goes to the router.
+- **speaking.** The sink says the answer. Frames arriving while the sink is
+  speaking reset the wake word rather than being listened to, unless
+  `audio.bargeIn` is on, because with one box in one room the microphone
+  hears the speaker.
+
+Clients that already know where the utterance starts and stops (a phone with a
+button, a satellite that did its own wake word) call `utterance(frames)`
+instead of `push(frame)` and skip the first two states.
+
+Every client has its own session, keyed by a client id, so a follow-up in the
+kitchen cannot resolve against something asked in the study. Each session's
+history is forgotten after four minutes of silence.
+
+## The router
+
+`core/router.ts` is local first. The local model gets the system prompt, the
+tools and one extra tool, `ask_the_clever_one`, which the prompt tells it to
+call whenever the question needs real reasoning, current information or
+knowledge it is unsure of. When it does, the rewritten question and the
+session's history go to the cloud model, which has server-side web search
+and no house tools. If the local model throws or times out and
+`llm.cloud.onLocalFailure` is true, the cloud model gets the original
+question instead. With no cloud model configured, failures are final and the
+escalation tool is not offered.
+
+`core/loop.ts` runs the tool rounds for whichever model is answering, up to
+`llm.maxToolRounds`, and stops with an apology rather than looping forever.
+
+## Configuration, secrets and paths
+
+| What | Where |
+| --- | --- |
+| `config.json`, `secrets.env`, `connectors.json` | `~/.config/parlour/`, or `$PARLOUR_HOME` |
+| Just the config file | `$PARLOUR_CONFIG`, or `parlour --config <file>` |
+| Models | `~/Library/Caches/parlour/models/{openwakeword,whisper}` |
+| Logs | `~/Library/Logs/parlour/{agent,whisper}.log` |
+| LaunchAgent labels | `io.parlour.agent`, `io.parlour.whisper` |
+| Bonjour service type | `_parlour._tcp` |
+| Keychain service for connector tokens | `parlour-connector` |
+| The desktop app's own settings | `~/Library/Application Support/io.parlour.desktop/settings.json` |
+
+`config.json` is a Zod schema in which every key has a default, so an empty
+file is a complete config and `parlour config show` prints what is in force.
+Secrets (`HA_TOKEN`, `ANTHROPIC_API_KEY`, `PARLOUR_TOKEN`, `BRAVE_API_KEY`,
+`LOG_LEVEL`) stay in `secrets.env` with mode 600, and the process environment
+wins over the file so a one-off run can override without editing anything.
+
+On Linux the cache and logs follow `XDG_CACHE_HOME` and `XDG_STATE_HOME`.
+Nothing else about Linux is done yet.
+
+## Events
+
+`parlour start --events` prints one JSON line per state change on stdout:
+`ready`, `state`, `heard`, `reply`, `muted` and `error`, each with an `at`
+timestamp. The desktop app reads these to draw its status rather than
+scraping log text. Without the flag stdout is a log for a person.
+
+## Why the pieces are the pieces
+
+| Stage | Choice | Why |
+| --- | --- | --- |
+| Wake word | openWakeWord, ONNX, in process | Free, offline, and it runs in the same Node process as everything else, so barge-in is possible. |
+| Capture | ffmpeg on avfoundation | Nothing to compile, and the only reliable way to pin one input device on macOS. |
+| Speech to text | whisper.cpp `small.en`, kept warm | Loading the model costs more than transcribing a sentence, so it runs as a server. |
+| Model | LM Studio, MLX build | The fastest way to run an 8B model on Apple silicon, and it speaks the OpenAI API, so the runtime stays swappable. |
+| Escalation | Claude with server-side web search | The local model is fast and private but wrong more often. Handing over is cheap; being wrong out loud is not. |
+| Speech | Kokoro 82M, ONNX | Close to a cloud voice, runs in process, and has British voices. `say` is the fallback for when it fails. |
+
+Latency is cumulative, so each stage is chosen to be fast rather than best.

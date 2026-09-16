@@ -1,28 +1,27 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-/// Where the app's own two facts live: which agent directory to drive, and
-/// which node to drive it with. Everything else the agent needs is the agent's
-/// own `agent.config.json`, which this app edits in place rather than shadows.
-///
-/// `scripts/setup.sh` writes this file, so a machine set up from a terminal
-/// opens the app already pointed at the right place, and the app's own setup
-/// writes it back the same way.
+/// The app's own two facts: where `parlour` is, and whether to start it when
+/// the app opens. Everything else Parlour needs is Parlour's own config, which
+/// the app reads and writes through the CLI rather than shadows.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
-    #[serde(rename = "agentDir")]
-    pub agent_dir: String,
-    #[serde(rename = "nodePath")]
-    pub node_path: String,
+    #[serde(rename = "parlourBin")]
+    pub parlour_bin: String,
+    #[serde(default)]
+    pub autostart: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            agent_dir: agent_dir_candidates().first().cloned().unwrap_or_default(),
-            node_path: default_node().to_string_lossy().into_owned(),
+            parlour_bin: detect_parlour()
+                .map(|path| path.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            autostart: false,
         }
     }
 }
@@ -43,15 +42,31 @@ impl Settings {
         std::fs::write(path, json + "\n").map_err(|e| e.to_string())
     }
 
-    /// True when the directory really is an agent checkout, which is the one
-    /// thing worth checking before spawning anything out of it.
+    /// True when the path is something that can be run, which is the one
+    /// thing worth checking before spawning it.
     pub fn looks_valid(&self) -> bool {
-        Path::new(&self.agent_dir).join("src/index.ts").is_file()
+        !self.parlour_bin.is_empty() && executable(Path::new(&self.parlour_bin))
     }
 }
 
 fn home() -> PathBuf {
-    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default()
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_default()
+}
+
+fn executable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        path.metadata()
+            .map(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
+    #[cfg(not(unix))]
+    {
+        path.is_file()
+    }
 }
 
 /// A bundled app inherits almost no PATH, so anything outside the bundle has to
@@ -63,8 +78,72 @@ pub fn found(binary: &str) -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
-pub fn node_version(node: &str) -> Option<String> {
-    let output = Command::new(node).arg("-v").output().ok()?;
+/// The PATH a terminal would have. A login shell is the only thing that knows
+/// about nvm, fnm and volta, because they work by editing the shell's own
+/// PATH, and `parlour` is a script whose first line asks for `node` by name.
+/// Every command the app runs on Parlour's behalf gets this PATH, so what
+/// works in a terminal works from the app. Asked once: an interactive shell
+/// takes a moment to start, and the answer does not change while the app runs.
+pub fn shell_path() -> &'static str {
+    static PATH: OnceLock<String> = OnceLock::new();
+    PATH.get_or_init(|| {
+        let mut path = login_shell("echo \"$PATH\"").unwrap_or_default();
+        // The usual places go on the end regardless, for a shell that would
+        // not say, or a PATH that a dotfile has trimmed.
+        for dir in ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"] {
+            if !path.split(':').any(|entry| entry == dir) {
+                if !path.is_empty() {
+                    path.push(':');
+                }
+                path.push_str(dir);
+            }
+        }
+        path
+    })
+}
+
+/// One line of output from the person's own shell, started the way a terminal
+/// would start it. Interactive as well as login, because nvm is usually set up
+/// in .zshrc, which a plain login shell never reads.
+fn login_shell(command: &str) -> Option<String> {
+    let shell = std::env::var_os("SHELL")?;
+    let output = Command::new(shell).args(["-lic", command]).output().ok()?;
+    let line = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .last()
+        .map(str::trim)
+        .unwrap_or_default()
+        .to_owned();
+    (!line.is_empty()).then_some(line)
+}
+
+/// Where `npm install -g parlour` put it, best guess first. The shell is asked
+/// before the directories are searched because the shell knows about version
+/// managers, and a stale copy in /usr/local/bin should not beat the one the
+/// person actually uses.
+pub fn detect_parlour() -> Option<PathBuf> {
+    if let Some(path) = login_shell("command -v parlour").map(PathBuf::from) {
+        if executable(&path) {
+            return Some(path);
+        }
+    }
+    [
+        PathBuf::from("/opt/homebrew/bin"),
+        PathBuf::from("/usr/local/bin"),
+        home().join(".npm-global/bin"),
+    ]
+    .iter()
+    .map(|dir| dir.join("parlour"))
+    .find(|path| executable(path))
+}
+
+/// `vX.Y.Z` from `node -v`, or nothing when there is no node to ask.
+pub fn node_version() -> Option<String> {
+    let output = Command::new("node")
+        .arg("-v")
+        .env("PATH", shell_path())
+        .output()
+        .ok()?;
     if !output.status.success() {
         return None;
     }
@@ -72,8 +151,8 @@ pub fn node_version(node: &str) -> Option<String> {
     (!version.is_empty()).then_some(version)
 }
 
-/// Type stripping is what lets the agent run TypeScript with no build step, and
-/// it arrived in 22.
+/// Parlour needs 22: it runs its own source with type stripping in a
+/// checkout, and that arrived in 22.
 pub fn recent_enough(version: &str) -> bool {
     version
         .trim_start_matches('v')
@@ -81,74 +160,4 @@ pub fn recent_enough(version: &str) -> bool {
         .next()
         .and_then(|major| major.parse::<u32>().ok())
         .is_some_and(|major| major >= 22)
-}
-
-/// Every directory that looks like an agent checkout, best first. In
-/// development the crate sits inside one; installed, it is wherever the person
-/// put the repository, and these are the places people put it.
-pub fn agent_dir_candidates() -> Vec<String> {
-    let mut found = Vec::new();
-    let mut add = |path: PathBuf| {
-        if !path.join("src/index.ts").is_file() {
-            return;
-        }
-        let resolved = path
-            .canonicalize()
-            .unwrap_or(path)
-            .to_string_lossy()
-            .into_owned();
-        if !found.contains(&resolved) {
-            found.push(resolved);
-        }
-    };
-
-    add(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."));
-    for parent in ["", "Developer/", "src/", "Projects/", "code/"] {
-        add(home().join(format!("{parent}home-assistant/agent")));
-    }
-    found
-}
-
-/// The node the person actually uses, which on a Mac is as likely to be under
-/// a version manager as in /opt/homebrew. Anything older than 22 is no use, so
-/// a new enough one further down the list beats an old one at the top.
-fn default_node() -> PathBuf {
-    let mut candidates: Vec<PathBuf> = ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"]
-        .iter()
-        .map(PathBuf::from)
-        .filter(|path| path.is_file())
-        .collect();
-
-    // A login shell is the only thing that knows about nvm, fnm and volta,
-    // because they work by editing the shell's own PATH.
-    if let Some(shell) = std::env::var_os("SHELL") {
-        if let Ok(output) = Command::new(shell).args(["-lic", "command -v node"]).output() {
-            let path = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
-            if path.is_file() {
-                candidates.push(path);
-            }
-        }
-    }
-
-    // And if the shell would not say, the version managers keep their versions
-    // somewhere predictable.
-    if let Ok(entries) = std::fs::read_dir(home().join(".nvm/versions/node")) {
-        let mut versions: Vec<PathBuf> = entries
-            .filter_map(Result::ok)
-            .map(|entry| entry.path().join("bin/node"))
-            .filter(|path| path.is_file())
-            .collect();
-        versions.sort();
-        candidates.extend(versions.into_iter().rev());
-    }
-    candidates.push(home().join(".volta/bin/node"));
-
-    let usable = candidates
-        .iter()
-        .find(|path| node_version(&path.to_string_lossy()).is_some_and(|v| recent_enough(&v)));
-
-    usable
-        .or_else(|| candidates.first())
-        .cloned()
-        .unwrap_or_else(|| PathBuf::from("node"))
 }

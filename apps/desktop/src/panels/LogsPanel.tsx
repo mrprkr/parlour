@@ -4,7 +4,7 @@ import { type JSX, useCallback, useEffect, useLayoutEffect, useRef } from "react
 const BOTTOM_SLACK = 20;
 
 /**
- * The agent's output, verbatim.
+ * Parlour's output, verbatim.
  *
  * A plain scrollable `<pre>` rather than a ScrollArea: the sticky-bottom rule
  * needs the scrolling element itself, and the ScrollArea primitive keeps its
@@ -25,6 +25,9 @@ export function LogsPanel({ lines }: { lines: string[] }): JSX.Element {
     stuck.current = el.scrollTop + el.clientHeight >= el.scrollHeight - BOTTOM_SLACK;
   }, []);
 
+  // `lines` is the trigger rather than an input: a new line is what moves the
+  // view, and there is nothing in the array itself the effect needs.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: lines is the trigger, not an input
   useLayoutEffect(() => {
     const el = log.current;
     if (el && stuck.current) el.scrollTop = el.scrollHeight;
@@ -47,14 +50,18 @@ export function LogsPanel({ lines }: { lines: string[] }): JSX.Element {
     <pre
       ref={log}
       onScroll={remember}
-      aria-label="Agent log"
+      role="log"
+      aria-label="Parlour log"
+      // A scrolling box that cannot take focus cannot be scrolled from the
+      // keyboard, which is why a non-interactive element gets a tabIndex here.
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: the log scrolls, so it has to be focusable
       tabIndex={0}
       className="m-0 h-full min-h-40 overflow-y-auto rounded-lg border border-border bg-card p-3 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-card-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
       {lines.length > 0 ? (
         lines.join("\n")
       ) : (
-        <span className="text-muted-foreground">Nothing yet. The agent writes here as it runs.</span>
+        <span className="text-muted-foreground">Nothing yet. Parlour writes here as it runs.</span>
       )}
     </pre>
   );

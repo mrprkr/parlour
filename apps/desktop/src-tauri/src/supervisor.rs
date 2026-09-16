@@ -6,13 +6,13 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
-use crate::settings::Settings;
+use crate::settings::{shell_path, Settings};
 
 const LOG_LINES: usize = 400;
 
-/// What the window draws. Every field but `running` comes from the agent's own
-/// NDJSON events, so the app never has to guess at the agent's state from log
-/// text.
+/// What the window draws. Every field but `running` comes from Parlour's own
+/// NDJSON events (`parlour start --events`), so the app never has to guess at
+/// its state from log text.
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
@@ -63,24 +63,21 @@ impl Supervisor {
         }
         if !settings.looks_valid() {
             return Err(format!(
-                "No agent at {}. Set the agent directory in Settings.",
-                settings.agent_dir
+                "No parlour at {:?}. Install it, or say where it is in Settings.",
+                settings.parlour_bin
             ));
         }
 
-        let mut child = Command::new(&settings.node_path)
-            .current_dir(&settings.agent_dir)
-            .args([
-                "--experimental-strip-types",
-                "--env-file-if-exists=.env",
-                "src/index.ts",
-            ])
-            .env("AGENT_EVENTS", "1")
+        // `--events` is what makes the status below possible: one JSON line
+        // per state change on stdout, alongside the ordinary log lines.
+        let mut child = Command::new(&settings.parlour_bin)
+            .args(["start", "--events"])
+            .env("PATH", shell_path())
             .env("LOG_LEVEL", "info")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| format!("could not start {}: {e}", settings.node_path))?;
+            .map_err(|e| format!("could not start {}: {e}", settings.parlour_bin))?;
 
         let stdout = child.stdout.take().ok_or("no stdout")?;
         let stderr = child.stderr.take().ok_or("no stderr")?;
@@ -141,7 +138,7 @@ impl Supervisor {
         let Some(child) = self.child.as_mut() else {
             return;
         };
-        // SIGINT first: the agent shuts ffmpeg down on it, and a SIGKILL here
+        // SIGINT first: Parlour shuts ffmpeg down on it, and a SIGKILL here
         // would leave the microphone held by an orphan.
         let _ = Command::new("kill")
             .args(["-INT", &child.id().to_string()])
@@ -169,7 +166,10 @@ fn apply(status: &Arc<Mutex<Status>>, event: &serde_json::Value) {
         Some("ready") => {
             status.running = true;
             status.tools = event.get("tools").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-            status.cloud = event.get("cloud").and_then(|v| v.as_bool()).unwrap_or(false);
+            status.cloud = event
+                .get("cloud")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             status.error = None;
         }
         Some("state") => {

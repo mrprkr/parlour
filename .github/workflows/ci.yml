@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A push to a branch with an open pull request runs once, not twice, and a
+# newer push replaces a run that is still going.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typecheck, lint, test, build
+    # macOS because the package's native dependencies (onnxruntime, the wake
+    # word and the voice) and the desktop app both build for it, and it is the
+    # only platform the release ships for. Linux support would add a second
+    # runner here, not replace this one.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # The pnpm version comes from packageManager in package.json, so there
+      # is one place to bump it.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache the Cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck, lint, test and build every project
+        run: pnpm exec nx run-many -t typecheck lint test build
+
+      # Tauri's generate_context! macro embeds the frontend and the app icon at
+      # compile time and panics when either is missing, so this has to come
+      # after the build above (which writes apps/desktop/dist) and after the
+      # icons, which are generated from src-tauri/icon.png and not checked in.
+      - name: Generate the app icons
+        run: pnpm -C apps/desktop icons
+
+      - name: Check the Rust side compiles
+        run: pnpm exec nx run desktop:cargo-check

@@ -12,18 +12,18 @@ import {
   audioDevices,
   deviceValue,
   getSettings,
-  readAgentConfig,
-  secretsPresent,
+  readConfig,
+  secretsStatus,
+  setSecret,
   setSettings,
-  writeAgentConfig,
-  writeSecrets,
+  writeConfig,
 } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
 
 /** Everything the form edits apart from the three write-only secrets. */
 interface FormValues {
-  agentDir: string;
-  nodePath: string;
+  parlourBin: string;
+  autostart: boolean;
   wakeWord: string;
   wakeThreshold: number;
   inputDevice: string;
@@ -47,19 +47,30 @@ interface Flash {
   tone: "ok" | "error";
 }
 
+/**
+ * What the providers fall back to when the config says nothing. `config show`
+ * fills in the core schema only, so these keys arrive absent until `init` has
+ * written them, and the form has to know the answer the box is standing in for.
+ * They match the `.default()` on each provider's schema in packages/parlour.
+ */
+const LOCAL_BASE_URL = "http://127.0.0.1:1234/v1";
+const LOCAL_MODEL = "qwen3-8b-mlx";
+const CLOUD_MODEL = "claude-opus-5";
+const HA_URL = "http://homeassistant.local:8123";
+
 const EMPTY: FormValues = {
-  agentDir: "",
-  nodePath: "",
+  parlourBin: "",
+  autostart: false,
   wakeWord: "hey_jarvis",
   wakeThreshold: 0.5,
   inputDevice: ":0",
   silenceMs: "800",
   voice: "bf_emma",
-  localBaseUrl: "http://127.0.0.1:1234/v1",
-  localModel: "",
+  localBaseUrl: LOCAL_BASE_URL,
+  localModel: LOCAL_MODEL,
   cloudEnabled: true,
-  cloudModel: "claude-opus-5",
-  haBaseUrl: "",
+  cloudModel: CLOUD_MODEL,
+  haBaseUrl: HA_URL,
 };
 
 const WAKE_WORDS: DeviceOption[] = [
@@ -104,6 +115,38 @@ function withCurrent(options: DeviceOption[], current: string): DeviceOption[] {
   return [{ value: current, label: `${current} (from the config)` }, ...options];
 }
 
+/**
+ * The parts of the config this form edits, each created on the object when it
+ * is missing so a load and a save address the same nested objects. Done once
+ * here rather than inline, because seven assignments in the middle of a read
+ * are hard to see past.
+ */
+function sections(config: AgentConfig) {
+  config.audio ??= {};
+  config.wake ??= {};
+  config.tts ??= {};
+  config.llm ??= {};
+  config.llm.local ??= {};
+  config.llm.cloud ??= {};
+  config.integrations ??= {};
+  config.integrations["home-assistant"] ??= {};
+  return {
+    audio: config.audio,
+    wake: config.wake,
+    tts: config.tts,
+    local: config.llm.local,
+    cloud: config.llm.cloud,
+    house: config.integrations["home-assistant"],
+  };
+}
+
+/** Writes the trimmed value, or removes the key when nothing was typed. */
+function setOrClear(target: Record<string, unknown>, key: string, value: string): void {
+  const trimmed = value.trim();
+  if (trimmed) target[key] = trimmed;
+  else delete target[key];
+}
+
 function Group({ title, children }: { title: string; children: ReactNode }): JSX.Element {
   return (
     <Card className="gap-4 py-4">
@@ -139,20 +182,25 @@ export function SettingsPanel({
   const [values, setValues] = useState<FormValues>(EMPTY);
   const [haToken, setHaToken] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
-  const [agentToken, setAgentToken] = useState("");
+  const [networkToken, setNetworkToken] = useState("");
   const [devices, setDevices] = useState<DeviceOption[]>([]);
   const [placeholders, setPlaceholders] = useState({
     haToken: "unchanged",
     anthropicKey: "unchanged",
-    agentToken: "unchanged",
+    networkToken: "unchanged",
   });
   const [flash, setFlash] = useState<Flash | null>(null);
   const [saving, setSaving] = useState(false);
-  /** Nothing is saved until something was read, so a failed load cannot be written back. */
+  /**
+   * Parlour's config is not written until it was read, so a failed load cannot
+   * be written back over the file. The app's own two settings are not gated:
+   * a wrong path to parlour is what makes the load fail, and this form is
+   * where it gets corrected.
+   */
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // The agent's own config is edited in place rather than shadowed, so the keys
+  // Parlour's own config is edited in place rather than shadowed, so the keys
   // this window knows nothing about survive a load and a save untouched.
   const configRef = useRef<AgentConfig>({});
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,32 +222,31 @@ export function SettingsPanel({
       const settings = await getSettings();
       if (!mine()) return;
 
-      let config: AgentConfig = {};
-      try {
-        config = JSON.parse(await readAgentConfig()) as AgentConfig;
-      } catch (error) {
-        // A missing file is the normal state before the first install, so this
-        // says so and carries on with an empty config rather than giving up.
-        say(`could not read agent.config.json: ${String(error)}`, "error");
-        config = {};
-      }
+      // The app's own two settings go onto the form before the config is
+      // asked for, because a wrong path is what makes that ask fail, and the
+      // form must then show the wrong path rather than an empty box. Saving
+      // from an empty form would also turn autostart off without anyone
+      // ticking anything.
+      setValues((previous) => ({
+        ...previous,
+        parlourBin: settings.parlourBin ?? "",
+        autostart: settings.autostart ?? false,
+      }));
+
+      // `config show` fills in every default, so a missing file reads as the
+      // defaults rather than as an error, and the first save writes them out.
+      const config = await readConfig();
       if (!mine()) return;
 
-      const audio = (config.audio ??= {});
-      const wake = (config.wake ??= {});
-      const tts = (config.tts ??= {});
-      const llm = (config.llm ??= {});
-      const local = (llm.local ??= {});
-      const cloud = (llm.cloud ??= {});
-      const house = (config.homeAssistant ??= {});
+      const { audio, wake, tts, local, cloud, house } = sections(config);
       configRef.current = config;
 
       // A missing device means the first one, which is what ffmpeg calls ":0".
       const current = audio.inputDevice || ":0";
 
       setValues({
-        agentDir: settings.agentDir ?? "",
-        nodePath: settings.nodePath ?? "",
+        parlourBin: settings.parlourBin ?? "",
+        autostart: settings.autostart ?? false,
         // An empty wake word or voice is not an answer, it is what an older
         // window wrote when it was shown one it did not offer.
         wakeWord: wake.words?.[0] || "hey_jarvis",
@@ -207,12 +254,12 @@ export function SettingsPanel({
         inputDevice: current,
         silenceMs: String(audio.silenceMs ?? 800),
         voice: tts.voice || "bf_emma",
-        localBaseUrl: local.baseUrl ?? "http://127.0.0.1:1234/v1",
-        localModel: local.model ?? "",
+        localBaseUrl: local.baseUrl || LOCAL_BASE_URL,
+        localModel: local.model || LOCAL_MODEL,
         // Absent means on: only a written false turns the cloud off.
         cloudEnabled: cloud.enabled !== false,
-        cloudModel: cloud.model ?? "claude-opus-5",
-        haBaseUrl: house.baseUrl ?? "",
+        cloudModel: cloud.model || CLOUD_MODEL,
+        haBaseUrl: house.url || HA_URL,
       });
 
       let options: DeviceOption[] = [];
@@ -241,12 +288,12 @@ export function SettingsPanel({
         }),
       );
 
-      const present = await secretsPresent();
+      const present = await secretsStatus();
       if (!mine()) return;
       setPlaceholders({
-        haToken: present.haToken ? KEPT : "not set",
-        anthropicKey: present.anthropicKey ? KEPT : "not set",
-        agentToken: present.agentToken ? KEPT : "not set, so nothing on the network can reach it",
+        haToken: present.HA_TOKEN ? KEPT : "not set",
+        anthropicKey: present.ANTHROPIC_API_KEY ? KEPT : "not set",
+        networkToken: present.PARLOUR_TOKEN ? KEPT : "not set, so nothing on the network can reach it",
       });
       setLoadError(null);
       setLoaded(true);
@@ -260,6 +307,10 @@ export function SettingsPanel({
     }
   }, [say]);
 
+  // `reloadKey` is not read by the load; it is the signal that something
+  // outside this form wrote what the form is showing, so the list is
+  // deliberately wider than the lint would have it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is the trigger, not an input
   useEffect(() => {
     void load();
   }, [load, reloadKey]);
@@ -279,42 +330,39 @@ export function SettingsPanel({
     setSaving(true);
 
     const config = configRef.current;
-    const audio = (config.audio ??= {});
-    const wake = (config.wake ??= {});
-    const tts = (config.tts ??= {});
-    const llm = (config.llm ??= {});
-    const local = (llm.local ??= {});
-    const cloud = (llm.cloud ??= {});
-    const house = (config.homeAssistant ??= {});
+    const { audio, wake, tts, local, cloud, house } = sections(config);
 
     audio.inputDevice = values.inputDevice;
     audio.silenceMs = Number(values.silenceMs);
     wake.words = [values.wakeWord];
     wake.threshold = values.wakeThreshold;
     tts.voice = values.voice;
-    local.baseUrl = values.localBaseUrl.trim();
-    local.model = values.localModel.trim();
+    // A cleared box means "not set", not the empty string. `config write`
+    // accepts "" for these, and the providers then run with it: doctor fails
+    // the local model and the house is asked for at no address. Leaving the
+    // key out lets the provider's own default apply instead.
+    setOrClear(local, "baseUrl", values.localBaseUrl);
+    setOrClear(local, "model", values.localModel);
     cloud.enabled = values.cloudEnabled;
-    cloud.model = values.cloudModel.trim();
-    house.baseUrl = values.haBaseUrl.trim();
+    setOrClear(cloud, "model", values.cloudModel);
+    setOrClear(house, "url", values.haBaseUrl);
 
     try {
       await setSettings({
-        agentDir: values.agentDir.trim(),
-        nodePath: values.nodePath.trim(),
+        parlourBin: values.parlourBin.trim(),
+        autostart: values.autostart,
       });
-      await writeAgentConfig(config);
-      // An empty box means "leave it alone", so only send what was typed.
-      await writeSecrets({
-        haToken: haToken || null,
-        anthropicKey: anthropicKey || null,
-        braveKey: null,
-        agentToken: agentToken || null,
-      });
-      setHaToken("");
-      setAnthropicKey("");
-      setAgentToken("");
-      say("Saved.", "ok");
+      if (loaded) {
+        await writeConfig(config);
+        // An empty box means "leave it alone", so only what was typed is sent.
+        if (haToken) await setSecret("HA_TOKEN", haToken);
+        if (anthropicKey) await setSecret("ANTHROPIC_API_KEY", anthropicKey);
+        if (networkToken) await setSecret("PARLOUR_TOKEN", networkToken);
+        setHaToken("");
+        setAnthropicKey("");
+        setNetworkToken("");
+      }
+      say(loaded ? "Saved." : "Saved where parlour is. The rest was not read, so it was not written.", "ok");
       await load();
       onSaved();
     } catch (error) {
@@ -336,22 +384,25 @@ export function SettingsPanel({
 
       <form className="grid gap-4" onSubmit={save}>
         <Group title="Where things are">
-          <Field id="agentDir" label="Agent directory">
+          <Field id="parlourBin" label="The parlour command">
             <Input
-              id="agentDir"
+              id="parlourBin"
               spellCheck={false}
-              value={values.agentDir}
-              onChange={(event) => set("agentDir", event.target.value)}
+              placeholder="/opt/homebrew/bin/parlour"
+              value={values.parlourBin}
+              onChange={(event) => set("parlourBin", event.target.value)}
             />
           </Field>
-          <Field id="nodePath" label="Node binary">
-            <Input
-              id="nodePath"
-              spellCheck={false}
-              value={values.nodePath}
-              onChange={(event) => set("nodePath", event.target.value)}
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="autostart"
+              checked={values.autostart}
+              onCheckedChange={(checked) => set("autostart", checked === true)}
             />
-          </Field>
+            <Label htmlFor="autostart" className="font-normal">
+              Start listening when this app opens
+            </Label>
+          </div>
         </Group>
 
         <Group title="Listening">
@@ -501,24 +552,23 @@ export function SettingsPanel({
         </Group>
 
         <Group title="The network">
-          <Field id="agentToken" label="Access token">
+          <Field id="networkToken" label="Access token">
             <Input
-              id="agentToken"
+              id="networkToken"
               type="password"
               autoComplete="off"
-              placeholder={placeholders.agentToken}
-              value={agentToken}
-              onChange={(event) => setAgentToken(event.target.value)}
+              placeholder={placeholders.networkToken}
+              value={networkToken}
+              onChange={(event) => setNetworkToken(event.target.value)}
             />
           </Field>
           <p className="text-sm text-muted-foreground">
-            Phones, satellites and Home Assistant all send this. Without it the agent answers this machine
-            only.
+            Phones, satellites and Home Assistant all send this. Without it Parlour answers this machine only.
           </p>
         </Group>
 
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={saving || !loaded}>
+          <Button type="submit" disabled={saving}>
             Save
           </Button>
           <span

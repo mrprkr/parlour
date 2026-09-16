@@ -1,0 +1,30 @@
+# Weekly, and grouped, so a quiet week is one pull request per ecosystem
+# rather than one per package. A major bump gets its own pull request, since
+# it is the one that needs reading.
+version: 2
+updates:
+  # The pnpm workspace: root, packages/parlour and apps/desktop share one lock
+  # file, so one entry at the root covers all three.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: cargo
+    directory: /apps/desktop/src-tauri
+    schedule:
+      interval: weekly
+    groups:
+      cargo-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

@@ -2,16 +2,21 @@
  * The Rust side, typed. Every capability the window has lives behind one of
  * these, so a component never reaches for `invoke` itself and a change to a
  * command signature shows up here as a type error rather than at runtime.
+ *
+ * Most of what the window wants is not the app's at all but Parlour's, and
+ * for that there is one command, `parlour(args, stdin)`, which runs the CLI.
+ * The typed wrappers below it are the only callers, so the JSON the CLI
+ * prints is parsed in exactly one place per command.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 // ------------------------------------------------------------------- shapes
 
-/** Where the agent is and what runs it. The app's only two facts of its own. */
+/** Where `parlour` is and whether to start it with the app. The app's only two facts of its own. */
 export interface Settings {
-  agentDir: string;
-  nodePath: string;
+  parlourBin: string;
+  autostart: boolean;
 }
 
 export type AgentState = "stopped" | "idle" | "listening" | "thinking" | "speaking";
@@ -28,17 +33,18 @@ export interface Status {
   error?: string | null;
 }
 
-export interface SecretsPresent {
-  haToken: boolean;
-  anthropicKey: boolean;
-  braveKey: boolean;
-  agentToken: boolean;
+/** What `parlour secrets status --json` prints: which are set, never their values. */
+export interface SecretsStatus {
+  HA_TOKEN: boolean;
+  ANTHROPIC_API_KEY: boolean;
+  PARLOUR_TOKEN: boolean;
+  BRAVE_API_KEY: boolean;
 }
 
 export interface Network {
   /** What to type into a phone, or point Home Assistant at. */
   url: string;
-  /** Without a token the agent answers loopback only. */
+  /** Without a token Parlour answers loopback only. */
   tokenSet: boolean;
   port: number;
 }
@@ -48,31 +54,32 @@ export interface Microphone {
   detail: string;
 }
 
+/** What running the CLI produced. The exit code means what each command says it means. */
+interface CliOutput {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
 /** Which pieces of the install are in place. What the onboarding draws. */
 export interface Readiness {
-  agentDir: string;
-  agentDirOk: boolean;
-  candidates: string[];
-  nodePath: string;
+  parlourBin: string;
+  parlourVersion: string | null;
+  parlourOk: boolean;
   nodeVersion: string | null;
   nodeOk: boolean;
-  packages: boolean;
-  models: boolean;
-  config: boolean;
   ffmpeg: boolean;
-  whisper: boolean;
-  homebrew: boolean;
+  /** Whether `parlour init` has written a config yet. */
+  config: boolean;
   /** Nothing left for the install step to do. */
   installed: boolean;
 }
 
-/** One line of the agent's own doctor. */
+/** One line of `parlour doctor --json`. */
 export interface Check {
   name: string;
-  ok: boolean;
+  status: "ok" | "warn" | "fail";
   detail: string;
-  /** A failed optional check is a warning, not a fault. */
-  required: boolean;
 }
 
 /** A remote MCP server the household has signed in to. */
@@ -82,16 +89,17 @@ export interface Connector {
   signedIn: boolean;
 }
 
-/** One line from scripts/setup.sh, already labelled. */
+/** One line of `parlour init --porcelain`, or of the CLI install, already labelled. */
 export interface SetupEvent {
   kind: "step" | "ok" | "warn" | "fail" | "log" | "done";
   text: string;
 }
 
 /**
- * The agent's own config file, edited in place rather than shadowed. Only the
+ * Parlour's own config, as `parlour config show --json` prints it with every
+ * default filled in, and as `parlour config write` takes it back. Only the
  * parts the window touches are named; everything else is carried through a
- * read and a write untouched, which is why the index signature is here.
+ * read and a write untouched, which is why the index signatures are here.
  */
 export interface AgentConfig {
   [key: string]: unknown;
@@ -103,14 +111,12 @@ export interface AgentConfig {
     cloud?: { enabled?: boolean; model?: string; [key: string]: unknown };
     [key: string]: unknown;
   };
-  homeAssistant?: { baseUrl?: string; [key: string]: unknown };
+  integrations?: {
+    "home-assistant"?: { url?: string; [key: string]: unknown };
+    [key: string]: unknown;
+  };
+  server?: { port?: number; host?: string; [key: string]: unknown };
 }
-
-/**
- * A secret to write. `null` means leave whatever is there alone, which is what
- * an untouched password box means; `""` deliberately clears it.
- */
-export type SecretEdit = string | null;
 
 // ----------------------------------------------------------------- commands
 
@@ -122,39 +128,84 @@ export const startAgent = () => invoke<void>("start_agent");
 export const stopAgent = () => invoke<void>("stop_agent");
 export const getLogs = () => invoke<string[]>("logs");
 
-export const readAgentConfig = () => invoke<string>("read_agent_config");
-export const writeAgentConfig = (config: AgentConfig) =>
-  invoke<void>("write_agent_config", { json: JSON.stringify(config) });
+const run = (args: string[], stdin?: string) => invoke<CliOutput>("parlour", { args, stdin: stdin ?? null });
 
-export const secretsPresent = () => invoke<SecretsPresent>("secrets_present");
-export const writeSecrets = (secrets: {
-  haToken?: SecretEdit;
-  anthropicKey?: SecretEdit;
-  braveKey?: SecretEdit;
-  agentToken?: SecretEdit;
-}) =>
-  invoke<void>("write_secrets", {
-    haToken: secrets.haToken ?? null,
-    anthropicKey: secrets.anthropicKey ?? null,
-    braveKey: secrets.braveKey ?? null,
-    agentToken: secrets.agentToken ?? null,
-  });
+/** The CLI's one-line failure, which it prints last on stderr with a `parlour:` in front. */
+function failure(output: CliOutput): string {
+  const last = output.stderr
+    .split("\n")
+    .reverse()
+    .find((line) => line.trim() !== "");
+  return last ? last.trim().replace(/^parlour: /, "") : `parlour exited ${output.code}`;
+}
 
-export const getNetwork = () => invoke<Network>("network");
+/** Runs the CLI and resolves with its stdout, or rejects with its one-line failure. */
+export async function parlour(args: string[], stdin?: string): Promise<string> {
+  const output = await run(args, stdin);
+  if (output.code !== 0) throw new Error(failure(output));
+  return output.stdout;
+}
 
-export const getConnectors = () => invoke<Connector[]>("connectors");
-export const connectorAdd = (name: string, url: string, scope: string | null) =>
-  invoke<void>("connector_add", { name, url, scope });
-export const connectorRemove = (name: string) => invoke<void>("connector_remove", { name });
-
-export const runDoctor = () => invoke<Check[]>("run_doctor");
+export const hostName = () => invoke<string>("host_name");
 export const audioDevices = () => invoke<string[]>("audio_devices");
 
 export const setupStatus = () => invoke<Readiness>("setup_status");
-export const runSetup = (wakeWord: string | null) => invoke<boolean>("run_setup", { wakeWord });
+/** `parlour init`, taking every default. `deps` lets it use Homebrew. */
+export const runSetup = (deps: boolean) => invoke<boolean>("run_setup", { deps });
+export const installCli = () => invoke<boolean>("install_cli");
 
 export const microphoneCheck = (device: string | null) => invoke<Microphone>("microphone_check", { device });
 export const openPrivacySettings = () => invoke<void>("open_privacy_settings");
+
+// -------------------------------------------------------------- through the CLI
+
+export const readConfig = async (): Promise<AgentConfig> =>
+  JSON.parse(await parlour(["config", "show", "--json"])) as AgentConfig;
+
+export const writeConfig = async (config: AgentConfig): Promise<void> => {
+  await parlour(["config", "write"], JSON.stringify(config));
+};
+
+export const secretsStatus = async (): Promise<SecretsStatus> =>
+  JSON.parse(await parlour(["secrets", "status", "--json"])) as SecretsStatus;
+
+/** The value goes on stdin, never on the command line. An empty value removes the secret. */
+export const setSecret = async (name: keyof SecretsStatus, value: string): Promise<void> => {
+  await parlour(["secrets", "set", name], `${value}\n`);
+};
+
+/** The doctor exits 1 to say there is something to fix, and its list is what says what. */
+export const runDoctor = async (): Promise<Check[]> => {
+  const output = await run(["doctor", "--json"]);
+  if (!output.stdout.trimStart().startsWith("[")) throw new Error(failure(output));
+  return JSON.parse(output.stdout) as Check[];
+};
+
+export const getConnectors = async (): Promise<Connector[]> =>
+  JSON.parse(await parlour(["connectors", "list", "--json"])) as Connector[];
+
+/**
+ * Starts a sign in. The browser opens, Parlour's loopback listener catches the
+ * redirect, and the tokens land in the Keychain. This resolves when the sign
+ * in is finished, or rejects when the CLI gives up waiting for it.
+ */
+export const connectorAdd = (name: string, url: string, scope: string | null): Promise<string> =>
+  parlour(["connectors", "add", name, url, ...(scope ? [`--scope=${scope}`] : [])]);
+
+export const connectorRemove = async (name: string): Promise<void> => {
+  await parlour(["connectors", "remove", name]);
+};
+
+/**
+ * Where the rest of the house should point. The hostname comes from the
+ * machine rather than the config, because that is the part a person has to
+ * type into a phone and the part they always get wrong.
+ */
+export const getNetwork = async (): Promise<Network> => {
+  const [config, secrets, host] = await Promise.all([readConfig(), secretsStatus(), hostName()]);
+  const port = config.server?.port ?? 8765;
+  return { url: `http://${host}:${port}`, tokenSet: secrets.PARLOUR_TOKEN, port };
+};
 
 // ------------------------------------------------------------------- events
 
@@ -173,7 +224,7 @@ export const onSetupEvent = (fn: (event: SetupEvent) => void): Promise<UnlistenF
 // ------------------------------------------------------------------ helpers
 
 /**
- * ffmpeg names inputs by index and the agent's config wants that index, so a
+ * ffmpeg names inputs by index and Parlour's config wants that index, so a
  * device line like "[0] MacBook Pro Microphone" becomes ":0".
  */
 export function deviceValue(line: string, fallback: string): string {

@@ -1,5 +1,5 @@
 // The window's shell: the header, the four tabs and the state everything else
-// reads. Only this file listens to the agent, so a panel never has to wonder
+// reads. Only this file listens to Parlour, so a panel never has to wonder
 // whether someone else is already subscribed.
 import { type JSX, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -50,9 +50,9 @@ const UNKNOWN: Status = { running: false, state: "stopped", tools: 0, cloud: fal
 const PANEL = "min-h-0 flex-1 data-[state=inactive]:hidden";
 
 /**
- * The window sits in the menu bar for days at a time and a chatty agent never
- * stops writing, so the oldest lines fall off the front. The whole log is still
- * on disk; this is only what the panel keeps in hand.
+ * The window sits in the menu bar for days at a time and a chatty Parlour
+ * never stops writing, so the oldest lines fall off the front. The whole log
+ * is still on disk; this is only what the panel keeps in hand.
  */
 const KEPT_LINES = 2000;
 
@@ -158,7 +158,7 @@ export function App(): JSX.Element {
             className={cn("size-3 shrink-0 rounded-full", DOT[state] ?? "bg-muted-foreground")}
           />
           <div>
-            <h1 className="text-[15px] leading-tight font-semibold">Home agent</h1>
+            <h1 className="text-[15px] leading-tight font-semibold">Parlour</h1>
             <p className="tracking-[0.04em] text-muted-foreground [font-variant-caps:all-small-caps]">
               {state}
             </p>

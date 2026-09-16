@@ -1,0 +1,115 @@
+name: Release
+
+# Tag a commit vX.Y.Z (after `pnpm version:set X.Y.Z` and a CHANGELOG entry)
+# and push the tag. The package goes to npm and the app to a GitHub release
+# on the tag, with notes generated from the pull requests since the last one.
+#
+# Follow-ups, deliberately not done here:
+# - The app is unsigned and not notarised. Gatekeeper asks the person to
+#   allow it in System Settings on first open. Signing needs an Apple
+#   Developer certificate in the repository's secrets and tauri-action or
+#   `xcrun notarytool` in the app job.
+# - There is no Homebrew tap. `npm install -g parlour` is the install path,
+#   and the app is a plain .dmg download until a cask is worth maintaining.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish parlour to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # Provenance: npm records which workflow and commit built the tarball,
+      # and the OIDC token is how it proves that.
+      id-token: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # A tag that does not match the version in package.json publishes the
+      # wrong thing under the right name, which npm will not let anyone undo.
+      - name: Check the tag matches the package version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./packages/parlour/package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "Tag v$tag does not match packages/parlour/package.json ($version)." >&2
+            echo "Run pnpm version:set $tag, commit, and tag that commit." >&2
+            exit 1
+          fi
+
+      - name: Test
+        run: pnpm -C packages/parlour test
+
+      - name: Build
+        run: pnpm -C packages/parlour build
+
+      - name: Publish
+        run: npm publish --provenance --access public
+        working-directory: packages/parlour
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  app:
+    name: Build the app and attach it to the release
+    runs-on: macos-latest
+    timeout-minutes: 45
+    permissions:
+      # To create the release and upload the .dmg to it.
+      contents: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache the Cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `pnpm build` in the app is `pnpm icons && tauri build`, and Tauri runs
+      # `pnpm build:ui` first through beforeBuildCommand, so this one step
+      # produces the icons, the frontend, the binary, the .app and the .dmg.
+      - name: Build the app
+        run: pnpm -C apps/desktop build
+
+      - name: Create the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
+          generate_release_notes: true
+          fail_on_unmatched_files: true

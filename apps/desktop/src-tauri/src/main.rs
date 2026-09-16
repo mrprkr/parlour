@@ -5,8 +5,9 @@ mod settings;
 mod setup;
 mod supervisor;
 
+use std::io::Write;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 
 use serde::Serialize;
@@ -14,13 +15,13 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 
-use settings::{found, Settings};
+use settings::{detect_parlour, found, shell_path, Settings};
 use setup::Readiness;
 use supervisor::{Status, Supervisor};
 
-/// The app owns two things: where the agent is, and the process itself. Its
-/// configuration is deliberately not a second copy of the agent's own, which
-/// stays the file the agent reads and this app edits in place.
+/// The app owns two things: where `parlour` is, and the process itself. Its
+/// configuration is deliberately not a second copy of Parlour's own, which
+/// stays the file the CLI reads and this app edits through the CLI.
 struct AppState {
     supervisor: Mutex<Supervisor>,
     settings: Mutex<Settings>,
@@ -31,29 +32,6 @@ impl AppState {
     fn settings(&self) -> Settings {
         self.settings.lock().unwrap().clone()
     }
-
-    fn agent_path(&self, file: &str) -> PathBuf {
-        PathBuf::from(self.settings().agent_dir).join(file)
-    }
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Network {
-    /// What to type into a phone, or point Home Assistant at.
-    url: String,
-    /// Without a token the agent answers loopback only, so nothing else can reach it.
-    token_set: bool,
-    port: u16,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SecretsPresent {
-    ha_token: bool,
-    anthropic_key: bool,
-    brave_key: bool,
-    agent_token: bool,
 }
 
 #[tauri::command]
@@ -100,220 +78,85 @@ fn logs(state: State<'_, AppState>) -> Vec<String> {
     logs.iter().cloned().collect()
 }
 
-#[tauri::command]
-fn read_agent_config(state: State<'_, AppState>) -> Result<String, String> {
-    let path = state.agent_path("agent.config.json");
-    match std::fs::read_to_string(&path) {
-        Ok(raw) => Ok(raw),
-        // A missing config is the normal first-run state, not an error: the
-        // example is what the installer starts from too.
-        Err(_) => std::fs::read_to_string(state.agent_path("agent.config.example.json"))
-            .map_err(|e| format!("{}: {e}", path.display())),
-    }
+/// What running the CLI produced. The exit code is handed back rather than
+/// turned into an error here, because what it means depends on the command:
+/// `doctor` exits 1 to say there is something to fix, and its list is the
+/// point. The window's typed wrappers know each command's contract.
+#[derive(Serialize)]
+struct CliOutput {
+    code: i32,
+    stdout: String,
+    stderr: String,
 }
 
+/// Runs `parlour` with these arguments. This is how the window reads and
+/// writes everything that is Parlour's rather than the app's: `config show
+/// --json`, `secrets set`, `doctor --json`, `connectors list`. The one
+/// command means the app and the terminal cannot disagree about a setting,
+/// because there is only the CLI's idea of it. `stdin` is for the commands
+/// that take a document or a secret that way rather than on the command line,
+/// where it would show in a process listing. An error here is the CLI not
+/// running at all, never the CLI saying no.
 #[tauri::command]
-fn write_agent_config(state: State<'_, AppState>, json: String) -> Result<(), String> {
-    // Parse before writing: a config the agent cannot read is worse than one
-    // that is out of date, because it fails at the next start rather than now.
-    let parsed: serde_json::Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
-    let pretty = serde_json::to_string_pretty(&parsed).map_err(|e| e.to_string())?;
-    std::fs::write(state.agent_path("agent.config.json"), pretty + "\n").map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn secrets_present(state: State<'_, AppState>) -> SecretsPresent {
-    let env = std::fs::read_to_string(state.agent_path(".env")).unwrap_or_default();
-    let set = |key: &str| {
-        env.lines()
-            .filter_map(|line| line.split_once('='))
-            .any(|(k, v)| k.trim() == key && !v.trim().is_empty())
-    };
-    SecretsPresent {
-        ha_token: set("HA_TOKEN"),
-        anthropic_key: set("ANTHROPIC_API_KEY"),
-        brave_key: set("BRAVE_API_KEY"),
-        agent_token: set("AGENT_TOKEN"),
-    }
-}
-
-/// Only the keys that were typed into are changed, so an empty box means
-/// "leave it alone" rather than "delete it".
-#[tauri::command]
-fn write_secrets(
+async fn parlour(
     state: State<'_, AppState>,
-    ha_token: Option<String>,
-    anthropic_key: Option<String>,
-    brave_key: Option<String>,
-    agent_token: Option<String>,
-) -> Result<(), String> {
-    let path = state.agent_path(".env");
-    let existing = std::fs::read_to_string(&path).unwrap_or_default();
-    let updates = [
-        ("HA_TOKEN", ha_token),
-        ("ANTHROPIC_API_KEY", anthropic_key),
-        ("BRAVE_API_KEY", brave_key),
-        ("AGENT_TOKEN", agent_token),
-    ];
-
-    let mut lines: Vec<String> = existing.lines().map(str::to_owned).collect();
-    for (key, value) in updates {
-        let Some(value) = value else { continue };
-        let line = format!("{key}={value}");
-        match lines
-            .iter()
-            .position(|l| l.split_once('=').is_some_and(|(k, _)| k.trim() == key))
-        {
-            Some(index) => lines[index] = line,
-            None => lines.push(line),
-        }
+    args: Vec<String>,
+    stdin: Option<String>,
+) -> Result<CliOutput, String> {
+    let settings = state.settings();
+    if !settings.looks_valid() {
+        return Err(format!(
+            "No parlour at {:?}. Install it, or say where it is in Settings.",
+            settings.parlour_bin
+        ));
     }
+    let output =
+        tauri::async_runtime::spawn_blocking(move || -> std::io::Result<std::process::Output> {
+            let mut child = Command::new(&settings.parlour_bin)
+                .args(&args)
+                .env("PATH", shell_path())
+                .stdin(if stdin.is_some() {
+                    Stdio::piped()
+                } else {
+                    Stdio::null()
+                })
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()?;
+            if let Some(text) = stdin {
+                // Written on its own thread so a command that answers before it
+                // has read everything cannot leave this end blocked on a full pipe.
+                if let Some(mut pipe) = child.stdin.take() {
+                    std::thread::spawn(move || {
+                        let _ = pipe.write_all(text.as_bytes());
+                    });
+                }
+            }
+            child.wait_with_output()
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("could not run parlour: {e}"))?;
 
-    std::fs::write(&path, lines.join("\n") + "\n").map_err(|e| e.to_string())?;
-    // The Home Assistant token is the whole house. It is not world readable.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    Ok(CliOutput {
+        // None is a signal, which for a command the window asked for is
+        // as good as a failure.
+        code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
 }
 
-/// Where the rest of the house should point. The hostname comes from the
-/// machine rather than the config, because that is the part a person has to
-/// type into a phone and the part they always get wrong.
+/// The machine's name, which is what a phone has to be told and what a
+/// person always gets wrong. The port comes from the config, via the CLI.
 #[tauri::command]
-fn network(state: State<'_, AppState>) -> Network {
-    let config: serde_json::Value = read_agent_config(state.clone())
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or(serde_json::Value::Null);
-    let port = config
-        .get("server")
-        .and_then(|s| s.get("port"))
-        .and_then(|p| p.as_u64())
-        .unwrap_or(8765) as u16;
-
-    let host = Command::new("hostname")
+fn host_name() -> String {
+    Command::new("hostname")
         .output()
         .ok()
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
         .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| "localhost".into());
-
-    let env = std::fs::read_to_string(state.agent_path(".env")).unwrap_or_default();
-    let token_set = env
-        .lines()
-        .filter_map(|line| line.split_once('='))
-        .any(|(k, v)| k.trim() == "AGENT_TOKEN" && !v.trim().is_empty());
-
-    Network {
-        url: format!("http://{host}:{port}"),
-        token_set,
-        port,
-    }
-}
-
-/// The household's connected accounts, read and written through the agent's
-/// own `connectors` command so the app and the terminal cannot disagree.
-#[tauri::command]
-async fn connectors(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
-    let output = agent_command(&state, &["src/connectors/cli.ts", "list", "--json"])
-        .await?
-        .map_err(|e| e.to_string())?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let line = stdout
-        .lines()
-        .rev()
-        .find(|line| line.starts_with('['))
-        .ok_or_else(|| String::from_utf8_lossy(&output.stderr).trim().to_string())?;
-    serde_json::from_str(line).map_err(|e| e.to_string())
-}
-
-/// Starts a sign in. The browser opens, the agent's loopback listener catches
-/// the redirect, and the tokens land in the Keychain; this returns as soon as
-/// the flow is under way rather than waiting for a person to finish typing
-/// their password.
-#[tauri::command]
-fn connector_add(state: State<'_, AppState>, name: String, url: String, scope: Option<String>) -> Result<(), String> {
-    if name.is_empty() || url.is_empty() {
-        return Err("a name and a URL are needed".into());
-    }
-    let settings = state.settings();
-    let mut args = vec![
-        "--experimental-strip-types".to_string(),
-        "--env-file-if-exists=.env".to_string(),
-        "src/connectors/cli.ts".to_string(),
-        "add".to_string(),
-        name,
-        url,
-    ];
-    if let Some(scope) = scope.filter(|s| !s.is_empty()) {
-        args.push(format!("--scope={scope}"));
-    }
-    Command::new(&settings.node_path)
-        .current_dir(&settings.agent_dir)
-        .args(args)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn connector_remove(state: State<'_, AppState>, name: String) -> Result<(), String> {
-    agent_command(&state, &["src/connectors/cli.ts", "remove", &name])
-        .await?
-        .map(|_| ())
-        .map_err(|e| e.to_string())
-}
-
-/// Runs one of the agent's own scripts and waits for it.
-async fn agent_command(
-    state: &State<'_, AppState>,
-    args: &[&str],
-) -> Result<std::io::Result<std::process::Output>, String> {
-    let settings = state.settings();
-    let owned: Vec<String> = args.iter().map(|a| a.to_string()).collect();
-    tauri::async_runtime::spawn_blocking(move || {
-        Command::new(&settings.node_path)
-            .current_dir(&settings.agent_dir)
-            .arg("--experimental-strip-types")
-            .arg("--env-file-if-exists=.env")
-            .args(&owned)
-            .output()
-    })
-    .await
-    .map_err(|e| e.to_string())
-}
-
-/// Runs the agent's own doctor rather than reimplementing its checks here, so
-/// the app and the terminal always agree about what is broken.
-#[tauri::command]
-async fn run_doctor(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
-    let settings = state.settings();
-    let output = tauri::async_runtime::spawn_blocking(move || {
-        Command::new(&settings.node_path)
-            .current_dir(&settings.agent_dir)
-            .args([
-                "--experimental-strip-types",
-                "--env-file-if-exists=.env",
-                "src/doctor.ts",
-                "--json",
-            ])
-            .output()
-    })
-    .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let line = stdout
-        .lines()
-        .rev()
-        .find(|line| line.starts_with('['))
-        .ok_or_else(|| String::from_utf8_lossy(&output.stderr).trim().to_string())?;
-    serde_json::from_str(line).map_err(|e| e.to_string())
+        .unwrap_or_else(|| "localhost".into())
 }
 
 #[derive(Serialize)]
@@ -326,7 +169,7 @@ struct Microphone {
 /// macOS asks about the microphone once, and only when something actually opens
 /// it. Recording a fraction of a second is what makes the prompt appear, and
 /// because ffmpeg is a child of this app the permission granted is this app's,
-/// which is the one the agent inherits when the app starts it.
+/// which is the one Parlour inherits when the app starts it.
 ///
 /// This blocks for as long as the prompt is on screen, which is the point: the
 /// answer is the return value.
@@ -338,7 +181,9 @@ async fn microphone_check(device: Option<String>) -> Microphone {
             detail: "ffmpeg is not installed yet, and it is what opens the microphone".into(),
         };
     };
-    let device = device.filter(|d| !d.is_empty()).unwrap_or_else(|| ":0".into());
+    let device = device
+        .filter(|d| !d.is_empty())
+        .unwrap_or_else(|| ":0".into());
 
     let output = tauri::async_runtime::spawn_blocking(move || {
         Command::new(ffmpeg)
@@ -397,28 +242,73 @@ fn open_privacy_settings() {
 }
 
 /// What the onboarding draws: which pieces are in place and which are not.
+/// A stored path is only kept while it works: an install that moved, or a
+/// fresh `npm install -g`, is found again here rather than typed in.
 #[tauri::command]
-fn setup_status(state: State<'_, AppState>) -> Readiness {
-    setup::inspect(&state.settings())
+async fn setup_status(state: State<'_, AppState>) -> Result<Readiness, String> {
+    let stored = state.settings();
+    // A login shell and several short commands, so off the main thread the
+    // way the rest are.
+    let (settings, readiness) = tauri::async_runtime::spawn_blocking(move || {
+        let mut settings = stored;
+        if !settings.looks_valid() {
+            if let Some(path) = detect_parlour() {
+                settings.parlour_bin = path.to_string_lossy().into_owned();
+            }
+        }
+        let readiness = setup::inspect(&settings);
+        (settings, readiness)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    if settings.parlour_bin != state.settings().parlour_bin {
+        settings.save(&state.settings_path)?;
+        *state.settings.lock().unwrap() = settings;
+    }
+    Ok(readiness)
 }
 
 /// Installs everything that needs no answer, reporting as it goes. The work is
-/// the agent's own setup script, so the app and a terminal do the same thing.
+/// `parlour init`, so the app and a terminal do the same thing.
 #[tauri::command]
-async fn run_setup(app: AppHandle, state: State<'_, AppState>, wake_word: Option<String>) -> Result<bool, String> {
+async fn run_setup(app: AppHandle, state: State<'_, AppState>, deps: bool) -> Result<bool, String> {
     let settings = state.settings();
-    tauri::async_runtime::spawn_blocking(move || setup::run(&app, &settings, wake_word))
+    tauri::async_runtime::spawn_blocking(move || setup::run(&app, &settings, deps))
         .await
         .map_err(|e| e.to_string())?
 }
 
+/// `npm install -g parlour` at this app's version, streamed like the setup.
+#[tauri::command]
+async fn install_cli(app: AppHandle) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        setup::install_cli(&app, env!("CARGO_PKG_VERSION"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// ffmpeg lists avfoundation devices on stderr and exits non-zero. That is
-/// normal, which is why the exit status is ignored.
+/// normal, which is why the exit status is ignored. Looked up by path rather
+/// than by name: an app opened from the Finder inherits a PATH without
+/// Homebrew on it, and a bare `ffmpeg` would then find nothing.
 #[tauri::command]
 async fn audio_devices() -> Vec<String> {
-    let output = tauri::async_runtime::spawn_blocking(|| {
-        Command::new("ffmpeg")
-            .args(["-hide_banner", "-f", "avfoundation", "-list_devices", "true", "-i", ""])
+    let Some(ffmpeg) = found("ffmpeg") else {
+        return Vec::new();
+    };
+    let output = tauri::async_runtime::spawn_blocking(move || {
+        Command::new(ffmpeg)
+            .args([
+                "-hide_banner",
+                "-f",
+                "avfoundation",
+                "-list_devices",
+                "true",
+                "-i",
+                "",
+            ])
             .output()
     })
     .await;
@@ -463,11 +353,28 @@ fn main() {
                 .join("settings.json");
             let settings = Settings::load(&settings_path);
 
+            let autostart = settings.autostart;
             app.manage(AppState {
                 supervisor: Mutex::new(Supervisor::default()),
                 settings: Mutex::new(settings),
                 settings_path,
             });
+
+            // Listening from the moment the app opens, for the machine where
+            // the app is what keeps Parlour running rather than launchd. An
+            // error here is the same one the Start button would show.
+            if autostart {
+                let state = app.state::<AppState>();
+                let settings = state.settings();
+                let started = state
+                    .supervisor
+                    .lock()
+                    .unwrap()
+                    .start(app.handle(), &settings);
+                if let Err(error) = started {
+                    let _ = app.emit("agent://error", error);
+                }
+            }
 
             let show = MenuItem::with_id(app, "show", "Open", true, None::<&str>)?;
             let start = MenuItem::with_id(app, "start", "Start listening", true, None::<&str>)?;
@@ -486,7 +393,7 @@ fn main() {
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
                 .icon_as_template(true)
-                .tooltip("Home agent")
+                .tooltip("Parlour")
                 .menu(&menu)
                 .on_menu_event(|app, event| {
                     let state = app.state::<AppState>();
@@ -507,7 +414,7 @@ fn main() {
                         }
                         "stop" => state.supervisor.lock().unwrap().stop(),
                         "quit" => {
-                            // Stop the agent first, or the microphone stays
+                            // Stop Parlour first, or the microphone stays
                             // held by an orphaned ffmpeg.
                             state.supervisor.lock().unwrap().stop();
                             app.exit(0);
@@ -520,7 +427,7 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Closing the window hides it. The agent is meant to keep
+            // Closing the window hides it. Parlour is meant to keep
             // listening, and a menu bar app with no window is the normal state.
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
@@ -534,20 +441,14 @@ fn main() {
             start_agent,
             stop_agent,
             logs,
-            read_agent_config,
-            write_agent_config,
-            secrets_present,
-            write_secrets,
-            run_doctor,
+            parlour,
+            host_name,
             setup_status,
             run_setup,
+            install_cli,
             microphone_check,
             open_privacy_settings,
             audio_devices,
-            network,
-            connectors,
-            connector_add,
-            connector_remove,
         ])
         .run(tauri::generate_context!())
         .expect("could not start the app");

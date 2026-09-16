@@ -1,6 +1,6 @@
-// The first run. Everything here writes through the same commands the Settings
-// tab uses, and the installing is the agent's own scripts/setup.sh, so nothing
-// in this file is a second way of doing something.
+// The first run. Everything here writes through the same CLI the Settings tab
+// uses, and the installing is Parlour's own `init`, so nothing in this file is
+// a second way of doing something.
 
 import { Check as CheckIcon, TriangleAlert, X } from "lucide-react";
 import { type JSX, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -10,31 +10,31 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  type AgentConfig,
   audioDevices,
   type Check,
   deviceValue,
+  getSettings,
+  installCli,
   microphoneCheck,
   mintToken,
   onSetupEvent,
   openPrivacySettings,
   type Readiness,
-  readAgentConfig,
+  readConfig,
   runDoctor,
   runSetup,
-  type SecretEdit,
-  type SecretsPresent,
+  type SecretsStatus,
   type SetupEvent,
-  secretsPresent,
+  secretsStatus,
+  setSecret,
   setSettings,
   setupStatus,
   startAgent,
-  writeAgentConfig,
-  writeSecrets,
+  writeConfig,
 } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
 
-const HA_DEFAULT = "http://homeassistant.home:8123";
+const HA_DEFAULT = "http://homeassistant.local:8123";
 const WAKE_DEFAULT = "hey_jarvis";
 const DEVICE_DEFAULT = ":0";
 
@@ -45,9 +45,9 @@ const WAKE_WORDS: { value: string; label: string }[] = [
 ];
 
 /**
- * scripts/setup.sh reports what it is doing rather than printing a transcript,
- * so the log has to draw the shape back on: a blank line opens a step, and its
- * results sit indented underneath it.
+ * `parlour init --porcelain` reports what it is doing rather than printing a
+ * transcript, so the log has to draw the shape back on: a blank line opens a
+ * step, and its results sit indented underneath it.
  */
 const PREFIX: Partial<Record<SetupEvent["kind"], string>> = {
   step: "\n",
@@ -117,18 +117,31 @@ function Step({
   );
 }
 
-/** The sentence under step one, which is the whole diagnosis of a wrong path. */
+/** The doctor's three states as the marks this page draws. */
+function toneOf(status: Check["status"]): Tone {
+  return status === "ok" ? "ok" : status === "fail" ? "bad" : "warn";
+}
+
+/** The sentence under step one, which is the whole diagnosis of a missing piece. */
 function whereNote(readiness: Readiness): string {
-  if (readiness.agentDirOk) {
-    if (readiness.nodeOk) return `Found the agent, and node ${readiness.nodeVersion}.`;
+  if (readiness.parlourOk) {
+    if (readiness.nodeOk)
+      return `Found parlour ${readiness.parlourVersion}, and node ${readiness.nodeVersion}.`;
     if (readiness.nodeVersion) {
-      return `node ${readiness.nodeVersion} is too old. The agent needs 22 or newer to run TypeScript without a build step.`;
+      return `Found parlour, but node ${readiness.nodeVersion} is too old. It needs 22 or newer.`;
     }
-    return "That node did not answer. Point it at one, or install step 2 will find one for you.";
+    return "Found parlour, but no node answered. It needs node 22 or newer on the PATH.";
   }
-  return readiness.candidates.length
-    ? "That is not an agent directory. Pick one of the suggestions."
-    : "No agent checkout found. Clone the home-assistant repository and give the path to its agent directory.";
+  if (readiness.nodeOk) {
+    return readiness.parlourBin
+      ? "That does not run. Install Parlour below, or give the path to a copy that does."
+      : "No parlour found. Install it below, or give the path to one.";
+  }
+  // A node that answered but is too old is a different fix from no node at all.
+  if (readiness.nodeVersion) {
+    return `Found node ${readiness.nodeVersion}, but it is too old. It needs 22 or newer before Parlour can be installed below.`;
+  }
+  return "No node found. Install Node 22 or newer first, with brew install node, then install Parlour below.";
 }
 
 export function Onboarding({
@@ -143,10 +156,11 @@ export function Onboarding({
   /** Opened by itself because there is something still to do, rather than asked for. */
   const [selfOpen, setSelfOpen] = useState(false);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
-  const [present, setPresent] = useState<SecretsPresent | null>(null);
+  const [present, setPresent] = useState<SecretsStatus | null>(null);
 
-  const [dir, setDir] = useState("");
-  const [node, setNode] = useState("");
+  const [bin, setBin] = useState("");
+  const [installingCli, setInstallingCli] = useState(false);
+  const [cliNote, setCliNote] = useState("");
 
   const [haUrl, setHaUrl] = useState(HA_DEFAULT);
   const [haToken, setHaToken] = useState("");
@@ -160,7 +174,8 @@ export function Onboarding({
   const [installing, setInstalling] = useState(false);
   const [runNote, setRunNote] = useState("");
   const [log, setLog] = useState("");
-  const [logShown, setLogShown] = useState(false);
+  /** Which step's job the log is showing, or none yet. Both jobs report the same way. */
+  const [logUnder, setLogUnder] = useState<1 | 2 | null>(null);
 
   const [checks, setChecks] = useState<Check[]>([]);
   const [doctorNote, setDoctorNote] = useState<string | null>("Not checked yet.");
@@ -180,16 +195,15 @@ export function Onboarding({
   const atBottomRef = useRef(true);
   const startedRef = useRef(false);
   const wasOpenRef = useRef(open);
-  const dirRef = useRef<HTMLInputElement>(null);
-  const nodeRef = useRef<HTMLInputElement>(null);
+  const binRef = useRef<HTMLInputElement>(null);
 
   /** Drawn instead of the diagnosis when the Rust side would not answer at all. */
   const [whereError, setWhereError] = useState<string | null>(null);
 
   const visible = open || selfOpen;
 
-  /** Whether .env already carries a network token, which decides whether to mint one. */
-  const hasAgentToken = present?.agentToken ?? false;
+  /** Whether a network token is already set, which decides whether to mint one. */
+  const hasToken = present?.PARLOUR_TOKEN ?? false;
 
   const ask = useCallback(async (device: string) => {
     // Two of these at once would stack two system dialogs, so a microphone
@@ -222,25 +236,30 @@ export function Onboarding({
     }
   }, []);
 
-  /** Fills the answers from whatever is already configured, and says which microphone. */
-  const loadAnswers = useCallback(async (): Promise<string> => {
-    let config: AgentConfig = {};
-    try {
-      config = JSON.parse(await readAgentConfig()) as AgentConfig;
-    } catch {
-      // No config yet is the normal first run state.
+  /**
+   * Fills the answers from whatever is already configured, and says which
+   * microphone. Everything comes through the CLI, so with no parlour yet the
+   * answers stay at their defaults, which is the normal first run state.
+   */
+  const loadAnswers = useCallback(async (parlourOk: boolean): Promise<string> => {
+    let current = DEVICE_DEFAULT;
+    if (parlourOk) {
+      try {
+        const config = await readConfig();
+        setHaUrl(config.integrations?.["home-assistant"]?.url ?? HA_DEFAULT);
+        // An empty wake word is not a wake word: an older window wrote one
+        // when it was shown a word it did not offer, and a list cannot show it back.
+        setWake(config.wake?.words?.[0] || WAKE_DEFAULT);
+        current = config.audio?.inputDevice || DEVICE_DEFAULT;
+
+        const secrets = await secretsStatus();
+        setPresent(secrets);
+        setNetwork(secrets.PARLOUR_TOKEN);
+      } catch {
+        // A CLI that will not answer is reported under step one, not here.
+      }
     }
 
-    setHaUrl(config.homeAssistant?.baseUrl ?? HA_DEFAULT);
-    // An empty wake word is not a wake word: an older window wrote one when it
-    // was shown a word it did not offer, and a list cannot show it back.
-    setWake(config.wake?.words?.[0] || WAKE_DEFAULT);
-
-    const secrets = await secretsPresent();
-    setPresent(secrets);
-    setNetwork(secrets.agentToken);
-
-    const current = config.audio?.inputDevice || DEVICE_DEFAULT;
     let devices: string[] = [];
     try {
       devices = await audioDevices();
@@ -270,10 +289,9 @@ export function Onboarding({
   const refresh = useCallback(async (): Promise<Readiness> => {
     const next = await setupStatus();
     setReadiness(next);
-    setDir(next.agentDir ?? "");
-    setNode(next.nodePath ?? "");
+    setBin(next.parlourBin ?? "");
 
-    const device = await loadAnswers();
+    const device = await loadAnswers(next.parlourOk);
 
     // Nobody should have to know to press a button for this. ffmpeg is what
     // opens the device, so there is nothing to ask with until it is installed,
@@ -312,6 +330,7 @@ export function Onboarding({
       const element = logRef.current;
       atBottomRef.current = !element || element.scrollTop + element.clientHeight >= element.scrollHeight - 20;
       setLog((previous) => `${previous}${PREFIX[event.kind] ?? "    "}${event.text}\n`);
+      // Only the install has steps worth naming; npm is one job from start to end.
       if (event.kind === "step") setRunNote(event.text);
     });
     return () => {
@@ -319,6 +338,8 @@ export function Onboarding({
     };
   }, []);
 
+  // `log` is the trigger, not an input: a new line is what moves the view.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: log is the trigger, not an input
   useLayoutEffect(() => {
     // Only follow the tail while the reader is already at it.
     const element = logRef.current;
@@ -332,88 +353,99 @@ export function Onboarding({
 
   // ---------------------------------------------------------------- step one
 
-  // Retyping a path should say straight away whether it was the right one, and
-  // picking one of the suggestions should say so the moment it is picked. Both
-  // are the native change event, which React does not surface: its onChange is
-  // the input event, and that fires on every keystroke.
+  // Retyping a path should say straight away whether it was the right one.
+  // That is the native change event, which React does not surface: its
+  // onChange is the input event, and that fires on every keystroke. The box
+  // only exists while the page is showing, so the listener is put back when
+  // it appears, which is what `visible` is doing in the list.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: visible is when the box mounts
   useEffect(() => {
-    const boxes = [dirRef.current, nodeRef.current];
+    const box = binRef.current;
+    if (!box) return;
 
     const commit = () => {
-      // The boxes are read rather than the state this listener closed over,
-      // since it outlives the render that installed it.
-      void setSettings({
-        agentDir: dirRef.current?.value.trim() ?? "",
-        nodePath: nodeRef.current?.value.trim() ?? "",
-      })
+      // The box is read rather than the state this listener closed over,
+      // since it outlives the render that installed it. The other setting is
+      // read back first so that changing the path cannot reset it.
+      void getSettings()
+        .then((current) => setSettings({ ...current, parlourBin: box.value.trim() }))
         .then(() => refresh())
         .then(() => setWhereError(null))
         .catch((error: unknown) => setWhereError(String(error)));
     };
 
-    for (const box of boxes) box?.addEventListener("change", commit);
-    return () => {
-      for (const box of boxes) box?.removeEventListener("change", commit);
-    };
+    box.addEventListener("change", commit);
+    return () => box.removeEventListener("change", commit);
   }, [refresh, visible]);
+
+  const installParlour = async () => {
+    setInstallingCli(true);
+    setLog("");
+    setLogUnder(1);
+    setCliNote("Installing with npm.");
+    try {
+      const ok = await installCli();
+      setCliNote(ok ? "Installed." : "npm did not finish. The log says why.");
+    } catch (error) {
+      setCliNote(String(error));
+    } finally {
+      setInstallingCli(false);
+      // In the finally so it runs either way, and caught so that a Rust side
+      // that has stopped answering does not throw past the note above.
+      await refresh().catch((error: unknown) => setWhereError(String(error)));
+    }
+  };
 
   // ---------------------------------------------------------------- step two
 
   const install = async () => {
     setInstalling(true);
     setLog("");
-    setLogShown(true);
+    setLogUnder(2);
     setRunNote("Working. The models are a few hundred megabytes, so this takes a while.");
     try {
-      await setSettings({ agentDir: dir.trim(), nodePath: node.trim() });
-      const ok = await runSetup(wake);
+      const ok = await runSetup(true);
       setRunNote(ok ? "Done." : "Finished, with the failures above still to fix.");
     } catch (error) {
       setRunNote(String(error));
     } finally {
       setInstalling(false);
-      // In the finally so it runs either way, and caught so that a Rust side
-      // that has stopped answering does not throw past the note above.
       await refresh().catch((error: unknown) => setRunNote(String(error)));
     }
   };
 
   // -------------------------------------------------------------- step three
 
-  /** null leaves it alone, "" takes it away, anything else is a new one. */
-  const agentToken = (): SecretEdit => {
-    if (!network) return hasAgentToken ? "" : null;
-    // Minting a second one would lock out every phone and satellite already
-    // holding the first.
-    if (hasAgentToken) return null;
-    return mintToken();
-  };
-
   const save = async () => {
     try {
-      const config = JSON.parse(await readAgentConfig()) as AgentConfig;
-      config.homeAssistant ??= {};
+      const config = await readConfig();
+      config.integrations ??= {};
+      config.integrations["home-assistant"] ??= {};
       config.audio ??= {};
       config.wake ??= {};
       config.llm ??= {};
       config.llm.cloud ??= {};
 
-      config.homeAssistant.baseUrl = haUrl.trim();
+      // A cleared box means "not set", not the empty string: `config write`
+      // would accept "" and the house would then be asked for at no address.
+      // Leaving the key out lets the integration's own default apply.
+      const url = haUrl.trim();
+      if (url) config.integrations["home-assistant"].url = url;
+      else delete config.integrations["home-assistant"].url;
       config.audio.inputDevice = mic;
       config.wake.words = [wake];
       // Nothing to escalate to without a key, and a cloud model that cannot be
       // reached is a slow way to fail.
       if (anthropic) config.llm.cloud.enabled = true;
 
-      await writeAgentConfig(config);
-      await writeSecrets({
-        haToken: haToken || null,
-        anthropicKey: anthropic || null,
-        braveKey: null,
-        // Ticking the box mints a token once. Unticking it takes the house back
-        // off the network.
-        agentToken: agentToken(),
-      });
+      await writeConfig(config);
+      if (haToken) await setSecret("HA_TOKEN", haToken);
+      if (anthropic) await setSecret("ANTHROPIC_API_KEY", anthropic);
+      // Ticking the box mints a token once: a second one would lock out every
+      // phone and satellite already holding the first. Unticking it takes the
+      // house back off the network.
+      if (network && !hasToken) await setSecret("PARLOUR_TOKEN", mintToken());
+      if (!network && hasToken) await setSecret("PARLOUR_TOKEN", "");
 
       setHaToken("");
       setAnthropic("");
@@ -462,20 +494,21 @@ export function Onboarding({
     : [{ value: wake, label: `${wake} (from the config)` }, ...WAKE_WORDS];
 
   const micTone: Tone = asking ? "warn" : micGranted ? "ok" : micAsked ? "bad" : "warn";
+  const busy = installing || installingCli;
+  const logBox = (
+    <pre
+      ref={logRef}
+      className="mt-2 max-h-[190px] overflow-y-auto rounded-lg border bg-background px-3 py-2.5 font-mono text-[11px] leading-normal break-words whitespace-pre-wrap"
+    >
+      {log}
+    </pre>
+  );
   const rows: [string, boolean, string][] = readiness
     ? [
-        ["Agent", readiness.agentDirOk, readiness.agentDir || "not set"],
+        ["Parlour", readiness.parlourOk, readiness.parlourVersion ?? "not installed"],
         ["Node", readiness.nodeOk, readiness.nodeVersion ?? "not found"],
-        [
-          "Homebrew",
-          readiness.homebrew,
-          readiness.homebrew ? "installed" : "not installed, so nothing can be installed for you",
-        ],
-        ["Packages", readiness.packages, readiness.packages ? "installed" : "not installed yet"],
-        ["Models", readiness.models, readiness.models ? "downloaded" : "about 500 MB, downloaded once"],
         ["ffmpeg", readiness.ffmpeg, readiness.ffmpeg ? "installed" : "no ffmpeg means no microphone"],
-        ["whisper", readiness.whisper, readiness.whisper ? "installed" : "no speech to text without it"],
-        ["Config", readiness.config, readiness.config ? "agent.config.json" : "written by the install below"],
+        ["Config", readiness.config, readiness.config ? "written" : "written by the install below"],
       ]
     : [];
 
@@ -483,7 +516,7 @@ export function Onboarding({
     <div className="fixed inset-0 z-10 overflow-y-auto bg-background p-5">
       <div className="mx-auto max-w-[640px]">
         <div className="mb-1 flex items-center justify-between">
-          <h1 className="text-[17px] font-semibold">Setting up the house agent</h1>
+          <h1 className="text-[17px] font-semibold">Setting up Parlour</h1>
           <Button variant="ghost" size="sm" onClick={dismiss}>
             Close
           </Button>
@@ -493,49 +526,24 @@ export function Onboarding({
         </p>
 
         <ol className="mt-4 grid gap-3.5">
-          <Step
-            index={1}
-            title="Where the agent lives"
-            done={Boolean(readiness?.agentDirOk && readiness.nodeOk)}
-          >
+          <Step index={1} title="Parlour" done={Boolean(readiness?.parlourOk && readiness.nodeOk)}>
             <p className="text-muted-foreground">
-              The <code className="font-mono">agent</code> directory inside your Home Assistant checkout, and
-              the node that runs it.
+              The <code className="font-mono">parlour</code> command, which this app starts and asks questions
+              of. It is an npm package, so it needs node 22 or newer.
             </p>
 
-            <div className="mt-2.5 grid gap-2.5">
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground" htmlFor="ob-dir">
-                  Agent directory
-                </Label>
-                <Input
-                  ref={dirRef}
-                  id="ob-dir"
-                  list="ob-candidates"
-                  spellCheck={false}
-                  placeholder="~/Developer/home-assistant/agent"
-                  value={dir}
-                  onChange={(event) => setDir(event.target.value)}
-                />
-                <datalist id="ob-candidates">
-                  {(readiness?.candidates ?? []).map((candidate) => (
-                    <option key={candidate} value={candidate} />
-                  ))}
-                </datalist>
-              </div>
-
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground" htmlFor="ob-node">
-                  Node
-                </Label>
-                <Input
-                  ref={nodeRef}
-                  id="ob-node"
-                  spellCheck={false}
-                  value={node}
-                  onChange={(event) => setNode(event.target.value)}
-                />
-              </div>
+            <div className="mt-2.5 grid gap-1">
+              <Label className="text-xs text-muted-foreground" htmlFor="ob-bin">
+                Where it is
+              </Label>
+              <Input
+                ref={binRef}
+                id="ob-bin"
+                spellCheck={false}
+                placeholder="/opt/homebrew/bin/parlour"
+                value={bin}
+                onChange={(event) => setBin(event.target.value)}
+              />
             </div>
 
             {whereError !== null ? (
@@ -543,6 +551,17 @@ export function Onboarding({
             ) : readiness ? (
               <Note>{whereNote(readiness)}</Note>
             ) : null}
+
+            {readiness && !readiness.parlourOk ? (
+              <div className="mt-2.5 flex items-center gap-2.5">
+                <Button disabled={busy || !readiness.nodeOk} onClick={() => void installParlour()}>
+                  Install Parlour
+                </Button>
+                <span className="text-muted-foreground">{cliNote || "npm install -g parlour"}</span>
+              </div>
+            ) : null}
+
+            {logUnder === 1 ? logBox : null}
           </Step>
 
           <Step index={2} title="What is missing" done={Boolean(readiness?.installed)}>
@@ -557,26 +576,24 @@ export function Onboarding({
             </ul>
 
             <div className="mt-2.5 flex items-center gap-2.5">
-              <Button disabled={installing} onClick={() => void install()}>
+              <Button disabled={busy || !readiness?.parlourOk} onClick={() => void install()}>
                 Install what is missing
               </Button>
               <span className="text-muted-foreground">{runNote}</span>
             </div>
 
-            {logShown ? (
-              <pre
-                ref={logRef}
-                className="mt-2 max-h-[190px] overflow-y-auto rounded-lg border bg-background px-3 py-2.5 font-mono text-[11px] leading-normal break-words whitespace-pre-wrap"
-              >
-                {log}
-              </pre>
-            ) : null}
+            <Note>
+              Runs <code className="font-mono">parlour init</code>: ffmpeg and whisper from Homebrew, the
+              models, and whisper kept warm at login.
+            </Note>
+
+            {logUnder === 2 ? logBox : null}
           </Step>
 
           <Step
             index={3}
             title="The things it cannot work out"
-            done={Boolean(present?.haToken) && micGranted === true}
+            done={Boolean(present?.HA_TOKEN) && micGranted === true}
           >
             <div className="grid gap-2.5">
               <div className="grid gap-1">
@@ -600,7 +617,7 @@ export function Onboarding({
                   id="ob-ha-token"
                   type="password"
                   autoComplete="off"
-                  placeholder={present?.haToken ? "set, leave blank to keep" : "not set"}
+                  placeholder={present?.HA_TOKEN ? "set, leave blank to keep" : "not set"}
                   value={haToken}
                   onChange={(event) => setHaToken(event.target.value)}
                 />
@@ -609,7 +626,7 @@ export function Onboarding({
 
             <Note>
               Your profile page in Home Assistant, Security tab, right at the bottom. It is the whole house,
-              so it goes in .env and never into git.
+              so it goes in secrets.env and never into git.
             </Note>
 
             <div className="mt-2.5 grid gap-1">
@@ -620,7 +637,7 @@ export function Onboarding({
                 id="ob-anthropic"
                 type="password"
                 autoComplete="off"
-                placeholder={present?.anthropicKey ? "set, leave blank to keep" : "not set"}
+                placeholder={present?.ANTHROPIC_API_KEY ? "set, leave blank to keep" : "not set"}
                 value={anthropic}
                 onChange={(event) => setAnthropic(event.target.value)}
               />
@@ -661,8 +678,8 @@ export function Onboarding({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {mics.map((option, index) => (
-                    <SelectItem key={`${option.value}-${index}`} value={option.value}>
+                  {mics.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
                   ))}
@@ -686,7 +703,7 @@ export function Onboarding({
             </div>
 
             <Note>
-              macOS asks once, for this app, and it is asked as soon as this page can ask it. The agent hears
+              macOS asks once, for this app, and it is asked as soon as this page can ask it. Parlour hears
               through this app, so a no here is silence later.
             </Note>
 
@@ -700,12 +717,14 @@ export function Onboarding({
             </div>
 
             <Note>
-              Phones, satellites and Home Assistant all send one shared token. Without it the agent answers
-              this machine only.
+              Phones, satellites and Home Assistant all send one shared token. Without it Parlour answers this
+              machine only.
             </Note>
 
             <div className="mt-2.5 flex items-center gap-2.5">
-              <Button onClick={() => void save()}>Save</Button>
+              <Button disabled={!readiness?.parlourOk} onClick={() => void save()}>
+                Save
+              </Button>
               <span className="text-muted-foreground">{saveNote}</span>
             </div>
           </Step>
@@ -718,7 +737,7 @@ export function Onboarding({
                 checks.map((check) => (
                   <CheckRow
                     key={check.name}
-                    tone={check.ok ? "ok" : check.required ? "bad" : "warn"}
+                    tone={toneOf(check.status)}
                     name={check.name}
                     detail={check.detail}
                   />

@@ -1,75 +1,78 @@
 use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-use crate::settings::{self, found, node_version, recent_enough, Settings};
+use crate::settings::{found, node_version, recent_enough, shell_path, Settings};
 
 /// What the onboarding needs to know: which pieces are already in place, so it
 /// can show what is left rather than making someone read a README to find out.
+/// The app knows about `parlour` and `node` because it is the one that has to
+/// find them; everything past that is Parlour's own business, and the doctor's.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Readiness {
-    pub agent_dir: String,
-    pub agent_dir_ok: bool,
-    /// Directories that look like an agent checkout, offered as a choice.
-    pub candidates: Vec<String>,
-    pub node_path: String,
+    pub parlour_bin: String,
+    pub parlour_version: Option<String>,
+    pub parlour_ok: bool,
     pub node_version: Option<String>,
     pub node_ok: bool,
-    pub packages: bool,
-    pub models: bool,
-    pub config: bool,
     pub ffmpeg: bool,
-    pub whisper: bool,
-    pub homebrew: bool,
+    /// Whether `parlour init` has written a config yet.
+    pub config: bool,
     /// Nothing left for the install step to do.
     pub installed: bool,
 }
 
-fn has_whisper_model(agent: &Path) -> bool {
-    std::fs::read_dir(agent.join("models/whisper"))
-        .map(|entries| {
-            entries
-                .filter_map(Result::ok)
-                .any(|entry| entry.path().extension().is_some_and(|e| e == "bin"))
-        })
-        .unwrap_or(false)
+/// One line of the CLI's stdout, when asked to run it. Not an error: a
+/// command that fails says so through its exit status and stderr.
+fn output(settings: &Settings, args: &[&str]) -> Option<String> {
+    let output = Command::new(&settings.parlour_bin)
+        .args(args)
+        .env("PATH", shell_path())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    (!text.is_empty()).then_some(text)
 }
 
 pub fn inspect(settings: &Settings) -> Readiness {
-    let agent = PathBuf::from(&settings.agent_dir);
-    let agent_dir_ok = settings.looks_valid();
+    let parlour_version = settings
+        .looks_valid()
+        .then(|| output(settings, &["--version"]))
+        .flatten();
+    let parlour_ok = parlour_version.is_some();
 
-    let version = node_version(&settings.node_path);
+    let version = node_version();
     let node_ok = version.as_deref().is_some_and(recent_enough);
 
-    let packages = agent.join("node_modules/onnxruntime-node").is_dir();
-    let models = agent.join("models/openwakeword/melspectrogram.onnx").is_file() && has_whisper_model(&agent);
-    let config = agent.join("agent.config.json").is_file();
+    // The CLI says where its config is, so the app need not know the rule.
+    let config = parlour_ok
+        && output(settings, &["config", "path"])
+            .map(|path| Path::new(&path).is_file())
+            .unwrap_or(false);
+    let ffmpeg = found("ffmpeg").is_some();
 
-    let mut readiness = Readiness {
-        agent_dir: settings.agent_dir.clone(),
-        agent_dir_ok,
-        candidates: settings::agent_dir_candidates(),
-        node_path: settings.node_path.clone(),
+    Readiness {
+        parlour_bin: settings.parlour_bin.clone(),
+        parlour_version,
+        parlour_ok,
         node_version: version,
         node_ok,
-        packages,
-        models,
+        ffmpeg,
         config,
-        ffmpeg: found("ffmpeg").is_some(),
-        whisper: found("whisper-server").is_some(),
-        homebrew: found("brew").is_some(),
-        installed: false,
-    };
-    readiness.installed = agent_dir_ok && node_ok && packages && models && config && readiness.ffmpeg;
-    readiness
+        installed: parlour_ok && node_ok && ffmpeg && config,
+    }
 }
 
-#[derive(Clone, Serialize)]
+/// One line of `parlour init --porcelain`, which is also the shape the window
+/// receives, so a line that parses is forwarded as it is.
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Event {
     /// step, ok, warn, fail, log or done.
@@ -87,36 +90,25 @@ fn emit(app: &AppHandle, kind: &str, text: &str) {
     );
 }
 
-/// Runs the agent's own `scripts/setup.sh`, which is the same script the
-/// terminal installer calls. Every line it prints becomes an event, because a
-/// five minute install behind a spinner is indistinguishable from a hang.
-pub fn run(app: &AppHandle, settings: &Settings, wake_word: Option<String>) -> Result<bool, String> {
-    let script = Path::new(&settings.agent_dir).join("scripts/setup.sh");
-    if !script.is_file() {
-        return Err(format!("No setup script at {}", script.display()));
-    }
-
-    let bash = found("bash").unwrap_or_else(|| PathBuf::from("/bin/bash"));
-    let mut command = Command::new(bash);
-    command
-        .arg(&script)
-        .arg("--porcelain")
-        .current_dir(&settings.agent_dir)
-        // Not NODE_PATH, which would change how node resolves modules. This is
-        // only a hint about where to look for the binary itself.
-        .env("NODE_PATH_HINT", &settings.node_path)
+/// Runs a command with its stdout read line by line into the setup log, and
+/// its stderr relayed as log text on a thread of its own so it never reaches
+/// the parser. Every line becomes an event, because a five minute install
+/// behind a spinner is indistinguishable from a hang.
+///
+/// The answer is the exit status and the command's own verdict together:
+/// `parlour init` exits 0 after a failing doctor check, saying so only through
+/// its final `done` line, and a "1" there is a failure the window has to show.
+fn stream(app: &AppHandle, mut command: Command, what: &str) -> Result<bool, String> {
+    let mut child = command
+        .env("PATH", shell_path())
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    if let Some(word) = wake_word.filter(|w| !w.is_empty()) {
-        command.env("WAKE_WORDS", word);
-    }
-
-    let mut child = command.spawn().map_err(|e| format!("could not run the setup script: {e}"))?;
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("could not run {what}: {e}"))?;
     let stdout = child.stdout.take().ok_or("no stdout")?;
     let stderr = child.stderr.take().ok_or("no stderr")?;
 
-    // stderr is whatever the tools underneath had to say. It is log text, not
-    // events, so it goes on a thread of its own and never reaches the parser.
     let noise = app.clone();
     std::thread::spawn(move || {
         for line in BufReader::new(stderr).lines().map_while(Result::ok) {
@@ -124,15 +116,59 @@ pub fn run(app: &AppHandle, settings: &Settings, wake_word: Option<String>) -> R
         }
     });
 
+    let mut verdict: Option<String> = None;
     for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-        let (kind, text) = line.split_once(' ').unwrap_or((line.as_str(), ""));
-        match kind {
-            "step" | "ok" | "warn" | "fail" | "log" | "done" => emit(app, kind, text),
-            // A line the script did not label is still worth showing.
-            _ => emit(app, "log", &line),
+        match serde_json::from_str::<Event>(&line) {
+            Ok(event) => {
+                if event.kind == "done" {
+                    verdict = Some(event.text.clone());
+                }
+                emit(app, &event.kind, &event.text);
+            }
+            // A line that is not an event is still worth showing.
+            Err(_) => emit(app, "log", &line),
         }
     }
 
     let status = child.wait().map_err(|e| e.to_string())?;
-    Ok(status.success())
+    Ok(status.success() && verdict.as_deref() != Some("1"))
+}
+
+/// Runs Parlour's own `init`, which is the same thing a terminal runs, taking
+/// every default. Without a terminal it asks nothing, so the secrets and the
+/// choices are the window's to collect afterwards, through the CLI.
+pub fn run(app: &AppHandle, settings: &Settings, deps: bool) -> Result<bool, String> {
+    if !settings.looks_valid() {
+        return Err(format!(
+            "No parlour at {:?}. Install it first.",
+            settings.parlour_bin
+        ));
+    }
+    let mut command = Command::new(&settings.parlour_bin);
+    command.args(["init", "--porcelain", "--yes"]);
+    if !deps {
+        command.arg("--no-deps");
+    }
+    stream(app, command, "parlour init")
+}
+
+/// `npm install -g parlour` at the app's own version, so the two are never
+/// out of step. npm is found through the shell's PATH, the same way `node` is,
+/// which is what makes a version manager's install work from a bundled app.
+pub fn install_cli(app: &AppHandle, version: &str) -> Result<bool, String> {
+    emit(app, "step", &format!("Installing parlour {version}"));
+    let mut command = Command::new("npm");
+    command.args(["install", "-g", &format!("parlour@{version}")]);
+    let ok = stream(app, command, "npm")?;
+    emit(
+        app,
+        if ok { "ok" } else { "fail" },
+        if ok {
+            "installed"
+        } else {
+            "npm did not finish"
+        },
+    );
+    emit(app, "done", if ok { "0" } else { "1" });
+    Ok(ok)
 }

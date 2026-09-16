@@ -4,11 +4,11 @@
 <dict>
   <!--
     macOS will not even show the microphone prompt without this, and a request
-    with no reason given is refused outright. The agent's own recording happens
+    with no reason given is refused outright. Parlour's own recording happens
     in ffmpeg, but ffmpeg is a child of this app, so this is the app the system
     asks about and this is the sentence it shows.
   -->
   <key>NSMicrophoneUsageDescription</key>
-  <string>The house agent listens for its wake word through this microphone.</string>
+  <string>Parlour listens for its wake word through this microphone.</string>
 </dict>
 </plist>

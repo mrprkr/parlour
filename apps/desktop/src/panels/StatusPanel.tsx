@@ -41,6 +41,9 @@ export function StatusPanel({ status, reloadKey }: StatusPanelProps): JSX.Elemen
     if (status.lastReply) setReply(status.lastReply);
   }, [status.lastReply]);
 
+  // `reloadKey` is the signal that a save elsewhere may have changed the
+  // token, not an input to the read, so it sits in the list on purpose.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is the trigger, not an input
   useEffect(() => {
     let live = true;
     void getNetwork()
@@ -50,7 +53,7 @@ export function StatusPanel({ status, reloadKey }: StatusPanelProps): JSX.Elemen
           url: net.url,
           note: net.tokenSet
             ? "Phones open that address. Home Assistant points at it with /v1 on the end."
-            : "No AGENT_TOKEN is set, so the agent only answers this machine. Add one in Settings to let the house in.",
+            : "No PARLOUR_TOKEN is set, so Parlour only answers this machine. Add one in Settings to let the house in.",
         });
       })
       .catch((error: unknown) => {
@@ -164,22 +167,21 @@ function Note({ children }: { children: ReactNode }): JSX.Element {
 }
 
 function CheckRow({ check }: { check: DoctorCheck }): JSX.Element {
-  const tone = check.ok ? "text-primary" : check.required ? "text-destructive" : "text-warn";
-  const Glyph = check.ok ? Check : check.required ? X : TriangleAlert;
+  const failed = check.status === "fail";
+  const tone = check.status === "ok" ? "text-primary" : failed ? "text-destructive" : "text-warn";
+  const Glyph = check.status === "ok" ? Check : failed ? X : TriangleAlert;
 
   return (
     <li
       className={cn(
         "grid grid-cols-[16px_130px_1fr] items-start gap-2.5",
         "rounded-xl border bg-card px-3 py-2.5",
-        !check.ok && check.required && "text-destructive",
+        failed && "text-destructive",
       )}
     >
       <Glyph className={cn("mt-0.5 size-3.5", tone)} aria-hidden="true" />
       <span className="font-medium">{check.name}</span>
-      <span className={cn("break-words", check.ok || !check.required ? "text-muted-foreground" : "")}>
-        {check.detail}
-      </span>
+      <span className={cn("break-words", !failed && "text-muted-foreground")}>{check.detail}</span>
     </li>
   );
 }

@@ -1,0 +1,40 @@
+name: Feature or provider request
+description: Something Parlour should do, or an engine or platform it should support.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A new engine for an existing port (a voice, a speech to text, a model server, a search) can be an npm package that needs no change here: see docs/providers.md. An issue is still welcome for one you would like built in, or for a port that does not exist yet.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is missing
+      description: The thing you cannot do today, in terms of the house rather than the code.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like instead
+      description: A config snippet, a command, or a sentence. If it is a provider, which kind and what it would wrap.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of change
+      options:
+        - A provider for an existing port
+        - An integration (a new source of tools)
+        - A new port
+        - A CLI command or flag
+        - The network server or a client
+        - The desktop app
+        - Linux or another platform
+        - Documentation
+        - Something else
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Would you work on it
+      options:
+        - label: I would open a pull request for this, with some pointers

@@ -8,9 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { type Connector, connectorAdd, connectorRemove, getConnectors } from "@/lib/bridge";
 
-/** How long to wait before looking again after a sign in has been kicked off. */
-const SIGN_IN_ROUND_TRIP_MS = 8000;
-
 interface ConnectorsPanelProps {
   /** Bumped when the tab is opened, which is when the old app reloaded the list. */
   reloadKey?: number;
@@ -26,11 +23,7 @@ export function ConnectorsPanel({ reloadKey }: ConnectorsPanelProps): JSX.Elemen
   const [statusIsError, setStatusIsError] = useState(false);
   const [adding, setAdding] = useState(false);
 
-  // The delayed re-check outlives the submit that scheduled it, so it has to be
-  // cancellable when the panel goes away.
-  const recheck = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Opening the tab, removing one and the delayed re-check can all be in flight
+  // Opening the tab, removing one and a finished sign in can all be in flight
   // at once, and the last list to arrive is not necessarily the newest. Only the
   // most recent request is allowed to paint.
   const loadId = useRef(0);
@@ -49,16 +42,12 @@ export function ConnectorsPanel({ reloadKey }: ConnectorsPanelProps): JSX.Elemen
     }
   }, []);
 
+  // `reloadKey` is the signal to look again, not an input to the load, so it
+  // sits in the list on purpose.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is the trigger, not an input
   useEffect(() => {
     void load();
   }, [load, reloadKey]);
-
-  useEffect(
-    () => () => {
-      if (recheck.current !== null) clearTimeout(recheck.current);
-    },
-    [],
-  );
 
   async function remove(connectorName: string) {
     try {
@@ -72,17 +61,17 @@ export function ConnectorsPanel({ reloadKey }: ConnectorsPanelProps): JSX.Elemen
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAdding(true);
+    setStatusIsError(false);
+    setStatus("Finish the sign in in your browser.");
     try {
+      // The CLI waits for the browser round trip, so this resolves when the
+      // sign in is done rather than guessing at how long a password takes.
       await connectorAdd(name.trim(), url.trim(), scope.trim() || null);
-      setStatusIsError(false);
-      setStatus("Finish the sign in in your browser, then refresh.");
+      setStatus("Connected.");
       setName("");
       setUrl("");
       setScope("");
-      // The browser round trip takes as long as it takes; check back rather than
-      // pretending to know when someone has finished typing a password.
-      if (recheck.current !== null) clearTimeout(recheck.current);
-      recheck.current = setTimeout(() => void load(), SIGN_IN_ROUND_TRIP_MS);
+      await load();
     } catch (error) {
       setStatusIsError(true);
       setStatus(String(error));

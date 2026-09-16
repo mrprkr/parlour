@@ -1,0 +1,309 @@
+# Writing a provider
+
+Every stage of Parlour is a provider behind a port, chosen by name in
+`config.json`. A built-in one is a file under `packages/parlour/src/providers`;
+a third-party one is an npm package with a default export, and core needs no
+change to load it. Integrations (a source of tools, prompt lines and a mute
+gate) are providers of kind `integration` and work the same way.
+
+## How a name becomes a running thing
+
+`resolveProvider(kind, name, options, context)` in `core/providers.ts`:
+
+1. Looks up `(kind, name)` in the registry. Built-ins are there because their
+   modules call `registerProvider` at import.
+2. If nothing is registered, does `await import(name)`. A name containing
+   `..` is refused; an absolute path is allowed, so a provider can be tried
+   from a checkout before it is published. The module's `default` export is
+   accepted when it is an object whose `kind` matches, whose `name` is a
+   string and whose `create` is a function. It is then registered under the
+   name from config, so the next lookup hits.
+3. Parses the options with the definition's `schema`, if it has one.
+4. Calls `create(options, context)` and returns whatever comes back, awaiting
+   it if it is a promise.
+
+Only "nothing there" is reported as an unknown provider, with the registered
+alternatives listed. A package that exists but fails to load (a syntax error,
+a missing peer, an old Node) is reported as what it is.
+
+The options are the whole slice from config: for `"tts": { "provider":
+"x", "voice": "y" }` the provider is handed `{ provider: "x", voice: "y",
+fallback: "macos-say", speed: 1 }`. A `z.object` schema drops the keys it
+does not declare rather than rejecting them, which is what you want.
+
+## The definition
+
+```ts
+export type ProviderKind =
+  | "audioSource" | "audioSink" | "wake" | "stt" | "tts"
+  | "llm" | "search" | "secrets" | "service" | "integration";
+
+export interface ProviderContext {
+  paths: Paths;                       // configFile, secretsFile, modelsDir, logsDir...
+  secrets: Secrets;                   // haToken, anthropicKey, braveKey, token, logLevel
+  log: Logger;                        // scoped to the provider's name
+  emit: (event: AgentEvent) => void;  // the NDJSON event stream, a no-op unless --events
+  /** The whole config, for providers that need more than their own slice. */
+  config: unknown;
+}
+
+export interface ProviderDefinition<T = unknown> {
+  kind: ProviderKind;
+  name: string;
+  description: string;
+  /** Validates the provider's own slice of config. Defaults to "anything". */
+  schema?: z.ZodType;
+  create(options: unknown, context: ProviderContext): T | Promise<T>;
+}
+
+export function defineProvider<T>(definition: ProviderDefinition<T>): ProviderDefinition<T>;
+```
+
+`defineProvider` is the identity function. It exists so that `T` is inferred
+and so a package's default export reads as what it is. `options` arrives as
+`unknown` even when there is a schema, so `create` casts it to the schema's
+inferred type, as every built-in does.
+
+The package exports everything a provider needs from its root:
+`defineProvider`, the `ProviderContext` and `ProviderDefinition` types, every
+port interface, `Check`, `defineTool` and `Tool` for integrations, and the
+message types a `ChatModel` sees. Fakes for every port are exported from
+`parlour/testing`.
+
+## A worked example: Piper as a voice
+
+[Piper](https://github.com/rhasspy/piper) is a fast local text to speech
+engine with a command line that reads text on stdin and writes a WAV. This
+package makes it a `tts` provider.
+
+`package.json`:
+
+```json
+{
+  "name": "parlour-tts-piper",
+  "version": "0.1.0",
+  "description": "Piper as a Parlour voice",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": { "build": "tsc" },
+  "peerDependencies": { "parlour": ">=0.1.0" },
+  "dependencies": { "zod": "^3.25.0" },
+  "devDependencies": { "typescript": "^5.9.0", "@types/node": "^22.0.0" }
+}
+```
+
+`"type": "module"` matters: Parlour loads the package with `import()`, and a
+CommonJS module's `default` export is not the `module.exports` object you
+might expect. `parlour` is a peer dependency because the definition is
+imported from it and there must be one copy.
+
+`index.ts`:
+
+```ts
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { type Check, defineProvider, type ProviderContext, type TextToSpeech } from "parlour";
+import { z } from "zod";
+
+// Only this provider's own keys. The rest of the tts slice (provider,
+// fallback, speed) is dropped by z.object rather than rejected.
+const schema = z.object({
+  /** A voice from https://github.com/rhasspy/piper/blob/master/VOICES.md, without the extension. */
+  model: z.string().default("en_GB-alba-medium"),
+  /** Where the .onnx and .onnx.json live. Defaults to Parlour's own model cache. */
+  modelsDir: z.string().optional(),
+});
+
+type Options = z.infer<typeof schema>;
+
+/** piper reads the text on stdin and writes the file it was told to. */
+function piper(model: string, text: string, file: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("piper", ["--model", model, "--output_file", file], {
+      stdio: ["pipe", "ignore", "pipe"],
+    });
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) =>
+      code === 0 ? resolve() : reject(new Error(`piper exited ${code}: ${stderr.trim()}`)),
+    );
+    child.stdin.end(text);
+  });
+}
+
+function createPiper(options: Options, context: ProviderContext): TextToSpeech {
+  const dir = options.modelsDir ?? join(context.paths.modelsDir, "piper");
+  const model = join(dir, `${options.model}.onnx`);
+
+  return {
+    // Nothing to load: piper is a process per sentence, and the model is
+    // read from disk each time. A provider with a model to load would do
+    // that here, so the first reply does not wait for it.
+    async warm() {},
+
+    async render(text) {
+      // Rendered to a temporary file rather than stdout so a stray line of
+      // logging from piper cannot end up inside the WAV.
+      const work = await mkdtemp(join(tmpdir(), "parlour-piper-"));
+      const file = join(work, "sentence.wav");
+      try {
+        const started = Date.now();
+        await piper(model, text, file);
+        context.log.debug(`rendered in ${Date.now() - started}ms`);
+        return await readFile(file);
+      } finally {
+        await rm(work, { recursive: true, force: true });
+      }
+    },
+
+    // Throwing from render is how a voice fails. Core's FallbackTextToSpeech
+    // catches it and speaks through tts.fallback instead, so this never
+    // needs a fallback of its own.
+
+    async doctor(): Promise<Check[]> {
+      if (!existsSync(model)) {
+        return [
+          {
+            name: "Piper",
+            status: "fail",
+            detail: `${model} is missing. Download the voice and its .json from the Piper voices list.`,
+          },
+        ];
+      }
+      return [{ name: "Piper", status: "ok", detail: `voice ${options.model}` }];
+    },
+  };
+}
+
+export default defineProvider<TextToSpeech>({
+  kind: "tts",
+  name: "parlour-tts-piper",
+  description: "Piper, a fast local voice with a command line",
+  schema,
+  create: (options, context) => createPiper(options as Options, context),
+});
+```
+
+`tsconfig.json`, so the output is ES modules with declarations:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "declaration": true,
+    "outDir": "dist",
+    "skipLibCheck": true
+  },
+  "include": ["index.ts"]
+}
+```
+
+Install it next to Parlour and name it in config:
+
+```sh
+npm install -g parlour-tts-piper
+```
+
+```json
+{ "tts": { "provider": "parlour-tts-piper", "model": "en_GB-alba-medium" } }
+```
+
+A global install works because `npm install -g` puts every global package in
+one `node_modules`, which Node walks up to from Parlour's own files. To try
+it before publishing, point config at the built file with an absolute path:
+`"provider": "/Users/you/src/parlour-tts-piper/dist/index.js"`.
+
+Then:
+
+```sh
+parlour doctor      # the Piper check appears with the others
+parlour text        # nothing spoken here, but the provider is created
+parlour start
+```
+
+## The other kinds
+
+The same shape fills any slot. What `create` returns is the port for the
+kind:
+
+| Kind | Returns | Options come from |
+| --- | --- | --- |
+| `audioSource` | `AudioSource` | `audio` (the whole object; `inputDevice`, `sampleRate`...) |
+| `audioSink` | `AudioSink` | `audio` |
+| `wake` | `WakeWordEngine` | `wake` (`words`, `threshold`, `refractoryMs` and your own) |
+| `stt` | `SpeechToText` | `stt` |
+| `tts` | `TextToSpeech` | `tts` |
+| `llm` | `ChatModel` | `llm.local` or `llm.cloud`, whichever names you |
+| `search` | `SearchProvider` | `search` |
+| `integration` | `Integration` | `integrations["your-name"]` |
+
+`secrets` and `service` providers are picked by platform rather than named in
+config, so adding one (a systemd `ServiceManager`, say) means registering it
+in `packages/parlour/src/providers/service/index.ts` and is a pull request
+rather than a package.
+
+## An integration
+
+An integration is a provider of kind `integration` whose `create` returns:
+
+```ts
+export interface Integration extends Diagnosable {
+  readonly name: string;
+  tools(): Promise<Tool[]>;
+  /** Extra lines for the system prompt. */
+  promptContext?(): string[];
+  /** True means ignore this wake. Asked after the wake word, before anything is acted on. */
+  gate?(): Promise<boolean>;
+  close?(): Promise<void>;
+}
+```
+
+It is selected by being a key under `integrations`, and the key is the
+provider name, so `"integrations": { "parlour-integration-sonos": {} }` loads
+that package and hands it `{}`. Tools are built with `defineTool(name,
+description, jsonSchema, handler)` from the package root; the handler returns
+a string the model reads. Keep names stable and short, because every tool
+description is in the local model's context on every turn, and a package with
+forty tools makes every answer slower.
+
+`tools()` is called once at assembly, so a connection opened there stays
+open; `close()` is where it is shut. The Home Assistant integration in
+`packages/parlour/src/integrations/home-assistant/index.ts` is the reference:
+MCP tools, two REST tools, a prompt line, a gate that reads an entity, and a
+doctor that checks the token, the API and the MCP endpoint.
+
+## Testing
+
+`parlour/testing` exports `FakeChatModel`, `FakeSpeechToText`,
+`FakeTextToSpeech`, `FakeAudioSink`, `FakeWakeWordEngine` and `silentLogger`,
+so a provider or integration can be run through the same `VoiceSession` and
+`Router` the built-ins are tested against without hardware, a model or a
+network. A `ProviderContext` for a test is a few lines:
+
+```ts
+import { resolvePaths, type ProviderContext } from "parlour";
+import { silentLogger } from "parlour/testing";
+
+const context: ProviderContext = {
+  paths: resolvePaths({ HOME: "/tmp/parlour-test" }),
+  secrets: {},
+  log: silentLogger,
+  emit: () => {},
+  config: {},
+};
+```
+
+Providers that need hardware or a model are not unit tested in this
+repository either. Each has a `doctor()` instead, which is the part worth
+getting right: it is what a person sees when the thing does not work.

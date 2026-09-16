@@ -1,0 +1,64 @@
+name: Bug report
+description: Something Parlour does that it should not, or does not do that it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks. Most reports are answered by the doctor and the log, so please include both. Never paste a token or a key: `parlour secrets status` reports which are set without their values.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you said or did, what Parlour did, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: parlour doctor
+      description: The whole output. If it hangs, say where.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: The log around the problem
+      description: "`parlour service logs`, the Logs tab in the app, or the terminal running `parlour start`. `LOG_LEVEL=debug` in secrets.env says more."
+      render: text
+  - type: textarea
+    id: config
+    attributes:
+      label: Config
+      description: "`parlour config show`, with anything you consider private removed. There should be no secrets in it."
+      render: json
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`parlour --version`, and the app's version if it is involved."
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: macOS version and chip, and `node -v`.
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Which client
+      description: Where the request came from, if it matters.
+      options:
+        - The server's own microphone
+        - A satellite
+        - Home Assistant / Voice PE
+        - The phone page
+        - Custom hardware on /listen
+        - /ask
+        - parlour text
+        - The desktop app
+        - Not applicable
