@@ -1,6 +1,6 @@
 import { loadConfig } from "../config.ts";
-import { ConnectorStore, type Connector } from "./store.ts";
 import { authorise } from "./oauth.ts";
+import { type Connector, ConnectorStore } from "./store.ts";
 
 /**
  * `pnpm connectors` — the household's accounts.
@@ -64,7 +64,7 @@ async function list(): Promise<void> {
 async function add(): Promise<void> {
   const [name, url] = args;
   if (!name || !url) {
-    console.error("usage: connectors add <name> <url> [--scope=\"a b\"]");
+    console.error('usage: connectors add <name> <url> [--scope="a b"]');
     process.exitCode = 2;
     return;
   }

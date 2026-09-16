@@ -9,9 +9,7 @@
   },
   "wake": {
     "modelDir": "models/openwakeword",
-    "words": [
-      "hey_jarvis"
-    ],
+    "words": ["hey_jarvis"],
     "threshold": 0.5
   },
   "stt": {
@@ -59,10 +57,7 @@
     "calendar": {
       "transport": "stdio",
       "command": "npx",
-      "args": [
-        "-y",
-        "@some/calendar-mcp-server"
-      ]
+      "args": ["-y", "@some/calendar-mcp-server"]
     }
   }
 }

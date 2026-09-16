@@ -49,7 +49,10 @@ export class HomeAssistant {
         {
           type: "object",
           properties: {
-            entity_id: { type: "string", description: "For example light.kitchen or sensor.bedroom_temperature" },
+            entity_id: {
+              type: "string",
+              description: "For example light.kitchen or sensor.bedroom_temperature",
+            },
           },
           required: ["entity_id"],
         },

@@ -1,18 +1,18 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { timingSafeEqual } from "node:crypto";
-import { WebSocketServer, type WebSocket } from "ws";
-import type { Config, Secrets } from "../config.ts";
-import type { Router } from "../llm/router.ts";
-import type { WakeModels } from "../audio/wake.ts";
-import type { Synthesiser } from "../tts/index.ts";
+import { type WebSocket, WebSocketServer } from "ws";
 import { FRAME_SAMPLES, wavToFrames } from "../audio/capture.ts";
 import { decodeToWav } from "../audio/decode.ts";
-import { VoiceSession, type VoiceState } from "../voice/session.ts";
+import type { WakeModels } from "../audio/wake.ts";
+import type { Config, Secrets } from "../config.ts";
 import { advertise } from "../discovery/index.ts";
+import type { Router } from "../llm/router.ts";
 import { logger } from "../logger.ts";
+import type { Synthesiser } from "../tts/index.ts";
+import { VoiceSession, type VoiceState } from "../voice/session.ts";
 
 const log = logger("server");
 const WEB_DIR = fileURLToPath(new URL("./web/", import.meta.url));
@@ -213,11 +213,12 @@ async function completions(
     user?: string;
   };
   const last = [...(payload.messages ?? [])].reverse().find((m) => m.role === "user");
-  const text = typeof last?.content === "string"
-    ? last.content
-    : (Array.isArray(last?.content)
+  const text =
+    typeof last?.content === "string"
+      ? last.content
+      : Array.isArray(last?.content)
         ? last.content.map((part: { text?: string }) => part.text ?? "").join(" ")
-        : "");
+        : "";
   if (!text.trim()) return send(response, 400, { error: "no user message" });
 
   // The caller's own system prompt and tools are ignored on purpose: this
@@ -233,9 +234,7 @@ async function completions(
       object: "chat.completion",
       created,
       model: "home-agent",
-      choices: [
-        { index: 0, message: { role: "assistant", content: answer.text }, finish_reason: "stop" },
-      ],
+      choices: [{ index: 0, message: { role: "assistant", content: answer.text }, finish_reason: "stop" }],
       usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
     });
   }

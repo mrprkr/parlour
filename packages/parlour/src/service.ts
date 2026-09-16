@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { mkdir, readFile, rename, writeFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -98,11 +98,16 @@ export async function specs(agentDir: string): Promise<ServiceSpec[]> {
         what: "whisper, kept warm",
         program: [
           whisper,
-          "--host", "127.0.0.1",
-          "--port", String(new URL(config.stt.url).port || 8910),
-          "--model", model,
-          "--language", config.stt.language,
-          "--threads", "6",
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(new URL(config.stt.url).port || 8910),
+          "--model",
+          model,
+          "--language",
+          config.stt.language,
+          "--threads",
+          "6",
           "--no-timestamps",
           "--convert",
         ],
@@ -118,7 +123,9 @@ export async function specs(agentDir: string): Promise<ServiceSpec[]> {
 function firstWhisperModel(agentDir: string): string | undefined {
   const dir = join(agentDir, "models/whisper");
   if (!existsSync(dir)) return undefined;
-  const file = readdirSync(dir).filter((name) => name.endsWith(".bin")).sort()[0];
+  const file = readdirSync(dir)
+    .filter((name) => name.endsWith(".bin"))
+    .sort()[0];
   return file ? join(dir, file) : undefined;
 }
 
@@ -185,9 +192,7 @@ async function launch(action: "load" | "unload", label: string): Promise<boolean
     try {
       await run("launchctl", args);
       return true;
-    } catch {
-      continue;
-    }
+    } catch {}
   }
   return false;
 }
@@ -282,9 +287,7 @@ export async function tail(label: string, lines: number): Promise<string> {
       const text = await readFile(logPath(label, extension), "utf8");
       const last = text.split("\n").filter(Boolean).slice(-lines);
       if (last.length) out.push(`--- ${label}.${extension}\n${last.join("\n")}`);
-    } catch {
-      continue;
-    }
+    } catch {}
   }
   return out.join("\n\n") || `Nothing logged yet for ${label}.`;
 }
@@ -318,7 +321,9 @@ if (process.argv[1]?.endsWith("service.ts")) {
   };
 
   if (process.platform !== "darwin" && command !== "status") {
-    console.error("launchd is a Mac thing. On anything else, run the agent under whatever supervises services there.");
+    console.error(
+      "launchd is a Mac thing. On anything else, run the agent under whatever supervises services there.",
+    );
     process.exitCode = 2;
   } else {
     switch (command) {
@@ -338,7 +343,13 @@ if (process.argv[1]?.endsWith("service.ts")) {
       }
       case "uninstall": {
         const removed = await uninstall(agentDir);
-        console.log(json ? JSON.stringify(removed) : removed.length ? `Removed ${removed.join(", ")}.` : "Nothing to remove.");
+        console.log(
+          json
+            ? JSON.stringify(removed)
+            : removed.length
+              ? `Removed ${removed.join(", ")}.`
+              : "Nothing to remove.",
+        );
         break;
       }
       case "restart":

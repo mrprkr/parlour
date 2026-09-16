@@ -1,51 +1,37 @@
 // The first run. Everything here writes through the same commands the Settings
 // tab uses, and the installing is the agent's own scripts/setup.sh, so nothing
 // in this file is a second way of doing something.
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type JSX,
-  type ReactNode,
-} from "react";
-import { Check as CheckIcon, TriangleAlert, X } from "lucide-react";
 
+import { Check as CheckIcon, TriangleAlert, X } from "lucide-react";
+import { type JSX, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  type AgentConfig,
   audioDevices,
+  type Check,
   deviceValue,
   microphoneCheck,
   mintToken,
   onSetupEvent,
   openPrivacySettings,
+  type Readiness,
   readAgentConfig,
   runDoctor,
   runSetup,
+  type SecretEdit,
+  type SecretsPresent,
+  type SetupEvent,
   secretsPresent,
   setSettings,
   setupStatus,
   startAgent,
   writeAgentConfig,
   writeSecrets,
-  type AgentConfig,
-  type Check,
-  type Readiness,
-  type SecretEdit,
-  type SecretsPresent,
-  type SetupEvent,
 } from "@/lib/bridge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const HA_DEFAULT = "http://homeassistant.home:8123";
@@ -324,8 +310,7 @@ export function Onboarding({
   useEffect(() => {
     const pending = onSetupEvent((event) => {
       const element = logRef.current;
-      atBottomRef.current =
-        !element || element.scrollTop + element.clientHeight >= element.scrollHeight - 20;
+      atBottomRef.current = !element || element.scrollTop + element.clientHeight >= element.scrollHeight - 20;
       setLog((previous) => `${previous}${PREFIX[event.kind] ?? "    "}${event.text}\n`);
       if (event.kind === "step") setRunNote(event.text);
     });
@@ -490,11 +475,7 @@ export function Onboarding({
         ["Models", readiness.models, readiness.models ? "downloaded" : "about 500 MB, downloaded once"],
         ["ffmpeg", readiness.ffmpeg, readiness.ffmpeg ? "installed" : "no ffmpeg means no microphone"],
         ["whisper", readiness.whisper, readiness.whisper ? "installed" : "no speech to text without it"],
-        [
-          "Config",
-          readiness.config,
-          readiness.config ? "agent.config.json" : "written by the install below",
-        ],
+        ["Config", readiness.config, readiness.config ? "agent.config.json" : "written by the install below"],
       ]
     : [];
 
@@ -518,8 +499,8 @@ export function Onboarding({
             done={Boolean(readiness?.agentDirOk && readiness.nodeOk)}
           >
             <p className="text-muted-foreground">
-              The <code className="font-mono">agent</code> directory inside your Home Assistant
-              checkout, and the node that runs it.
+              The <code className="font-mono">agent</code> directory inside your Home Assistant checkout, and
+              the node that runs it.
             </p>
 
             <div className="mt-2.5 grid gap-2.5">
@@ -627,8 +608,8 @@ export function Onboarding({
             </div>
 
             <Note>
-              Your profile page in Home Assistant, Security tab, right at the bottom. It is the whole
-              house, so it goes in .env and never into git.
+              Your profile page in Home Assistant, Security tab, right at the bottom. It is the whole house,
+              so it goes in .env and never into git.
             </Note>
 
             <div className="mt-2.5 grid gap-1">
@@ -705,8 +686,8 @@ export function Onboarding({
             </div>
 
             <Note>
-              macOS asks once, for this app, and it is asked as soon as this page can ask it. The
-              agent hears through this app, so a no here is silence later.
+              macOS asks once, for this app, and it is asked as soon as this page can ask it. The agent hears
+              through this app, so a no here is silence later.
             </Note>
 
             <div className="mt-2.5 flex items-center gap-2">
@@ -719,8 +700,8 @@ export function Onboarding({
             </div>
 
             <Note>
-              Phones, satellites and Home Assistant all send one shared token. Without it the agent
-              answers this machine only.
+              Phones, satellites and Home Assistant all send one shared token. Without it the agent answers
+              this machine only.
             </Note>
 
             <div className="mt-2.5 flex items-center gap-2.5">

@@ -1,9 +1,9 @@
-import { useEffect, useState, type JSX, type ReactNode } from "react";
 import { Check, TriangleAlert, X } from "lucide-react";
+import { type JSX, type ReactNode, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getNetwork, runDoctor, type Check as DoctorCheck, type Status } from "@/lib/bridge";
+import { type Check as DoctorCheck, getNetwork, runDoctor, type Status } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
 
 interface StatusPanelProps {
@@ -105,9 +105,7 @@ export function StatusPanel({ status, reloadKey }: StatusPanelProps): JSX.Elemen
 
       <dl className="flex gap-[26px]">
         <Fact label="Tools">{status.running ? String(status.tools) : "-"}</Fact>
-        <Fact label="Cloud escalation">
-          {status.running ? (status.cloud ? "on" : "off") : "-"}
-        </Fact>
+        <Fact label="Cloud escalation">{status.running ? (status.cloud ? "on" : "off") : "-"}</Fact>
       </dl>
 
       <Card className={CARD}>
@@ -116,9 +114,7 @@ export function StatusPanel({ status, reloadKey }: StatusPanelProps): JSX.Elemen
         </CardHeader>
         <CardContent className={cn(CARD_PAD, "space-y-1")}>
           <p className="break-all font-mono text-[13px]">{network ? network.url : "-"}</p>
-          {network?.note ? (
-            <p className="text-muted-foreground">{network.note}</p>
-          ) : null}
+          {network?.note ? <p className="text-muted-foreground">{network.note}</p> : null}
         </CardContent>
       </Card>
 
@@ -164,9 +160,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }): JSX.
 
 /** A line of the doctor's list, or one of the messages that stand in for it. */
 function Note({ children }: { children: ReactNode }): JSX.Element {
-  return (
-    <li className="rounded-xl border bg-card px-3 py-2.5 text-muted-foreground">{children}</li>
-  );
+  return <li className="rounded-xl border bg-card px-3 py-2.5 text-muted-foreground">{children}</li>;
 }
 
 function CheckRow({ check }: { check: DoctorCheck }): JSX.Element {

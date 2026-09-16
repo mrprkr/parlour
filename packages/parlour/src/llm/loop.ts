@@ -1,7 +1,7 @@
-import type { ChatModel, Message, ToolSpec } from "./types.ts";
-import type { ToolRegistry } from "../tools/registry.ts";
-import { ESCALATE_TOOL } from "../prompt.ts";
 import { logger } from "../logger.ts";
+import { ESCALATE_TOOL } from "../prompt.ts";
+import type { ToolRegistry } from "../tools/registry.ts";
+import type { ChatModel, Message, ToolSpec } from "./types.ts";
 
 const log = logger("loop");
 

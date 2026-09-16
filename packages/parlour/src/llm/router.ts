@@ -1,9 +1,9 @@
 import type { Config } from "../config.ts";
-import type { ToolRegistry } from "../tools/registry.ts";
+import { logger } from "../logger.ts";
 import { escalateSpec, systemPrompt } from "../prompt.ts";
+import type { ToolRegistry } from "../tools/registry.ts";
 import { runTurn } from "./loop.ts";
 import type { ChatModel, Message } from "./types.ts";
-import { logger } from "../logger.ts";
 
 const log = logger("router");
 
@@ -85,11 +85,7 @@ export class Router {
 
     if (result.escalateTo && this.#cloud) {
       via = "cloud";
-      const handover: Message[] = [
-        system,
-        ...session.history,
-        { role: "user", content: result.escalateTo },
-      ];
+      const handover: Message[] = [system, ...session.history, { role: "user", content: result.escalateTo }];
       try {
         result = await runTurn({
           model: this.#cloud,
@@ -141,8 +137,5 @@ export class Router {
 
 function roomContext(room: string | undefined): string[] {
   if (!room) return [];
-  return [
-    "",
-    `You are being spoken to from the ${room}. When a request names no room, it means this one.`,
-  ];
+  return ["", `You are being spoken to from the ${room}. When a request names no room, it means this one.`];
 }

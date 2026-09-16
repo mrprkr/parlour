@@ -1,7 +1,14 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
   "files": {
-    "includes": ["packages/**", "apps/desktop/src/**", "scripts/**", "!**/dist", "!**/node_modules", "!**/target"]
+    "includes": [
+      "packages/**",
+      "apps/desktop/src/**",
+      "scripts/**",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/target"
+    ]
   },
   "formatter": { "indentStyle": "space", "lineWidth": 110 },
   "linter": { "rules": { "recommended": true, "style": { "noNonNullAssertion": "off" } } },

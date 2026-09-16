@@ -28,7 +28,12 @@ function args(voice: string | undefined, speed: number, file?: string): string[]
  * when Kokoro is not there or has fallen over, and it is a good one: nothing to
  * download, and it starts talking immediately instead of synthesising first.
  */
-export function sayAloud(text: string, voice: string | undefined, speed: number, signal?: AbortSignal): Promise<void> {
+export function sayAloud(
+  text: string,
+  voice: string | undefined,
+  speed: number,
+  signal?: AbortSignal,
+): Promise<void> {
   return run("say", args(voice, speed), { input: text, signal });
 }
 

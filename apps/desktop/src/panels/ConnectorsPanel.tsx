@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type JSX } from "react";
 import { CircleCheck, CircleX, LoaderCircle } from "lucide-react";
+import { type FormEvent, type JSX, useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { connectorAdd, connectorRemove, getConnectors, type Connector } from "@/lib/bridge";
+import { type Connector, connectorAdd, connectorRemove, getConnectors } from "@/lib/bridge";
 
 /** How long to wait before looking again after a sign in has been kicked off. */
 const SIGN_IN_ROUND_TRIP_MS = 8000;
@@ -94,8 +94,8 @@ export function ConnectorsPanel({ reloadKey }: ConnectorsPanelProps): JSX.Elemen
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        A connector is a remote MCP server the house has signed in to. Its tools appear alongside
-        the lights at the next start; its tokens live in the Keychain, never in the config.
+        A connector is a remote MCP server the house has signed in to. Its tools appear alongside the lights
+        at the next start; its tokens live in the Keychain, never in the config.
       </p>
 
       <Card>
@@ -116,10 +116,7 @@ export function ConnectorsPanel({ reloadKey }: ConnectorsPanelProps): JSX.Elemen
                   {index > 0 ? <Separator /> : null}
                   <div className="flex items-center gap-3 px-6 py-3">
                     {connector.signedIn ? (
-                      <CircleCheck
-                        aria-label="Signed in"
-                        className="size-4 shrink-0 text-primary"
-                      />
+                      <CircleCheck aria-label="Signed in" className="size-4 shrink-0 text-primary" />
                     ) : (
                       <CircleX aria-label="Signed out" className="size-4 shrink-0 text-destructive" />
                     )}
@@ -195,9 +192,7 @@ export function ConnectorsPanel({ reloadKey }: ConnectorsPanelProps): JSX.Elemen
               </Button>
               {status !== null ? (
                 <span
-                  className={
-                    statusIsError ? "text-xs text-destructive" : "text-xs text-muted-foreground"
-                  }
+                  className={statusIsError ? "text-xs text-destructive" : "text-xs text-muted-foreground"}
                 >
                   {status}
                 </span>

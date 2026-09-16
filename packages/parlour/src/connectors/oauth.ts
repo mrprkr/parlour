@@ -7,8 +7,8 @@ import type {
   OAuthClientMetadata,
   OAuthTokens,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
-import type { Connector, ConnectorStore } from "./store.ts";
 import { logger } from "../logger.ts";
+import type { Connector, ConnectorStore } from "./store.ts";
 
 const log = logger("connectors");
 
@@ -28,12 +28,7 @@ export class KeychainProvider implements OAuthClientProvider {
   readonly #redirect: string;
   readonly #open: (url: URL) => void;
 
-  constructor(
-    store: ConnectorStore,
-    connector: Connector,
-    redirect: string,
-    open: (url: URL) => void,
-  ) {
+  constructor(store: ConnectorStore, connector: Connector, redirect: string, open: (url: URL) => void) {
     this.#store = store;
     this.#connector = connector;
     this.#redirect = redirect;
@@ -94,7 +89,11 @@ export class KeychainProvider implements OAuthClientProvider {
     else if (scope === "verifier") await this.#merge({ verifier: undefined });
   }
 
-  async #merge(patch: { tokens?: Record<string, unknown>; client?: Record<string, unknown>; verifier?: string }): Promise<void> {
+  async #merge(patch: {
+    tokens?: Record<string, unknown>;
+    client?: Record<string, unknown>;
+    verifier?: string;
+  }): Promise<void> {
     const current = await this.#store.secrets(this.#connector.name);
     await this.#store.saveSecrets(this.#connector.name, { ...current, ...patch });
   }
@@ -106,7 +105,9 @@ export function providerFor(store: ConnectorStore, connector: Connector): OAuthC
     // Reaching here means the stored tokens are gone or were rejected. There
     // is nobody at a keyboard, so say what to do rather than opening a window
     // on a headless Mac in a cupboard.
-    log.warn(`${connector.name} needs signing in again: pnpm connectors add ${connector.name} ${connector.url}`);
+    log.warn(
+      `${connector.name} needs signing in again: pnpm connectors add ${connector.name} ${connector.url}`,
+    );
     log.debug("authorisation url", url.toString());
   });
 }
@@ -125,12 +126,14 @@ export async function authorise(store: ConnectorStore, connector: Connector): Pr
     }
     const code = url.searchParams.get("code");
     const error = url.searchParams.get("error");
-    response.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(
-      `<!doctype html><meta charset="utf-8"><title>Home agent</title>` +
-        `<body style="font:16px system-ui;padding:3rem;max-width:32rem;margin:auto">` +
-        `<h1 style="font-size:1.1rem">${code ? `${connector.name} is connected.` : "That did not work."}</h1>` +
-        `<p style="color:#666">${code ? "You can close this tab and go back to the terminal." : (error ?? "No authorisation code came back.")}</p>`,
-    );
+    response
+      .writeHead(200, { "content-type": "text/html; charset=utf-8" })
+      .end(
+        `<!doctype html><meta charset="utf-8"><title>Home agent</title>` +
+          `<body style="font:16px system-ui;padding:3rem;max-width:32rem;margin:auto">` +
+          `<h1 style="font-size:1.1rem">${code ? `${connector.name} is connected.` : "That did not work."}</h1>` +
+          `<p style="color:#666">${code ? "You can close this tab and go back to the terminal." : (error ?? "No authorisation code came back.")}</p>`,
+      );
     if (code) codes.resolve(code);
     else codes.reject(new Error(error ?? "no authorisation code"));
   });
@@ -163,7 +166,9 @@ export async function authorise(store: ConnectorStore, connector: Connector): Pr
 }
 
 function openInBrowser(url: URL): void {
-  console.log(`\nOpening your browser to sign in to the connector.\nIf nothing happens, open this:\n${url}\n`);
+  console.log(
+    `\nOpening your browser to sign in to the connector.\nIf nothing happens, open this:\n${url}\n`,
+  );
   const opener = process.platform === "darwin" ? "open" : "xdg-open";
   spawn(opener, [url.toString()], { stdio: "ignore", detached: true }).unref();
 }

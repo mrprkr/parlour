@@ -1,15 +1,15 @@
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Config } from "../config.ts";
+import { logger } from "../logger.ts";
 import type { McpTools } from "../tools/mcp.ts";
 import type { Tool } from "../tools/registry.ts";
-import { ConnectorStore } from "./store.ts";
 import { providerFor } from "./oauth.ts";
-import { logger } from "../logger.ts";
+import { ConnectorStore } from "./store.ts";
 
 const log = logger("connectors");
 
-export { ConnectorStore } from "./store.ts";
 export type { Connector } from "./store.ts";
+export { ConnectorStore } from "./store.ts";
 
 /**
  * Every connected service, as tools.

@@ -94,9 +94,7 @@ export class ConnectorStore {
 
   async #keychainRead(name: string): Promise<string | null> {
     try {
-      const { stdout } = await run("security", [
-        "find-generic-password", "-s", SERVICE, "-a", name, "-w",
-      ]);
+      const { stdout } = await run("security", ["find-generic-password", "-s", SERVICE, "-a", name, "-w"]);
       return stdout.trim() || null;
     } catch {
       return null;
@@ -107,8 +105,16 @@ export class ConnectorStore {
     try {
       // -U updates in place, so re-authorising does not pile up duplicates.
       await run("security", [
-        "add-generic-password", "-U", "-s", SERVICE, "-a", name, "-w", value,
-        "-l", `Home agent: ${name}`,
+        "add-generic-password",
+        "-U",
+        "-s",
+        SERVICE,
+        "-a",
+        name,
+        "-w",
+        value,
+        "-l",
+        `Home agent: ${name}`,
       ]);
       return true;
     } catch {

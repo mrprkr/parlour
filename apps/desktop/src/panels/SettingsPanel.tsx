@@ -1,28 +1,14 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type JSX,
-  type ReactNode,
-} from "react";
 import { Wand2 } from "lucide-react";
+import { type FormEvent, type JSX, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { cn } from "@/lib/utils";
 import {
+  type AgentConfig,
   audioDevices,
   deviceValue,
   getSettings,
@@ -31,8 +17,8 @@ import {
   setSettings,
   writeAgentConfig,
   writeSecrets,
-  type AgentConfig,
 } from "@/lib/bridge";
+import { cn } from "@/lib/utils";
 
 /** Everything the form edits apart from the three write-only secrets. */
 interface FormValues {
@@ -131,15 +117,7 @@ function Group({ title, children }: { title: string; children: ReactNode }): JSX
   );
 }
 
-function Field({
-  id,
-  label,
-  children,
-}: {
-  id: string;
-  label: string;
-  children: ReactNode;
-}): JSX.Element {
+function Field({ id, label, children }: { id: string; label: string; children: ReactNode }): JSX.Element {
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={id}>{label}</Label>
@@ -286,9 +264,12 @@ export function SettingsPanel({
     void load();
   }, [load, reloadKey]);
 
-  useEffect(() => () => {
-    if (flashTimer.current) clearTimeout(flashTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    },
+    [],
+  );
 
   const set = <Key extends keyof FormValues>(key: Key, value: FormValues[Key]) =>
     setValues((previous) => ({ ...previous, [key]: value }));
@@ -531,8 +512,8 @@ export function SettingsPanel({
             />
           </Field>
           <p className="text-sm text-muted-foreground">
-            Phones, satellites and Home Assistant all send this. Without it the agent answers this
-            machine only.
+            Phones, satellites and Home Assistant all send this. Without it the agent answers this machine
+            only.
           </p>
         </Group>
 

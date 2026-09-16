@@ -1,15 +1,15 @@
 import { join } from "node:path";
 import ort from "onnxruntime-node";
-import { FRAME_SAMPLES } from "./capture.ts";
 import { logger } from "../logger.ts";
+import { FRAME_SAMPLES } from "./capture.ts";
 
 const log = logger("wake");
 
 const MEL_BINS = 32;
-const EMBED_WINDOW = 76;   // mel frames the embedding model consumes
-const EMBED_STRIDE = 8;    // mel frames between embeddings
+const EMBED_WINDOW = 76; // mel frames the embedding model consumes
+const EMBED_STRIDE = 8; // mel frames between embeddings
 const EMBED_DIM = 96;
-const CONTEXT = 16;        // embeddings the wake word model consumes
+const CONTEXT = 16; // embeddings the wake word model consumes
 
 export interface WakeOptions {
   modelDir: string;

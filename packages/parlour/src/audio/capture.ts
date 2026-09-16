@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { logger } from "../logger.ts";
 
 const log = logger("mic");
@@ -28,13 +28,21 @@ export class Microphone {
 
   async *frames(signal?: AbortSignal): AsyncGenerator<Int16Array> {
     const proc = spawn("ffmpeg", [
-      "-hide_banner", "-loglevel", "error",
-      "-f", "avfoundation",
-      "-i", this.#device,
-      "-ac", "1",
-      "-ar", String(this.#sampleRate),
-      "-f", "s16le",
-      "-acodec", "pcm_s16le",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-f",
+      "avfoundation",
+      "-i",
+      this.#device,
+      "-ac",
+      "1",
+      "-ar",
+      String(this.#sampleRate),
+      "-f",
+      "s16le",
+      "-acodec",
+      "pcm_s16le",
       "-",
     ]);
     this.#proc = proc;
@@ -83,8 +91,8 @@ export function toWav(frames: Int16Array[], sampleRate: number): Buffer {
   header.write("WAVE", 8);
   header.write("fmt ", 12);
   header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20);            // PCM
-  header.writeUInt16LE(1, 22);            // mono
+  header.writeUInt16LE(1, 20); // PCM
+  header.writeUInt16LE(1, 22); // mono
   header.writeUInt32LE(sampleRate, 24);
   header.writeUInt32LE(sampleRate * 2, 28);
   header.writeUInt16LE(2, 32);

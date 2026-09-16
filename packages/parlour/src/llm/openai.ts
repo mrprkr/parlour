@@ -1,5 +1,5 @@
-import type { ChatModel, Completion, Message, ToolSpec } from "./types.ts";
 import { logger } from "../logger.ts";
+import type { ChatModel, Completion, Message, ToolSpec } from "./types.ts";
 
 const log = logger("local-llm");
 

@@ -8,11 +8,17 @@ import { spawn } from "node:child_process";
 export function decodeToWav(input: Buffer, sampleRate = 16000): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const proc = spawn("ffmpeg", [
-      "-hide_banner", "-loglevel", "error",
-      "-i", "pipe:0",
-      "-ac", "1",
-      "-ar", String(sampleRate),
-      "-f", "wav",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      "pipe:0",
+      "-ac",
+      "1",
+      "-ar",
+      String(sampleRate),
+      "-f",
+      "wav",
       "pipe:1",
     ]);
 

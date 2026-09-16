@@ -1,8 +1,8 @@
 import type { Config } from "../config.ts";
 import { logger } from "../logger.ts";
 import { loadKokoro, renderKokoro } from "./kokoro.ts";
-import { isKokoroVoiceId, renderSay, sayAloud } from "./say.ts";
 import { playWav } from "./play.ts";
+import { isKokoroVoiceId, renderSay, sayAloud } from "./say.ts";
 
 const log = logger("tts");
 

@@ -2,10 +2,10 @@ import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { loadConfig, type Config } from "./config.ts";
+import { type Config, loadConfig } from "./config.ts";
 import { ConnectorStore } from "./connectors/store.ts";
 import { findServer } from "./discovery/index.ts";
-import { statusAll, AGENT_LABEL } from "./service.ts";
+import { AGENT_LABEL, statusAll } from "./service.ts";
 
 /**
  * Checks every moving part the agent depends on and says which one is broken.
@@ -154,8 +154,11 @@ export async function diagnose(configPath?: string): Promise<Check[]> {
 /** Used by both roles, because a satellite with local wake needs them too. */
 function wakeModels(config: Config): [string, boolean, string] {
   const dir = config.wake.modelDir;
-  const missing = ["melspectrogram.onnx", "embedding_model.onnx", ...config.wake.words.map((w) => `${w}.onnx`)]
-    .filter((file) => !existsSync(join(dir, file)));
+  const missing = [
+    "melspectrogram.onnx",
+    "embedding_model.onnx",
+    ...config.wake.words.map((w) => `${w}.onnx`),
+  ].filter((file) => !existsSync(join(dir, file)));
   return [
     "wake word models",
     missing.length === 0,
@@ -220,7 +223,9 @@ if (process.argv[1]?.endsWith("doctor.ts")) {
       console.log(`${mark}  ${check.name.padEnd(18)} ${check.detail}`);
     }
     const broken = checks.filter((c) => !c.ok && c.required);
-    console.log(broken.length ? `\n${broken.length} thing(s) to fix.` : "\nEverything the agent needs is up.");
+    console.log(
+      broken.length ? `\n${broken.length} thing(s) to fix.` : "\nEverything the agent needs is up.",
+    );
   }
   // Not process.exit: stdout to a pipe is asynchronous, and exiting here
   // truncates the report when the doctor is run through pnpm or the app.

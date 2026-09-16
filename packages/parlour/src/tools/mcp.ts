@@ -1,12 +1,12 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { McpServerConfig } from "../config.ts";
 import type { JsonSchema } from "../llm/types.ts";
-import { defineTool, type Tool } from "./registry.ts";
 import { logger } from "../logger.ts";
+import { defineTool, type Tool } from "./registry.ts";
 
 const log = logger("mcp");
 
@@ -72,9 +72,7 @@ async function transportFor(server: McpServerConfig) {
   }
 
   const token = server.tokenEnv ? process.env[server.tokenEnv] : undefined;
-  const options = token
-    ? { requestInit: { headers: { authorization: `Bearer ${token}` } } }
-    : undefined;
+  const options = token ? { requestInit: { headers: { authorization: `Bearer ${token}` } } } : undefined;
   const url = new URL(server.url);
   // Home Assistant still serves MCP over SSE, so fall back rather than fail.
   return url.pathname.endsWith("/sse")

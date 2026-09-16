@@ -1,22 +1,22 @@
 import { createInterface } from "node:readline/promises";
-import { loadConfig, type Config, type McpServerConfig } from "./config.ts";
-import { logger } from "./logger.ts";
 import { Microphone } from "./audio/capture.ts";
 import { WakeModels } from "./audio/wake.ts";
-import { createSpeaker, createSynthesiser, sentences, type Speaker } from "./tts/index.ts";
-import { OpenAiCompatibleModel } from "./llm/openai.ts";
-import { ClaudeModel } from "./llm/anthropic.ts";
-import { Router } from "./llm/router.ts";
-import { ToolRegistry } from "./tools/registry.ts";
-import { McpTools } from "./tools/mcp.ts";
-import { createHomeAssistant, type HomeAssistant } from "./tools/homeassistant.ts";
-import { searchTool } from "./tools/websearch.ts";
-import { Timers } from "./tools/timers.ts";
+import { type Config, loadConfig, type McpServerConfig } from "./config.ts";
 import { connectorTools } from "./connectors/index.ts";
-import { VoiceSession, type VoiceSink, type VoiceState } from "./voice/session.ts";
-import { startServer } from "./server/index.ts";
-import { runSatellite } from "./satellite/index.ts";
 import { emit } from "./events.ts";
+import { ClaudeModel } from "./llm/anthropic.ts";
+import { OpenAiCompatibleModel } from "./llm/openai.ts";
+import { Router } from "./llm/router.ts";
+import { logger } from "./logger.ts";
+import { runSatellite } from "./satellite/index.ts";
+import { startServer } from "./server/index.ts";
+import { createHomeAssistant, type HomeAssistant } from "./tools/homeassistant.ts";
+import { McpTools } from "./tools/mcp.ts";
+import { ToolRegistry } from "./tools/registry.ts";
+import { Timers } from "./tools/timers.ts";
+import { searchTool } from "./tools/websearch.ts";
+import { createSpeaker, createSynthesiser, type Speaker, sentences } from "./tts/index.ts";
+import { VoiceSession, type VoiceSink, type VoiceState } from "./voice/session.ts";
 
 const log = logger("agent");
 

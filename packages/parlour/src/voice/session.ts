@@ -1,10 +1,10 @@
-import type { Config } from "../config.ts";
 import { FRAME_SAMPLES, toWav } from "../audio/capture.ts";
 import { Endpointer } from "../audio/endpoint.ts";
 import type { WakeWord } from "../audio/wake.ts";
-import { isNoise, transcribe } from "../stt/whisper.ts";
+import type { Config } from "../config.ts";
 import type { Answer, Router } from "../llm/router.ts";
 import { logger } from "../logger.ts";
+import { isNoise, transcribe } from "../stt/whisper.ts";
 
 const log = logger("voice");
 const FRAME_MS = (FRAME_SAMPLES / 16000) * 1000;

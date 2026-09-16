@@ -1,13 +1,13 @@
 import { hostname } from "node:os";
 import WebSocket from "ws";
-import type { Config, Secrets } from "../config.ts";
 import { FRAME_SAMPLES, Microphone } from "../audio/capture.ts";
 import { Endpointer } from "../audio/endpoint.ts";
 import { WakeModels } from "../audio/wake.ts";
-import { playWav } from "../tts/play.ts";
+import type { Config, Secrets } from "../config.ts";
 import { findServer } from "../discovery/index.ts";
 import { emit } from "../events.ts";
 import { logger } from "../logger.ts";
+import { playWav } from "../tts/play.ts";
 
 const log = logger("satellite");
 const FRAME_MS = (FRAME_SAMPLES / 16000) * 1000;
@@ -192,9 +192,13 @@ function parse(raw: string): Record<string, unknown> | null {
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, ms);
-    signal.addEventListener("abort", () => {
-      clearTimeout(timer);
-      resolve();
-    }, { once: true });
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
   });
 }

@@ -1,5 +1,5 @@
-import { defineTool, type Tool } from "./registry.ts";
 import { logger } from "../logger.ts";
+import { defineTool, type Tool } from "./registry.ts";
 
 const log = logger("timers");
 

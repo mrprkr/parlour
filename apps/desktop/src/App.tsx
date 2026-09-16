@@ -1,25 +1,25 @@
 // The window's shell: the header, the four tabs and the state everything else
 // reads. Only this file listens to the agent, so a panel never has to wonder
 // whether someone else is already subscribed.
-import { useCallback, useEffect, useState, type JSX } from "react";
+import { type JSX, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ConnectorsPanel } from "@/panels/ConnectorsPanel";
-import { LogsPanel } from "@/panels/LogsPanel";
-import { Onboarding } from "@/panels/Onboarding";
-import { SettingsPanel } from "@/panels/SettingsPanel";
-import { StatusPanel } from "@/panels/StatusPanel";
 import {
   getLogs,
   getStatus,
   onAgentError,
   onAgentLog,
   onAgentStatus,
+  type Status,
   startAgent,
   stopAgent,
-  type Status,
 } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
+import { ConnectorsPanel } from "@/panels/ConnectorsPanel";
+import { LogsPanel } from "@/panels/LogsPanel";
+import { Onboarding } from "@/panels/Onboarding";
+import { SettingsPanel } from "@/panels/SettingsPanel";
+import { StatusPanel } from "@/panels/StatusPanel";
 
 type TabName = "status" | "connectors" | "settings" | "logs";
 
@@ -177,10 +177,7 @@ export function App(): JSX.Element {
         }}
         className="min-h-0 flex-1 gap-0"
       >
-        <TabsList
-          variant="line"
-          className="w-full justify-start gap-1 rounded-none border-b px-4"
-        >
+        <TabsList variant="line" className="w-full justify-start gap-1 rounded-none border-b px-4">
           {TABS.map((entry) => (
             <TabsTrigger
               key={entry.value}

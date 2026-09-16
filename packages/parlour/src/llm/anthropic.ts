@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { ChatModel, Completion, Message, ToolSpec } from "./types.ts";
 import { logger } from "../logger.ts";
+import type { ChatModel, Completion, Message, ToolSpec } from "./types.ts";
 
 const log = logger("cloud-llm");
 
@@ -32,7 +32,10 @@ export class ClaudeModel implements ChatModel {
   }
 
   async complete(messages: Message[], tools: ToolSpec[]): Promise<Completion> {
-    const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+    const system = messages
+      .filter((m) => m.role === "system")
+      .map((m) => m.content)
+      .join("\n\n");
     const history = toAnthropicMessages(messages.filter((m) => m.role !== "system"));
 
     const params: Anthropic.MessageCreateParamsNonStreaming = {

@@ -153,8 +153,7 @@ export const audioDevices = () => invoke<string[]>("audio_devices");
 export const setupStatus = () => invoke<Readiness>("setup_status");
 export const runSetup = (wakeWord: string | null) => invoke<boolean>("run_setup", { wakeWord });
 
-export const microphoneCheck = (device: string | null) =>
-  invoke<Microphone>("microphone_check", { device });
+export const microphoneCheck = (device: string | null) => invoke<Microphone>("microphone_check", { device });
 export const openPrivacySettings = () => invoke<void>("open_privacy_settings");
 
 // ------------------------------------------------------------------- events
