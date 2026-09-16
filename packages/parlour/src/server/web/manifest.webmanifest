@@ -1,6 +1,6 @@
 {
   "name": "Parlour",
-  "short_name": "Agent",
+  "short_name": "Parlour",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#16181d",
