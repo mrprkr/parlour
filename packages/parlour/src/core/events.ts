@@ -3,7 +3,8 @@
  *
  * The desktop app reads these lines to draw its status: parsing the human log
  * output would be guesswork, and a socket would be another thing to keep
- * alive. Off unless AGENT_EVENTS is 1, so the terminal stays readable.
+ * alive. Off until `enableEvents()` is called (the CLI does so for
+ * `parlour start --events`), so the terminal stays readable.
  */
 
 export type AgentEvent =
@@ -14,9 +15,13 @@ export type AgentEvent =
   | { type: "muted" }
   | { type: "error"; message: string };
 
-const enabled = process.env.AGENT_EVENTS === "1";
+let enabled = false;
+
+export function enableEvents(): void {
+  enabled = true;
+}
 
 export function emit(event: AgentEvent): void {
   if (!enabled) return;
-  process.stdout.write(JSON.stringify({ ...event, at: Date.now() }) + "\n");
+  process.stdout.write(`${JSON.stringify({ ...event, at: Date.now() })}\n`);
 }

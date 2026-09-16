@@ -1,4 +1,4 @@
-import type { JsonSchema, ToolSpec } from "../llm/types.ts";
+import type { JsonSchema, ToolSpec } from "./types.ts";
 
 export interface Tool extends ToolSpec {
   run(args: Record<string, unknown>): Promise<string>;

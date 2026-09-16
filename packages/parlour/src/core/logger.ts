@@ -18,3 +18,5 @@ export function logger(scope: string) {
     error: (...a: unknown[]) => write("error", scope, a),
   };
 }
+
+export type Logger = ReturnType<typeof logger>;

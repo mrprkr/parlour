@@ -1,0 +1,81 @@
+{
+  "name": "Parlour",
+  "locale": "en-GB",
+  "role": "server",
+  "audio": {
+    "source": "ffmpeg",
+    "sink": "afplay",
+    "inputDevice": ":0",
+    "outputDevice": null,
+    "silenceMs": 800,
+    "maxUtteranceMs": 15000,
+    "silenceThreshold": 0.012,
+    "bargeIn": false
+  },
+  "wake": {
+    "provider": "openwakeword",
+    "words": ["hey_jarvis"],
+    "threshold": 0.5,
+    "refractoryMs": 1500
+  },
+  "stt": {
+    "provider": "whisper-cpp",
+    "url": "http://127.0.0.1:8910/inference",
+    "language": "en",
+    "timeoutMs": 20000
+  },
+  "tts": {
+    "provider": "kokoro",
+    "voice": "bf_emma",
+    "speed": 1.0,
+    "fallback": "macos-say"
+  },
+  "llm": {
+    "local": {
+      "provider": "openai-compatible",
+      "baseUrl": "http://127.0.0.1:1234/v1",
+      "model": "qwen3-8b-mlx",
+      "temperature": 0.3,
+      "timeoutMs": 30000
+    },
+    "cloud": {
+      "provider": "anthropic",
+      "enabled": true,
+      "model": "claude-opus-5",
+      "maxTokens": 1024,
+      "onLocalFailure": true
+    },
+    "maxToolRounds": 6
+  },
+  "search": {
+    "provider": "searxng",
+    "url": "http://searxng.local:8080",
+    "maxResults": 5
+  },
+  "integrations": {
+    "home-assistant": {
+      "url": "http://homeassistant.local:8123",
+      "mcp": true,
+      "rest": true,
+      "muteEntity": ""
+    },
+    "mcp": { "servers": {} },
+    "connectors": {}
+  },
+  "server": {
+    "enabled": true,
+    "port": 8765,
+    "host": "0.0.0.0",
+    "web": true
+  },
+  "discovery": {
+    "enabled": true,
+    "name": ""
+  },
+  "satellite": {
+    "serverUrl": "",
+    "room": "",
+    "localWake": false,
+    "retryMs": 15000
+  }
+}
