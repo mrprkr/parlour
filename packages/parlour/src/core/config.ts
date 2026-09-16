@@ -15,10 +15,23 @@ import type { Paths } from "./paths.ts";
  */
 export const ProviderSlice = z.object({ provider: z.string() }).passthrough();
 
+function isLocale(tag: string): boolean {
+  try {
+    return Intl.getCanonicalLocales(tag).length === 1;
+  } catch {
+    return false;
+  }
+}
+
 export const ConfigSchema = z.object({
   /** What the house calls itself. Used in the persona. */
   name: z.string().default("Parlour"),
-  locale: z.string().default("en-GB"),
+  /**
+   * A BCP 47 tag. Sets the date in the prompt and which English the model
+   * speaks. Checked here because a tag ICU rejects ("en_GB") would otherwise
+   * throw from inside every turn rather than once, with the key named.
+   */
+  locale: z.string().refine(isLocale, "must be a BCP 47 language tag, such as en-GB").default("en-GB"),
 
   /**
    * What this machine is. One box in the house runs the models and answers;
@@ -62,8 +75,9 @@ export const ConfigSchema = z.object({
     provider: z.string().default("kokoro"),
     /** Used when the provider throws, so a missing model still speaks. Null disables it. */
     fallback: z.string().nullable().default("macos-say"),
-    voice: z.string().default("bf_emma"),
-    speed: z.number().positive().default(1),
+    // No `voice` or `speed` here. The whole slice goes to the primary and to the
+    // fallback alike, so a default filled in by core would hand a Kokoro voice
+    // id to every other engine. Each provider's schema supplies its own.
   }).default({}),
 
   llm: z
@@ -89,8 +103,13 @@ export const ConfigSchema = z.object({
   /**
    * Keyed by integration name, which is also the provider name, so an
    * integration can be any npm package. Each one parses its own slice.
+   *
+   * Connectors are on by default because `parlour connectors add` writes
+   * `connectors.json` and never this file: without the key here, an account
+   * the house has signed in to would never reach the model. The integration
+   * costs nothing when that file is empty or missing.
    */
-  integrations: z.record(z.unknown()).default(() => ({ "home-assistant": {} })),
+  integrations: z.record(z.unknown()).default(() => ({ "home-assistant": {}, connectors: {} })),
 
   /**
    * The agent as a service on the house network, so that this machine's

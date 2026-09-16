@@ -14,9 +14,14 @@ Node 22, pnpm, and a Rust toolchain (`rustup`).
 
 ```sh
 pnpm install
-pnpm -C apps/desktop app        # against the checkout, with live reload
+pnpm -C apps/desktop app        # the window from the checkout, with live reload
 pnpm -C apps/desktop build      # Parlour.app and a dmg, in apps/desktop/src-tauri/target/release/bundle
 ```
+
+Live reload covers the window. The CLI it drives is whichever `parlour` the
+app's settings point at, which on a fresh machine is the globally installed
+one, not the checkout: see
+[Running the app against a checkout](#running-the-app-against-a-checkout).
 
 The build is unsigned. Copy `Parlour.app` into `/Applications` and, the first
 time, open it with a right click. Signing and notarising are a follow-up.
@@ -33,7 +38,7 @@ that can disagree.
 | --- | --- |
 | Onboarding | Opens itself on a machine that is not set up yet, and from **Run setup again** in Settings after that. Four steps: find or install `parlour`, an Install button that runs `parlour init --porcelain --yes` with its output live, the answers, and the doctor. |
 | Status | A dot that follows Parlour through idle, listening, thinking and speaking, the last thing it heard, the last thing it said and which model said it, and a Check button that runs `parlour doctor --json`. |
-| Settings | Wake word, sensitivity, microphone, silence timeout, voice, both models, the Home Assistant address, and the secrets. Reads `parlour config show --json`, writes through `parlour config write` and `parlour secrets set`. |
+| Settings | Wake word, sensitivity, microphone, silence timeout, voice, both models, the Home Assistant address, and the secrets. Reads `parlour config show --raw` (the file as written, so a save does not freeze every default into it), writes through `parlour config write` and `parlour secrets set`. |
 | Connectors | What the house has signed in to, and a form to add another. `parlour connectors` with buttons. |
 | Logs | Parlour's output, live. |
 
@@ -66,6 +71,26 @@ on it and an orphaned ffmpeg holds the microphone.
 The app's own settings live at
 `~/Library/Application Support/io.parlour.desktop/settings.json`:
 `{ "parlourBin": "/opt/homebrew/bin/parlour", "autostart": false }`.
+
+## Running the app against a checkout
+
+`pnpm -C apps/desktop app` reloads the window from the checkout, but every
+CLI call goes to the `parlourBin` in `settings.json`, and the app fills that
+in by asking the login shell for `parlour`, so a change to `packages/parlour`
+is not what the app exercises until you point it there.
+`packages/parlour/bin/parlour-dev` runs the CLI from source for exactly this.
+Put its absolute path in **The parlour command** on the Settings tab (or on
+the onboarding's first step), which takes effect at once, or write it to the
+file and restart the app, which reads the file once at launch:
+
+```json
+{ "parlourBin": "/path/to/parlour/packages/parlour/bin/parlour-dev", "autostart": false }
+```
+
+The path is kept for as long as it is executable, so the app will not swap
+it back for the global copy on its own. The dev build and the installed
+`Parlour.app` share the same settings file, so put the global path back, or
+delete the file and let the app find `parlour` again, when you are done.
 
 ## Two rules worth knowing
 

@@ -4,8 +4,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type WebSocket, WebSocketServer } from "ws";
+import { z } from "zod";
 import type { Agent } from "../core/agent.ts";
-import { decodeToWav, FRAME_SAMPLES, wavToFrames } from "../core/audio.ts";
+import { decodeToWav, FRAME_MS, FRAME_SAMPLES, wavToFrames } from "../core/audio.ts";
 import type { Config } from "../core/config.ts";
 import { logger } from "../core/logger.ts";
 import { VoiceSession, type VoiceState } from "../core/session.ts";
@@ -14,6 +15,26 @@ import { advertise } from "./discovery.ts";
 const log = logger("server");
 const WEB_DIR = fileURLToPath(new URL("./web/", import.meta.url));
 const MAX_BODY = 8 * 1024 * 1024;
+/** A socket frame is 2560 bytes. Anything near this is not audio. */
+const MAX_SOCKET_MESSAGE = 256 * 1024;
+/** The socket's control messages are a few dozen bytes. */
+const MAX_SOCKET_TEXT = 4 * 1024;
+
+/** The routes that reach the agent, and so need the token. Everything else is the page. */
+const API_ROUTES = new Set(["POST /ask", "POST /voice", "GET /v1/models", "POST /v1/chat/completions"]);
+
+const AskBody = z.object({
+  text: z.string().min(1),
+  client: z.string().optional(),
+  room: z.string().optional(),
+});
+
+/** The parts of an OpenAI chat request that matter here. The rest is dropped, on purpose. */
+const CompletionsBody = z.object({
+  messages: z.array(z.object({ role: z.string(), content: z.unknown() })),
+  stream: z.boolean().optional(),
+  user: z.string().optional(),
+});
 
 export interface ServerDeps {
   config: Config;
@@ -28,6 +49,19 @@ export interface RunningServer {
   /** The port actually bound, which differs from config when that asked for 0. */
   port: number;
   host: string;
+}
+
+/**
+ * A request the client got wrong, and the status that says so. Anything else
+ * that is thrown is the server's fault and the client is told only that.
+ */
+class RequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
 }
 
 /**
@@ -53,22 +87,46 @@ export async function startServer(deps: ServerDeps): Promise<RunningServer | nul
 
   const server = createServer((request, response) => {
     handle(request, response, deps, token).catch((error) => {
+      if (error instanceof RequestError) {
+        send(response, error.status, { error: error.message });
+        return;
+      }
+      // The stack goes to the log. The client gets nothing that names a
+      // file, a URL or a provider.
       log.error(error);
-      send(response, 500, { error: error instanceof Error ? error.message : String(error) });
+      if (response.headersSent) response.end();
+      else send(response, 500, { error: "internal error" });
     });
   });
 
-  const sockets = new WebSocketServer({ noServer: true });
+  const sockets = new WebSocketServer({ noServer: true, maxPayload: MAX_SOCKET_MESSAGE });
   server.on("upgrade", (request, socket, head) => {
     const url = new URL(request.url ?? "/", "http://localhost");
-    if (url.pathname !== "/listen" || !authorised(request, url, token)) {
+    if (url.pathname !== "/listen" || !local(request, token) || !authorised(request, url, token)) {
       socket.destroy();
       return;
     }
     sockets.handleUpgrade(request, socket, head, (ws) => listen(ws, url, deps));
   });
 
-  await new Promise<void>((resolve) => server.listen(config.server.port, host, resolve));
+  await new Promise<void>((resolve, reject) => {
+    // The usual reason the port is taken is that init installed the login
+    // item and it is already up. That deserves a sentence, not a stack.
+    const failed = (error: NodeJS.ErrnoException) =>
+      reject(
+        error.code === "EADDRINUSE"
+          ? new Error(
+              `port ${config.server.port} is already in use, most likely by the Parlour that runs at login. ` +
+                "parlour service status says whether it is, and parlour service uninstall stops it from starting.",
+            )
+          : error,
+      );
+    server.once("error", failed);
+    server.listen(config.server.port, host, () => {
+      server.off("error", failed);
+      resolve();
+    });
+  });
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : config.server.port;
   log.info(`listening on http://${host}:${port}`);
@@ -109,14 +167,29 @@ async function handle(
   const url = new URL(request.url ?? "/", "http://localhost");
   const route = `${request.method} ${url.pathname}`;
 
+  if (!local(request, token)) {
+    send(response, 403, { error: "this server answers its own machine only" });
+    return;
+  }
+  allowCors(request, response, token);
+
   if (request.method === "OPTIONS") {
-    response.writeHead(204, cors()).end();
+    response.writeHead(204).end();
     return;
   }
 
   if (route === "GET /health") {
     send(response, 200, { ok: true, ...deps.agent.status() });
     return;
+  }
+
+  // The page and its files hold nothing secret, and the browser fetches
+  // app.js and app.css without a token however the page was opened, so they
+  // come before the check. The token is typed into the page; the routes that
+  // reach the agent stay behind it.
+  if (!API_ROUTES.has(route)) {
+    if (request.method === "GET" && deps.config.server.web) return page(url, response);
+    return send(response, 404, { error: "no such route" });
   }
 
   if (!authorised(request, url, token)) {
@@ -134,17 +207,14 @@ async function handle(
         object: "list",
         data: [{ id: "parlour", object: "model", created: 0, owned_by: "parlour" }],
       });
-    case "POST /v1/chat/completions":
-      return completions(request, response, deps);
     default:
-      return deps.config.server.web ? page(url, response) : send(response, 404, { error: "no such route" });
+      return completions(request, response, deps);
   }
 }
 
 /** The plain endpoint: text in, text out. Automations and scripts use this. */
 async function ask(request: IncomingMessage, response: ServerResponse, deps: ServerDeps): Promise<void> {
-  const body = (await json(request)) as { text?: string; client?: string; room?: string };
-  if (!body.text) return send(response, 400, { error: "text is required" });
+  const body = await json(request, AskBody);
 
   const answer = await deps.agent.router.ask(body.text, {
     session: body.client ?? "api",
@@ -208,17 +278,15 @@ async function completions(
   response: ServerResponse,
   deps: ServerDeps,
 ): Promise<void> {
-  const payload = (await json(request)) as {
-    messages?: { role: string; content?: unknown }[];
-    stream?: boolean;
-    user?: string;
-  };
-  const last = [...(payload.messages ?? [])].reverse().find((m) => m.role === "user");
+  const payload = await json(request, CompletionsBody);
+  const last = [...payload.messages].reverse().find((m) => m.role === "user");
   const text =
     typeof last?.content === "string"
       ? last.content
       : Array.isArray(last?.content)
-        ? last.content.map((part: { text?: string }) => part.text ?? "").join(" ")
+        ? last.content
+            .map((part: { text?: unknown }) => (typeof part?.text === "string" ? part.text : ""))
+            .join(" ")
         : "";
   if (!text.trim()) return send(response, 400, { error: "no user message" });
 
@@ -244,7 +312,6 @@ async function completions(
     "content-type": "text/event-stream",
     "cache-control": "no-cache",
     connection: "keep-alive",
-    ...cors(),
   });
   const chunk = (delta: Record<string, unknown>, finish: string | null) =>
     response.write(
@@ -307,19 +374,26 @@ function listen(socket: WebSocket, url: URL, deps: ServerDeps): void {
     },
   });
 
+  // Push mode trusts the client to say when the utterance ends. The
+  // microphone's own limit applies here too, so a client that never does is
+  // answered at that point rather than buffered for as long as it streams.
+  const maxFrames = Math.ceil(deps.config.audio.maxUtteranceMs / FRAME_MS);
+  const finish = () => {
+    const frames = pending;
+    pending = null;
+    if (frames) void session.utterance(frames);
+  };
+
   log.info(`${client} connected${room ? ` from the ${room}` : ""} in ${mode} mode`);
   tell({ type: "ready", sampleRate: deps.config.audio.sampleRate, frameSamples: FRAME_SAMPLES, mode });
 
   socket.on("message", (data: Buffer, isBinary: boolean) => {
     if (!isBinary) {
+      if (data.length > MAX_SOCKET_TEXT) return;
       const message = parse(data.toString());
       if (message?.type === "start") pending = [];
       if (message?.type === "cancel") pending = null;
-      if (message?.type === "end" && pending) {
-        const frames = pending;
-        pending = null;
-        void session.utterance(frames);
-      }
+      if (message?.type === "end") finish();
       if (message?.type === "spoke") speaking = false;
       return;
     }
@@ -333,8 +407,12 @@ function listen(socket: WebSocket, url: URL, deps: ServerDeps): void {
       tail = tail.subarray(bytes);
       const frame = new Int16Array(FRAME_SAMPLES);
       for (let i = 0; i < FRAME_SAMPLES; i++) frame[i] = slice.readInt16LE(i * 2);
-      if (pending) pending.push(frame);
-      else if (mode === "wake") void session.push(frame);
+      if (pending) {
+        pending.push(frame);
+        if (pending.length >= maxFrames) finish();
+      } else if (mode === "wake") {
+        void session.push(frame);
+      }
     }
   });
 
@@ -362,12 +440,51 @@ function pipeline(deps: ServerDeps, client: string) {
 }
 
 function authorised(request: IncomingMessage, url: URL, token: string | undefined): boolean {
-  if (!token) return true; // Loopback only in this case; see startServer.
+  if (!token) return true; // Loopback only in this case; see startServer and local.
   const header = request.headers.authorization ?? "";
   const supplied = header.startsWith("Bearer ") ? header.slice(7) : (url.searchParams.get("token") ?? "");
   const a = Buffer.from(supplied);
   const b = Buffer.from(token);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * Without a token the server trusts the machine it runs on, and the browser
+ * on that machine is part of it: a page from anywhere can post to loopback
+ * and read the reply, and a name that resolves here is loopback to the
+ * browser too. So the request has to be addressed to a loopback name and,
+ * when a browser sends it, come from a page a loopback name served. With a
+ * token the token decides and none of this applies.
+ */
+function local(request: IncomingMessage, token: string | undefined): boolean {
+  if (token) return true;
+  const origin = request.headers.origin;
+  return loopback(request.headers.host) && (origin === undefined || loopback(origin));
+}
+
+/** `localhost`, 127.0.0.0/8 or ::1, with or without a scheme and a port. */
+function loopback(address: string | undefined): boolean {
+  if (!address) return false;
+  try {
+    const { hostname } = new URL(address.includes("://") ? address : `http://${address}`);
+    return hostname === "localhost" || hostname === "[::1]" || /^127(\.\d{1,3}){3}$/.test(hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * With a token the browser cannot forge the bearer, so any page may ask.
+ * Without one only a loopback page reaches this far, and it is named rather
+ * than starred so the browser hands the reply to that page alone.
+ */
+function allowCors(request: IncomingMessage, response: ServerResponse, token: string | undefined): void {
+  const origin = token ? "*" : request.headers.origin;
+  if (!origin) return; // Not a browser, so nothing to allow.
+  response.setHeader("access-control-allow-origin", origin);
+  response.setHeader("access-control-allow-headers", "authorization, content-type");
+  response.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
+  if (origin !== "*") response.setHeader("vary", "origin");
 }
 
 async function page(url: URL, response: ServerResponse): Promise<void> {
@@ -376,7 +493,7 @@ async function page(url: URL, response: ServerResponse): Promise<void> {
   if (name.includes("..") || name.includes("/")) return send(response, 404, { error: "no such file" });
   try {
     const file = await readFile(join(WEB_DIR, name));
-    response.writeHead(200, { "content-type": contentType(name), ...cors() }).end(file);
+    response.writeHead(200, { "content-type": contentType(name) }).end(file);
   } catch {
     send(response, 404, { error: "no such file" });
   }
@@ -395,17 +512,9 @@ function contentType(name: string): string {
   );
 }
 
-function cors(): Record<string, string> {
-  return {
-    "access-control-allow-origin": "*",
-    "access-control-allow-headers": "authorization, content-type",
-    "access-control-allow-methods": "GET, POST, OPTIONS",
-  };
-}
-
 function send(response: ServerResponse, status: number, payload: unknown): void {
   const body = JSON.stringify(payload);
-  response.writeHead(status, { "content-type": "application/json", ...cors() }).end(body);
+  response.writeHead(status, { "content-type": "application/json" }).end(body);
 }
 
 function body(request: IncomingMessage): Promise<Buffer> {
@@ -415,7 +524,7 @@ function body(request: IncomingMessage): Promise<Buffer> {
     request.on("data", (chunk: Buffer) => {
       size += chunk.length;
       if (size > MAX_BODY) {
-        reject(new Error("body too large"));
+        reject(new RequestError(413, "body too large"));
         request.destroy();
         return;
       }
@@ -426,9 +535,29 @@ function body(request: IncomingMessage): Promise<Buffer> {
   });
 }
 
-async function json(request: IncomingMessage): Promise<unknown> {
+/**
+ * The body, checked against the shape the route takes. It has to say it is
+ * JSON: a form can post text/plain anywhere without a preflight, and a form
+ * cannot say application/json.
+ */
+async function json<T>(request: IncomingMessage, schema: z.ZodType<T>): Promise<T> {
+  const type = request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase();
+  if (type !== "application/json") throw new RequestError(415, "send application/json");
+
   const raw = (await body(request)).toString("utf8");
-  return raw ? JSON.parse(raw) : {};
+  let parsed: unknown;
+  try {
+    parsed = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new RequestError(400, "the body is not JSON");
+  }
+
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    const path = result.error.issues[0]?.path.join(".");
+    throw new RequestError(400, `the body is not what this route takes${path ? ` (${path})` : ""}`);
+  }
+  return result.data;
 }
 
 function parse(raw: string): { type?: string } | null {

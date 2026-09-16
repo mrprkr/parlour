@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, test } from "node:test";
@@ -17,7 +17,13 @@ import { buildAgent } from "./agent.ts";
 import { parseConfig } from "./config.ts";
 import { resolvePaths } from "./paths.ts";
 import type { SearchProvider, TextToSpeech } from "./ports.ts";
-import { clearProviders, defineProvider, registerProvider, UnknownProviderError } from "./providers.ts";
+import {
+  clearProviders,
+  defineProvider,
+  ProviderOptionsError,
+  registerProvider,
+  UnknownProviderError,
+} from "./providers.ts";
 import { defineTool } from "./registry.ts";
 import type { Completion } from "./types.ts";
 
@@ -248,6 +254,43 @@ test("buildAgent loads the wake word and warms the voice, unless audio is off", 
   await text.close();
 });
 
+test("a slow voice warms in the background rather than holding up the agent", async () => {
+  // Kokoro downloads its model on first use. The wake word, the microphone
+  // loop and the server all come up as soon as the agent is built, so a
+  // warm-up that has not finished must not stop buildAgent from returning.
+  let finishWarming = () => {};
+  const warming = new Promise<void>((resolve) => {
+    finishWarming = resolve;
+  });
+  let warmed = false;
+  registerProvider(
+    defineProvider<TextToSpeech>({
+      kind: "tts",
+      name: "fake-slow",
+      description: "",
+      create: () => ({
+        warm: async () => {
+          await warming;
+          warmed = true;
+        },
+        render: async (text) => Buffer.from(text),
+      }),
+    }),
+  );
+  const agent = await buildAgent(
+    fakeConfig({ tts: { provider: "fake-slow", fallback: null, voice: "v" } }),
+    {},
+    paths,
+  );
+  assert.equal(made.wakes[0]?.loaded, true);
+  assert.equal(warmed, false);
+
+  finishWarming();
+  await warming;
+  assert.equal(warmed, true);
+  await agent.close();
+});
+
 test("the integrations' prompt context reaches the local model", async () => {
   const agent = await buildAgent(fakeConfig(), {}, paths);
   await agent.router.ask("hi");
@@ -276,6 +319,14 @@ test("the cloud model is optional: disabled, unable to start, or missing", async
   await assert.rejects(
     buildAgent(withCloud({ provider: "nope-not-a-package" }), {}, paths),
     (error: unknown) => error instanceof UnknownProviderError && error.providerName === "nope-not-a-package",
+  );
+
+  // Nor is an option the provider's schema rejects.
+  registerFakes();
+  await assert.rejects(
+    buildAgent(withCloud({ provider: "fake", model: 42 }), {}, paths),
+    (error: unknown) =>
+      error instanceof ProviderOptionsError && error.providerName === "fake" && /model: /.test(error.message),
   );
 });
 
@@ -326,6 +377,33 @@ test("close closes the integrations and the microphone", async () => {
   await agent.close();
   assert.equal(made.integrations[0]?.closed, true);
   assert.equal(made.sources[0]?.closed, true);
+});
+
+test("a provider loaded by path logs under its own name, not the path", async () => {
+  // The docs say to try a provider from a checkout by putting its absolute
+  // path in config. The path is the specifier; the scope should be the name
+  // the package gave itself, or every line it logs breaks the column.
+  const path = join(mkdtempSync(join(tmpdir(), "parlour-agent-path-")), "checkout.mjs");
+  writeFileSync(
+    path,
+    `export default {
+      kind: "integration", name: "checkout", description: "",
+      create: (_options, context) => { context.log.info("created"); return { name: "checkout", tools: async () => [] }; },
+    };\n`,
+  );
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...args: unknown[]) => lines.push(args.join(" "));
+  try {
+    const agent = await buildAgent(fakeConfig({ integrations: { [path]: {} } }), {}, paths, { audio: false });
+    await agent.close();
+  } finally {
+    console.log = original;
+  }
+  const line = lines.find((l) => l.endsWith("created"));
+  assert.ok(line, "the provider's line was logged");
+  assert.match(line, /info {2}checkout {3}created$/);
+  assert.ok(!line.includes(path));
 });
 
 test("context.config is the whole config", async () => {

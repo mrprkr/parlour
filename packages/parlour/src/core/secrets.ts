@@ -50,8 +50,18 @@ function quote(value: string): string {
   return /[\s#"'\\]/.test(value) || value === "" ? `"${value.replace(/(["\\])/g, "\\$1")}"` : value;
 }
 
+/**
+ * Every `KEY=value` in `secrets.env`, by name. The file is not only the
+ * named keys `loadSecrets` knows: a provider's own key (an `apiKeyEnv`, a
+ * connector's `tokenEnv`) lives there too and reaches it through the
+ * environment, so `secrets status` needs the whole list to report it.
+ */
+export function readSecretsFile(paths: Paths): Record<string, string> {
+  return existsSync(paths.secretsFile) ? parseEnvFile(readFileSync(paths.secretsFile, "utf8")) : {};
+}
+
 export function loadSecrets(paths: Paths, env: NodeJS.ProcessEnv = process.env): Secrets {
-  const file = existsSync(paths.secretsFile) ? parseEnvFile(readFileSync(paths.secretsFile, "utf8")) : {};
+  const file = readSecretsFile(paths);
   const get = (key: string) => env[key] ?? file[key];
   return {
     haToken: get("HA_TOKEN"),

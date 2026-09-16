@@ -2,9 +2,10 @@ import { type Agent, buildAgent } from "../core/agent.ts";
 import { loadConfig } from "../core/config.ts";
 import { enableEvents } from "../core/events.ts";
 import { logger } from "../core/logger.ts";
+import { onShutdown } from "../core/process.ts";
 import { loadSecrets } from "../core/secrets.ts";
 import { LocalVoice, VoiceSession } from "../core/session.ts";
-import { startServer } from "../server/index.ts";
+import { type RunningServer, startServer } from "../server/index.ts";
 import { runSatellite } from "../server/satellite.ts";
 import { type Command, parseCli } from "./args.ts";
 
@@ -35,8 +36,12 @@ export const command: Command = {
     }
 
     const agent = await buildAgent(config, secrets, paths);
-    const server = await startServer({ config, token: secrets.token, agent });
+    // The server is started inside the try so a port already taken still
+    // closes the agent, whose connectors would otherwise keep the process
+    // alive after the error has been printed.
+    let server: RunningServer | null = null;
     try {
+      server = await startServer({ config, token: secrets.token, agent });
       await micMode(agent);
     } finally {
       await server?.close();
@@ -45,13 +50,14 @@ export const command: Command = {
   },
 };
 
-/** The microphone attached to this machine, until Ctrl-C. */
+/** The microphone attached to this machine, until Ctrl-C or launchd says stop. */
 async function micMode(agent: Agent): Promise<void> {
   const { config } = agent;
   const abort = new AbortController();
   // Stop talking and stop listening; the loop below ends when the source
-  // does, and the caller closes the rest.
-  process.once("SIGINT", () => {
+  // does, and the caller closes the rest. SIGTERM and SIGHUP take the same
+  // path as Ctrl-C, or launchd's stop would leave ffmpeg holding the microphone.
+  onShutdown(() => {
     agent.speaker.stop();
     abort.abort();
   });

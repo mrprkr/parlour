@@ -1,4 +1,4 @@
-import { execFile, spawn } from "node:child_process";
+import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -61,6 +61,73 @@ export async function withTempWav<T>(work: (file: string) => Promise<T>): Promis
 }
 
 const execFileAsync = promisify(execFile);
+
+/** The signals that mean "stop now": Ctrl-C, launchd and a closed terminal. */
+const SHUTDOWN_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
+
+/**
+ * Runs `stop` once, on whichever shutdown signal arrives first. Ctrl-C is
+ * SIGINT, but launchd stops a job with SIGTERM (`launchctl unload`, which is
+ * what `parlour service restart` and `uninstall` and a logout send), and a
+ * closing terminal sends SIGHUP. Node's default for the last two is to die
+ * on the spot without running anything, which leaves the ffmpeg child holding
+ * the microphone. Handling all three the same way means the process always
+ * gets to close what it opened. The other two handlers are removed when one
+ * fires, so a second signal falls back to the default and ends a stuck exit.
+ */
+export function onShutdown(stop: (signal: NodeJS.Signals) => void): void {
+  const handlers = new Map<NodeJS.Signals, () => void>();
+  for (const signal of SHUTDOWN_SIGNALS) {
+    const handler = () => {
+      for (const [other, fn] of handlers) process.removeListener(other, fn);
+      stop(signal);
+    };
+    handlers.set(signal, handler);
+    process.once(signal, handler);
+  }
+}
+
+/**
+ * Kills a child when this process exits, whatever the reason. The signal
+ * handlers close things in order; this is the net under them, for an exit
+ * they never see (an uncaught exception, a `process.exit` from somewhere),
+ * because a child that outlives its parent is reparented to launchd and, if it
+ * is ffmpeg, keeps the microphone open. Returns the hook so a test can fire it.
+ */
+export function killOnExit(proc: ChildProcess): () => void {
+  const kill = () => {
+    if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGKILL");
+  };
+  process.once("exit", kill);
+  proc.once("exit", () => process.removeListener("exit", kill));
+  return kill;
+}
+
+/**
+ * The pids of processes launchd has adopted whose command line matches.
+ * An orphan is one whose parent is pid 1 and that was not started by launchd
+ * on purpose, which for a command line ffmpeg is always the case.
+ */
+export async function orphans(pattern: RegExp): Promise<number[]> {
+  try {
+    const { stdout } = await execFileAsync("ps", ["-axo", "pid=,ppid=,command="]);
+    return parseOrphans(stdout, pattern);
+  } catch {
+    return [];
+  }
+}
+
+/** `ps -axo pid=,ppid=,command=` output to the pids whose parent is 1 and whose command matches. */
+export function parseOrphans(ps: string, pattern: RegExp): number[] {
+  const found: number[] = [];
+  for (const line of ps.split("\n")) {
+    const match = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/);
+    if (!match) continue;
+    const [, pid, ppid, command] = match as [string, string, string, string];
+    if (ppid === "1" && pattern.test(command)) found.push(Number(pid));
+  }
+  return found;
+}
 
 /**
  * Where a binary is on the PATH, or null. `parlour doctor` prints the path so

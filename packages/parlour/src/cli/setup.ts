@@ -15,8 +15,8 @@ import { describeState, parlourBin } from "./service.ts";
  * questions live in `init.ts`.
  *
  * `PARLOUR_SKIP_MODELS=1` skips the model download. It exists for the test
- * suite, which cannot pull a gigabyte from Hugging Face on every run, and is
- * not otherwise documented.
+ * suite, which cannot pull a gigabyte from Hugging Face on every run, and for
+ * the throwaway init in CONTRIBUTING.md. It is not mentioned to users.
  */
 
 export interface SetupOptions {
@@ -25,6 +25,33 @@ export interface SetupOptions {
   config: Config;
   /** False never touches Homebrew. */
   deps: boolean;
+  /** False never writes a LaunchAgent. Missing means true; only `init --no-service` says otherwise. */
+  service?: boolean;
+}
+
+/**
+ * What Homebrew is asked for. Node is deliberately not on the list: it is the
+ * prerequisite that installed Parlour in the first place, and `brew install
+ * node` on a machine that manages Node with nvm, fnm or volta would put a
+ * second, newer major into /opt/homebrew/bin, ahead of the one Parlour was
+ * installed with when the LaunchAgent PATH is built. The version check below
+ * covers Node instead.
+ */
+export const HOMEBREW_FORMULAE = ["ffmpeg", "whisper-cpp"] as const;
+
+/**
+ * Which models a box needs, or null for none. A satellite streams what it
+ * hears and plays back what it is sent, so it has nothing to fetch unless
+ * `localWake` moves the wake word onto it; whisper only ever runs on the
+ * server. The configured word is fetched as well as the stock three, for a
+ * word picked before the models were ever fetched.
+ */
+export function modelsFor(config: Config): { wake: string[]; whisper: string | null } | null {
+  if (config.role === "satellite" && !config.satellite.localWake) return null;
+  return {
+    wake: [...new Set([...DEFAULT_WAKE_WORDS, ...config.wake.words])],
+    whisper: config.role === "server" ? DEFAULT_WHISPER_MODEL : null,
+  };
 }
 
 /** True when nothing failed. Warnings are for the doctor to repeat. */
@@ -52,7 +79,7 @@ export async function runSetup(options: SetupOptions, report: Reporter): Promise
     report.warn("Homebrew is not installed, so nothing can be installed for you.");
     report.warn("Install it from https://brew.sh, then run this again.");
   } else {
-    for (const formula of ["node", "ffmpeg", "whisper-cpp"]) {
+    for (const formula of HOMEBREW_FORMULAE) {
       if ((await stream("brew", ["list", "--formula", formula])) === 0) {
         report.ok(`have ${formula}`);
       } else {
@@ -71,18 +98,14 @@ export async function runSetup(options: SetupOptions, report: Reporter): Promise
   else report.warn("whisper-server is missing, so there is no speech to text.");
 
   report.step("Models");
+  const models = modelsFor(config);
   if (process.env.PARLOUR_SKIP_MODELS) {
     report.ok("skipped (PARLOUR_SKIP_MODELS)");
+  } else if (!models) {
+    report.ok("none needed: a satellite streams to the server");
   } else {
     try {
-      // The configured word as well as the stock three, for a word picked
-      // before the models were ever fetched.
-      await fetchModels({
-        modelsDir: paths.modelsDir,
-        wake: [...new Set([...DEFAULT_WAKE_WORDS, ...config.wake.words])],
-        whisper: config.role === "server" ? DEFAULT_WHISPER_MODEL : null,
-        report,
-      });
+      await fetchModels({ modelsDir: paths.modelsDir, ...models, report });
     } catch (error) {
       fail(error instanceof Error ? error.message : String(error));
     }
@@ -95,7 +118,9 @@ export async function runSetup(options: SetupOptions, report: Reporter): Promise
     const whisper = (await serviceSpecs(config, paths, parlourBin())).filter(
       (spec) => spec.label === WHISPER_LABEL,
     );
-    if (!whisper.length) {
+    if (options.service === false) {
+      report.ok("whisper is not set up to start at login (--no-service)");
+    } else if (!whisper.length) {
       report.warn("whisper-server or its model is missing, so it was not set up to start at login.");
     } else {
       try {

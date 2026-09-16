@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { parseConfig } from "./config.ts";
 import { resolvePaths } from "./paths.ts";
-import { serviceSpecs } from "./services.ts";
+import { leftoverServices, serviceSpecs } from "./services.ts";
 
 let home = "";
 let paths = resolvePaths({ HOME: "/nowhere" }, "darwin");
@@ -30,7 +30,7 @@ function withWhisperModel(name = "ggml-small.en.bin"): string {
 }
 
 test("the agent spec runs parlour start with its home and a spelled out PATH", async () => {
-  const specs = await serviceSpecs(parseConfig({}), paths, "/opt/homebrew/bin/parlour", {
+  const specs = await serviceSpecs(parseConfig({}), paths, ["/opt/homebrew/bin/parlour"], {
     which: whichOf({ node: "/opt/homebrew/bin/node", ffmpeg: "/usr/local/bin/ffmpeg" }),
   });
   assert.equal(specs.length, 1);
@@ -47,15 +47,24 @@ test("the agent spec runs parlour start with its home and a spelled out PATH", a
   assert.equal(path.indexOf("/opt/homebrew/bin"), path.lastIndexOf("/opt/homebrew/bin"), "no repeats");
 });
 
+test("a parlour that is run by node keeps node in front of start", async () => {
+  const specs = await serviceSpecs(parseConfig({}), paths, ["/opt/node/bin/node", "/src/dist/cli/main.js"], {
+    which: whichOf({}),
+  });
+  const agent = specs[0]!;
+  assert.deepEqual(agent.program, ["/opt/node/bin/node", "/src/dist/cli/main.js", "start"]);
+  assert.ok(agent.env.PATH!.split(":").includes("/opt/node/bin"), "the directory of that node");
+});
+
 test("the running node is on the agent's PATH when none is found by name", async () => {
-  const specs = await serviceSpecs(parseConfig({}), paths, "/x/parlour", { which: whichOf({}) });
+  const specs = await serviceSpecs(parseConfig({}), paths, ["/x/parlour"], { which: whichOf({}) });
   const path = specs[0]!.env.PATH!.split(":");
   assert.ok(path.includes(dirname(process.execPath)), "the directory of the node running this test");
 });
 
 test("whisper is kept warm when the server, its binary and a model are all present", async () => {
   const model = withWhisperModel();
-  const specs = await serviceSpecs(parseConfig({}), paths, "/opt/homebrew/bin/parlour", {
+  const specs = await serviceSpecs(parseConfig({}), paths, ["/opt/homebrew/bin/parlour"], {
     which: whichOf({
       "whisper-server": "/opt/homebrew/bin/whisper-server",
       ffmpeg: "/opt/homebrew/bin/ffmpeg",
@@ -80,7 +89,7 @@ test("whisper is kept warm when the server, its binary and a model are all prese
 test("the whisper port and language follow the stt slice", async () => {
   withWhisperModel();
   const config = parseConfig({ stt: { url: "http://127.0.0.1:9000/inference", language: "de" } });
-  const specs = await serviceSpecs(config, paths, "/usr/local/bin/parlour", {
+  const specs = await serviceSpecs(config, paths, ["/usr/local/bin/parlour"], {
     which: whichOf({ "whisper-server": "/usr/local/bin/whisper-server" }),
   });
   const whisper = specs[1]!;
@@ -92,7 +101,7 @@ test("the whisper port and language follow the stt slice", async () => {
 test("the first model by name wins when there are several", async () => {
   withWhisperModel("ggml-small.en.bin");
   const first = withWhisperModel("ggml-base.en.bin");
-  const specs = await serviceSpecs(parseConfig({}), paths, "/usr/local/bin/parlour", {
+  const specs = await serviceSpecs(parseConfig({}), paths, ["/usr/local/bin/parlour"], {
     which: whichOf({ "whisper-server": "/usr/local/bin/whisper-server" }),
   });
   assert.equal(specs[1]!.program[specs[1]!.program.indexOf("--model") + 1], first);
@@ -100,18 +109,42 @@ test("the first model by name wins when there are several", async () => {
 
 test("no whisper spec without a model, without the binary, or when stt is something else", async () => {
   const binary = whichOf({ "whisper-server": "/usr/local/bin/whisper-server" });
-  assert.equal((await serviceSpecs(parseConfig({}), paths, "/x/parlour", { which: binary })).length, 1);
+  assert.equal((await serviceSpecs(parseConfig({}), paths, ["/x/parlour"], { which: binary })).length, 1);
   withWhisperModel();
-  assert.equal((await serviceSpecs(parseConfig({}), paths, "/x/parlour", { which: whichOf({}) })).length, 1);
+  assert.equal(
+    (await serviceSpecs(parseConfig({}), paths, ["/x/parlour"], { which: whichOf({}) })).length,
+    1,
+  );
   const other = parseConfig({ stt: { provider: "some-cloud-stt" } });
-  assert.equal((await serviceSpecs(other, paths, "/x/parlour", { which: binary })).length, 1);
+  assert.equal((await serviceSpecs(other, paths, ["/x/parlour"], { which: binary })).length, 1);
 });
 
 test("a satellite gets no whisper and says what it is", async () => {
   withWhisperModel();
-  const specs = await serviceSpecs(parseConfig({ role: "satellite" }), paths, "/x/parlour", {
+  const specs = await serviceSpecs(parseConfig({ role: "satellite" }), paths, ["/x/parlour"], {
     which: whichOf({ "whisper-server": "/usr/local/bin/whisper-server" }),
   });
   assert.equal(specs.length, 1);
   assert.equal(specs[0]!.what, "the satellite");
+});
+
+test("a satellite's leftovers are the whisper LaunchAgent it was given as a server", async () => {
+  const specs = await serviceSpecs(parseConfig({ role: "satellite" }), paths, ["/x/parlour"], {
+    which: whichOf({}),
+  });
+  const leftovers = leftoverServices(specs, paths);
+  assert.deepEqual(
+    leftovers.map((spec) => spec.label),
+    ["io.parlour.whisper"],
+  );
+  assert.equal(leftovers[0]!.what, "whisper, left over");
+  assert.equal(leftovers[0]!.logPath, join(paths.logsDir, "whisper.log"));
+});
+
+test("nothing is left over when the config would install everything", async () => {
+  withWhisperModel();
+  const specs = await serviceSpecs(parseConfig({}), paths, ["/x/parlour"], {
+    which: whichOf({ "whisper-server": "/usr/local/bin/whisper-server" }),
+  });
+  assert.deepEqual(leftoverServices(specs, paths), []);
 });

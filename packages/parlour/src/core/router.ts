@@ -33,6 +33,8 @@ export interface AskOptions {
 export interface RouterOptions {
   /** What the house calls itself, for the persona. */
   name: string;
+  /** BCP 47 tag for the date and the language the persona asks for. Defaults to en-GB. */
+  locale?: string;
   local: ChatModel;
   /** Null runs local only: no escalation tool is offered and failures are final. */
   cloud: ChatModel | null;
@@ -71,7 +73,11 @@ export class Router {
     const session = this.#session(options.session ?? "local");
     const system: Message = {
       role: "system",
-      content: systemPrompt(this.#options.name, [...this.#context(), ...roomContext(options.room)]),
+      content: systemPrompt(
+        this.#options.name,
+        [...this.#context(), ...roomContext(options.room)],
+        this.#options.locale,
+      ),
     };
     const messages: Message[] = [system, ...session.history, { role: "user", content: text }];
     const tools = registry.specs();
@@ -100,10 +106,13 @@ export class Router {
       via = "cloud";
       const handover: Message[] = [system, ...session.history, { role: "user", content: result.escalateTo }];
       try {
+        // No house tools for the cloud: the house stays local, the cloud gets
+        // the question and brings its own web search. Handing it the local
+        // web_search tool as well would clash with that one by name.
         result = await runTurn({
           model: cloud,
           messages: handover,
-          tools,
+          tools: [],
           registry,
           maxRounds: maxToolRounds,
           allowEscalation: false,

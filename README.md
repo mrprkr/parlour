@@ -25,14 +25,14 @@ different one is an npm package away. See [docs/providers.md](docs/providers.md)
 
 ## Quick start
 
-macOS with Node 22 or later. Everything else (ffmpeg, whisper.cpp, the
-models) is fetched by `init`.
+macOS with Node 22 or later and [Homebrew](https://brew.sh). Everything
+else (ffmpeg, whisper.cpp, the models) is fetched by `init` through `brew`.
 
 ```sh
 npm install -g parlour
 parlour init
 parlour text          # try it without a microphone
-parlour start         # the real thing
+parlour start         # the real thing, unless init already runs it at login
 ```
 
 `init` asks for the Home Assistant address and token, an Anthropic key if you
@@ -47,7 +47,7 @@ a model and turn its server on.
 ## The commands
 
 ```text
-parlour init [--yes] [--no-deps] [--porcelain]   dependencies, models, config, secrets, service or app
+parlour init [--yes] [--no-deps] [--no-service] [--porcelain]   dependencies, models, config, secrets, service or app
 parlour start [--events]                         the server or the satellite, per config.role
 parlour text                                     everything but the microphone
 parlour doctor [--json]                          which of the moving parts is down
@@ -58,7 +58,10 @@ parlour config path|show|write|edit
 parlour secrets status|set <NAME>
 ```
 
-`parlour <command> --help` prints the flags for each.
+`parlour <command> --help` prints the flags for each. `parlour connectors
+add` signs the house in to a remote MCP server and keeps the tokens in the
+Keychain; the `connectors` integration that loads them is on by default, and
+`parlour doctor` says so if a config written by hand has left it out.
 
 ## One server, any number of clients
 

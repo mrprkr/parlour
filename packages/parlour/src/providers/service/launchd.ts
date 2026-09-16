@@ -23,6 +23,13 @@ const MAX_LOG_BYTES = 8 * 1024 * 1024;
 
 export const LaunchdSchema = z.object({
   launchAgentsDir: z.string().default(() => join(homedir(), "Library", "LaunchAgents")),
+  /**
+   * The launchctl to run. launchd is one per user, so a job bootstrapped
+   * against a scratch HOME is still a real job that outlives whatever wrote
+   * it. The test suite points this at a stub and exercises everything up to
+   * that call.
+   */
+  launchctl: z.string().default("launchctl"),
 });
 
 export type LaunchdOptions = z.infer<typeof LaunchdSchema>;
@@ -96,7 +103,7 @@ export function createLaunchd(options: LaunchdOptions = LaunchdSchema.parse({}))
     const legacy = action === "load" ? ["load", "-w", file] : ["unload", "-w", file];
     for (const args of [modern, legacy]) {
       try {
-        await run("launchctl", args);
+        await run(options.launchctl, args);
         return true;
       } catch {}
     }
@@ -115,7 +122,7 @@ export function createLaunchd(options: LaunchdOptions = LaunchdSchema.parse({}))
     };
 
     try {
-      const { stdout } = await run("launchctl", ["list", spec.label]);
+      const { stdout } = await run(options.launchctl, ["list", spec.label]);
       const pid = Number(stdout.match(/"PID"\s*=\s*(\d+)/)?.[1] ?? NaN);
       const exit = Number(stdout.match(/"LastExitStatus"\s*=\s*(-?\d+)/)?.[1] ?? NaN);
       return {

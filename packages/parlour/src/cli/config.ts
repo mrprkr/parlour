@@ -7,6 +7,7 @@ import { printJson } from "./output.ts";
 const USAGE = [
   "parlour config path              where the config file is",
   "parlour config show [--json]     the effective config, defaults filled in",
+  "parlour config show --raw        the file as written, one JSON line, nothing filled in",
   "parlour config write             replace the file with the JSON on stdin, after validating it",
   "parlour config edit              open it in $EDITOR",
 ];
@@ -15,8 +16,10 @@ const SUBCOMMANDS = ["path", "show", "write", "edit"] as const;
 
 /**
  * The config file, from the outside. `show` and `write` are how the desktop
- * app reads and saves settings, so `show` fills in every default (the app has
- * no schema of its own) and `write` refuses anything the schema would.
+ * app reads and saves settings. `show --json` fills in every default for a
+ * reader with no schema of its own; `show --raw` prints the file as written,
+ * which is what the app edits and hands back to `write`, so a save from the
+ * app freezes no default into the file. `write` refuses anything the schema would.
  */
 export const command: Command = {
   name: "config",
@@ -24,7 +27,7 @@ export const command: Command = {
   usage: USAGE,
 
   async run({ paths, argv }) {
-    const { positionals, values } = parseCli(argv, { json: { type: "boolean" } });
+    const { positionals, values } = parseCli(argv, { json: { type: "boolean" }, raw: { type: "boolean" } });
     const sub = subcommand(positionals, SUBCOMMANDS, USAGE);
 
     switch (sub) {
@@ -33,8 +36,12 @@ export const command: Command = {
         return;
 
       case "show": {
-        const { config } = loadConfig(paths);
-        if (values.json) printJson(config);
+        const { config, raw } = loadConfig(paths);
+        // The raw document is still validated by the load, so a file that
+        // would not parse is reported here rather than echoed back for a
+        // caller to edit and re-submit.
+        if (values.raw) printJson(raw);
+        else if (values.json) printJson(config);
         else process.stdout.write(`${JSON.stringify(config, null, 2)}\n`);
         return;
       }

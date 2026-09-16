@@ -20,16 +20,29 @@ The CLI runs from source with type stripping, no build step:
 ```sh
 packages/parlour/bin/parlour-dev doctor
 packages/parlour/bin/parlour-dev text
-PARLOUR_HOME=$(mktemp -d) packages/parlour/bin/parlour-dev init --yes --no-deps
+PARLOUR_HOME=$(mktemp -d) PARLOUR_SKIP_MODELS=1 \
+  packages/parlour/bin/parlour-dev init --yes --no-deps --no-service
 ```
 
-`PARLOUR_HOME` keeps an experiment away from your real config. `pnpm -C
-packages/parlour build` compiles to `dist/`, which is what `npm publish`
-ships and what `node dist/cli/main.js` runs.
+`PARLOUR_HOME` keeps an experiment's config and secrets away from your real
+ones, but not its LaunchAgents: `io.parlour.agent` and `io.parlour.whisper`
+are one per user, and an `init` without `--no-service` would replace the
+ones running your house with ones that start this checkout against the
+scratch directory. `PARLOUR_SKIP_MODELS=1` skips the model download, which
+is otherwise a gigabyte into the same throwaway directory. If you have
+already done it the other way, `parlour service uninstall` and then
+`parlour init` from your real install puts things back.
 
-For the app, `pnpm -C apps/desktop app` runs it against the checkout with
-live reload, and `pnpm exec nx run desktop:cargo-check` is what CI runs on
-the Rust.
+`pnpm -C packages/parlour build` compiles to `dist/`, which is what `npm
+publish` ships and what `node dist/cli/main.js` runs.
+
+For the app, `pnpm -C apps/desktop app` runs the window from the checkout
+with live reload. The CLI it drives is whichever `parlour` its settings name,
+the global install by default; to have it run this checkout, set **The
+parlour command** on its Settings tab to the absolute path of
+`packages/parlour/bin/parlour-dev`. See
+[docs/desktop.md](docs/desktop.md#running-the-app-against-a-checkout).
+`pnpm exec nx run desktop:cargo-check` is what CI runs on the Rust.
 
 ## Where things go
 

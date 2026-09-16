@@ -135,7 +135,7 @@ at the new path, offers to convert it:
 | Then | Now |
 | --- | --- |
 | `homeAssistant.baseUrl`, `homeAssistant.useMcp` | `integrations["home-assistant"].url`, `.mcp` |
-| `muteEntity` at the top level | `integrations["home-assistant"].muteEntity` |
+| `muteEntity` at the top level | `integrations["home-assistant"].muteEntity`; when the old file never set it, the old default `input_boolean.home_agent_muted` is written out |
 | `mcpServers` | `integrations.mcp.servers` |
 | `search.searxngUrl` | `search.url` |
 | `tts.engine: "say"` | `tts.provider: "macos-say"` |

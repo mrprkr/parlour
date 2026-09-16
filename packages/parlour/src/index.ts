@@ -30,9 +30,15 @@ export type {
   WakeWordDetector,
   WakeWordEngine,
 } from "./core/ports.ts";
-export type { ProviderContext, ProviderDefinition, ProviderKind } from "./core/providers.ts";
+export type {
+  ProviderContext,
+  ProviderContextFactory,
+  ProviderDefinition,
+  ProviderKind,
+} from "./core/providers.ts";
 export {
   defineProvider,
+  ProviderKindError,
   registeredProviders,
   registerProvider,
   resolveProvider,

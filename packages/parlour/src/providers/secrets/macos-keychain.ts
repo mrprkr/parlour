@@ -1,16 +1,41 @@
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import type { SecretStore } from "../../core/ports.ts";
 import { defineProvider, registerProvider } from "../../core/providers.ts";
 
-/** Runs a program and resolves with its output, or rejects the way `execFile` does. */
-export type Runner = (program: string, args: string[]) => Promise<{ stdout: string; stderr: string }>;
+/**
+ * Runs a program, feeding `input` to its stdin, and resolves with its output
+ * or rejects the way `execFile` does, with `code` and `stderr` on the error.
+ */
+export type Runner = (
+  program: string,
+  args: string[],
+  input?: string,
+) => Promise<{ stdout: string; stderr: string }>;
 
-const execFileAsync = promisify(execFile);
-const defaultRunner: Runner = (program, args) => execFileAsync(program, args);
+const defaultRunner: Runner = (program, args, input = "") =>
+  new Promise((resolve, reject) => {
+    const child = execFile(program, args, (error, stdout, stderr) => {
+      if (error) reject(Object.assign(error, { stdout, stderr }));
+      else resolve({ stdout, stderr });
+    });
+    child.stdin?.end(input);
+  });
 
 /** One Keychain service for every connector; the key is the account. */
 export const KEYCHAIN_SERVICE = "parlour-connector";
+
+/**
+ * Quotes one word for a `security -i` command line. Interactive mode splits
+ * on whitespace and honours double quotes with backslash escapes for `"` and
+ * `\`, but it reads a line at a time, so a value with a line break cannot be
+ * expressed. A connector's JSON blob never has one.
+ */
+export function quoteForSecurity(word: string): string {
+  if (/[\r\n]/.test(word)) {
+    throw new Error("The Keychain store cannot hold a value with a line break.");
+  }
+  return `"${word.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
 
 /**
  * The login Keychain, through the `security` tool that ships with macOS. A
@@ -41,24 +66,28 @@ export function createKeychainStore(run: Runner = defaultRunner): SecretStore {
       }
     },
     async set(key, value) {
+      // The value is a live token blob and process arguments are visible to
+      // every local user through `ps` for as long as `security` runs, so the
+      // command goes down stdin in interactive mode rather than on argv.
+      // -U updates in place, so re-authorising does not pile up duplicates.
+      const line = [
+        "add-generic-password",
+        "-U",
+        "-s",
+        KEYCHAIN_SERVICE,
+        "-a",
+        quoteForSecurity(key),
+        "-w",
+        quoteForSecurity(value),
+        "-l",
+        quoteForSecurity(`Parlour: ${key}`),
+      ].join(" ");
       try {
-        // -U updates in place, so re-authorising does not pile up duplicates.
-        await run("security", [
-          "add-generic-password",
-          "-U",
-          "-s",
-          KEYCHAIN_SERVICE,
-          "-a",
-          key,
-          "-w",
-          value,
-          "-l",
-          `Parlour: ${key}`,
-        ]);
+        await run("security", ["-i"], `${line}\n`);
       } catch (error) {
-        // execFile puts the whole command line in its message, and the value
-        // is on that command line. A locked Keychain or a denied prompt must
-        // not end up printing the tokens to the terminal or the service log.
+        // execFile puts the command line in its message. The value is no
+        // longer on it, but a locked Keychain or a denied prompt should still
+        // report the reason rather than the mechanics.
         const { stderr, code } = error as { stderr?: string; code?: number | string };
         const reason = stderr?.trim() || `security exited ${code ?? "without a code"}`;
         throw new Error(`The Keychain would not store ${key}: ${reason}`);

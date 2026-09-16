@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { request as httpRequest, type IncomingHttpHeaders } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { type TestContext, test } from "node:test";
+import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import { type Config, parseConfig } from "../core/config.ts";
 import { ToolRegistry } from "../core/registry.ts";
@@ -66,6 +72,49 @@ function post(url: string, body: unknown, token?: string): Promise<Response> {
   });
 }
 
+interface Raw {
+  status: number;
+  headers: IncomingHttpHeaders;
+  body: string;
+}
+
+/** A request with the headers a browser sets and fetch will not let a test set, Host and Origin among them. */
+function raw(
+  url: string,
+  options: { method?: string; headers?: Record<string, string>; body?: string } = {},
+): Promise<Raw> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      url,
+      { method: options.method ?? "GET", headers: options.headers },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on("data", (chunk: Buffer) => chunks.push(chunk));
+        response.on("end", () =>
+          resolve({
+            status: response.statusCode ?? 0,
+            headers: response.headers,
+            body: Buffer.concat(chunks).toString(),
+          }),
+        );
+      },
+    );
+    request.on("error", reject);
+    request.end(options.body);
+  });
+}
+
+/** Opens a socket and reports whether the server let it, closing it either way. */
+async function opens(t: TestContext, url: string, headers: Record<string, string> = {}): Promise<boolean> {
+  const socket = new WebSocket(url, { headers });
+  t.after(() => socket.close());
+  return new Promise<boolean>((resolve) => {
+    socket.once("open", () => resolve(true));
+    socket.once("error", () => resolve(false));
+    socket.once("close", () => resolve(false));
+  });
+}
+
 /** Polls rather than sleeps, so a passing test is as quick as the work it waits for. */
 async function until(check: () => boolean, what: string): Promise<void> {
   for (let i = 0; i < 500; i++) {
@@ -93,6 +142,16 @@ test("without a token the server binds to loopback", async (t) => {
   const health = await fetch(`${server.url}/health`);
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), { ok: true, tools: 2, cloud: false });
+});
+
+test("a port already in use is one sentence naming the service, not a stack", async (t) => {
+  const first = await serve(t);
+  const base = testConfig("127.0.0.1");
+  const config = { ...base, server: { ...base.server, port: first.port } };
+  await assert.rejects(
+    startServer({ config, token: undefined, agent: fakeAgent() }),
+    new RegExp(`port ${first.port} is already in use.*parlour service status`),
+  );
 });
 
 test("/health needs no token; /ask needs one", async (t) => {
@@ -174,6 +233,121 @@ test("the phone page is served at / and nothing outside the web directory is", a
   assert.equal((await fetch(`${server.url}/nope.html`)).status, 404);
 });
 
+test("the phone page and its files need no token, since the browser fetches them without one", async (t) => {
+  const server = await serve(t, { token: "secret" });
+  // The token is typed into the page's settings, so the page has to load first.
+  for (const path of ["/", "/app.js", "/app.css", "/manifest.webmanifest"]) {
+    assert.equal((await fetch(`${server.url}${path}`)).status, 200, path);
+  }
+  // What reaches the agent still needs it.
+  assert.equal((await post(`${server.url}/ask`, { text: "hi" })).status, 401);
+  assert.equal((await fetch(`${server.url}/v1/models`)).status, 401);
+  assert.equal((await fetch(`${server.url}/nope.html`)).status, 404);
+});
+
+test("building twice ships one copy of the phone page, not a copy nested inside the last one", (t) => {
+  // `cp -R src/server/web dist/server/web` copies *into* the directory once it
+  // exists, so a second build used to leave dist/server/web/web/ in the
+  // published tarball. The copy step is run as written, twice, so the guard
+  // is against the command text and not a paraphrase of it.
+  const pkg = JSON.parse(readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8"));
+  const steps = (pkg.scripts.build as string)
+    .split(" && ")
+    .filter((step) => !/^(pnpm clean|tsc)\b/.test(step));
+  assert.ok(
+    steps.some((step) => step.startsWith("cp ")),
+    "the build copies the web directory",
+  );
+
+  const root = mkdtempSync(join(tmpdir(), "parlour-build-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "src/server/web"), { recursive: true });
+  writeFileSync(join(root, "src/server/web/index.html"), "<!doctype html>");
+  // tsc has already written dist/server/ by the time the copy runs.
+  mkdirSync(join(root, "dist/server"), { recursive: true });
+
+  for (let build = 1; build <= 2; build++) {
+    execFileSync("sh", ["-c", steps.join(" && ")], { cwd: root, stdio: "pipe" });
+    assert.ok(existsSync(join(root, "dist/server/web/index.html")), `build ${build} has the page`);
+    assert.ok(!existsSync(join(root, "dist/server/web/web")), `build ${build} has no nested copy`);
+  }
+});
+
+test("without a token, a page from elsewhere in this machine's browser cannot reach the agent", async (t) => {
+  const server = await serve(t);
+  const body = JSON.stringify({ text: "unlock the front door" });
+  const json = { "content-type": "application/json" };
+
+  // A form post: no preflight, and any content type a form can send.
+  const form = await raw(`${server.url}/ask`, {
+    method: "POST",
+    headers: { origin: "https://evil.example", "content-type": "text/plain" },
+    body,
+  });
+  assert.equal(form.status, 403);
+  assert.equal(form.headers["access-control-allow-origin"], undefined);
+
+  // DNS rebinding: a name that resolves here, so the page and the server share an origin.
+  const rebound = await raw(`${server.url}/ask`, {
+    method: "POST",
+    headers: { host: "evil.example", ...json },
+    body,
+  });
+  assert.equal(rebound.status, 403);
+
+  // A form cannot say it is JSON, so what a form can say is refused even from here.
+  const plain = await raw(`${server.url}/ask`, {
+    method: "POST",
+    headers: { "content-type": "text/plain" },
+    body,
+  });
+  assert.equal(plain.status, 415);
+
+  // A page loopback served is this machine, and gets its own origin back rather than a star.
+  const own = await raw(`${server.url}/ask`, {
+    method: "POST",
+    headers: { origin: "http://localhost:5173", ...json },
+    body,
+  });
+  assert.equal(own.status, 200);
+  assert.equal(own.headers["access-control-allow-origin"], "http://localhost:5173");
+
+  // Nothing to allow when no browser is asking.
+  assert.equal((await raw(`${server.url}/health`)).headers["access-control-allow-origin"], undefined);
+});
+
+test("without a token, /listen refuses a socket a page from elsewhere opened", async (t) => {
+  const server = await serve(t);
+  const url = `ws://127.0.0.1:${server.port}/listen?mode=push`;
+  assert.equal(await opens(t, url, { origin: "https://evil.example" }), false);
+  assert.equal(await opens(t, url, { host: "evil.example" }), false);
+  assert.equal(await opens(t, url), true);
+});
+
+test("a body the route does not take is a 400, and a failure inside is a 500 that says nothing more", async (t) => {
+  const failing = {
+    ...fakeAgent(),
+    router: { ask: async () => Promise.reject(new Error("/Users/someone/secret")) },
+  };
+  const server = await serve(t, { agent: failing as unknown as ServerDeps["agent"] });
+  const json = { "content-type": "application/json" };
+
+  const messages = await post(`${server.url}/v1/chat/completions`, { messages: 5 });
+  assert.equal(messages.status, 400);
+  assert.deepEqual(await messages.json(), { error: "the body is not what this route takes (messages)" });
+
+  const text = await post(`${server.url}/ask`, { text: { nested: true } });
+  assert.equal(text.status, 400);
+
+  const notJson = await raw(`${server.url}/ask`, { method: "POST", headers: json, body: "not json" });
+  assert.equal(notJson.status, 400);
+  assert.deepEqual(JSON.parse(notJson.body), { error: "the body is not JSON" });
+
+  const broken = await post(`${server.url}/ask`, { text: "hi" });
+  assert.equal(broken.status, 500);
+  assert.deepEqual(await broken.json(), { error: "internal error" });
+});
+
 test("/listen in push mode transcribes the frames and sends the reply as text then audio", async (t) => {
   const agent = fakeAgent();
   const server = await serve(t, { token: "secret", agent });
@@ -227,4 +401,41 @@ test("/listen refuses a socket without the token", async (t) => {
     socket.once("close", () => resolve());
   });
   assert.equal(opened, false);
+});
+
+test("/listen in push mode answers an utterance the client never ends once it reaches the limit", async (t) => {
+  const agent = fakeAgent();
+  const server = await serve(t, { agent });
+  const socket = new WebSocket(`ws://127.0.0.1:${server.port}/listen?client=test&mode=push`);
+  t.after(() => socket.close());
+  const messages: Record<string, unknown>[] = [];
+  socket.on("message", (data: Buffer, isBinary: boolean) => {
+    if (!isBinary) messages.push(JSON.parse(data.toString()) as Record<string, unknown>);
+  });
+  await new Promise<void>((resolve, reject) => {
+    socket.once("open", resolve);
+    socket.once("error", reject);
+  });
+  await until(() => messages.length > 0, "the ready message");
+
+  // maxUtteranceMs of 80 ms frames, and no end message.
+  socket.send(JSON.stringify({ type: "start" }));
+  for (let i = 0; i < Math.ceil(15000 / 80); i++) socket.send(frameBytes(3000));
+  await until(() => messages.some((m) => m.type === "state" && m.value === "idle"), "idle again");
+  assert.equal(agent.stt.heard.length, 1);
+  assert.deepEqual(agent.tts.rendered, ["hello"]);
+});
+
+test("/listen closes a socket that sends a message too large to be audio", async (t) => {
+  const server = await serve(t);
+  const socket = new WebSocket(`ws://127.0.0.1:${server.port}/listen?client=test&mode=push`);
+  t.after(() => socket.close());
+  await new Promise<void>((resolve, reject) => {
+    socket.once("open", resolve);
+    socket.once("error", reject);
+  });
+  const closed = new Promise<number>((resolve) => socket.once("close", (code) => resolve(code)));
+  socket.send(Buffer.alloc(300 * 1024));
+  // 1009 is "message too big", from ws's own maxPayload.
+  assert.equal(await closed, 1009);
 });

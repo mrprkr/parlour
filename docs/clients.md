@@ -33,8 +33,10 @@ parlour service restart
 
 Without it the server binds to loopback, answers only the machine it runs
 on, and does not advertise itself at all, because a voice agent on an open
-port can turn the heating on and read the shopping list. `parlour doctor`
-says which of the two states it is in.
+port can turn the heating on and read the shopping list. The browser on that
+machine counts as somewhere else: a request addressed to a name other than
+`localhost`, or sent by a page that was not served from `localhost`, is
+refused. `parlour doctor` says which of the two states it is in.
 
 Clients send the token as `Authorization: Bearer <token>`, or as `?token=`
 on the URL for the socket and the phone page. `/health` needs no token and
@@ -62,8 +64,16 @@ reconnects for as long as it is switched on, and backs off (doubling up to
 }
 ```
 
-- **`serverUrl` empty** means Bonjour. Fill it in (`http://study-mac.local:8765`)
-  only if the network drops multicast, which some mesh systems and most guest
+- **`serverUrl` empty** means Bonjour, once. `parlour init` looks while you
+  are watching, and a satellite that starts with the key empty looks until a
+  server lets it in. Either way the address found is written here and the
+  satellite talks to that server and no other from then on. Anything on the
+  network can advertise `_parlour._tcp`, and the satellite hands its token
+  to whichever server it connects to, so the first one it trusts is the only
+  one it trusts. If the server genuinely moves, clear the key; if the pinned
+  server is down and something else is advertising, the log says so and the
+  satellite stays put. Fill the key in by hand (`http://study-mac.local:8765`)
+  when the network drops multicast, which some mesh systems and most guest
   VLANs do. `parlour doctor` on the satellite says whether it can see a server.
 - **`localWake`** runs the wake word on the satellite and streams only what
   follows it. It costs a copy of the models on that box (`parlour models
@@ -129,8 +139,12 @@ listening again immediately rather than waiting out its own guess.
 ```sh
 curl -s http://<the server>:8765/ask \
   -H "authorization: Bearer $PARLOUR_TOKEN" \
+  -H "content-type: application/json" \
   -d '{"text": "is the washing machine finished", "room": "kitchen"}'
 ```
+
+The content type is required. A form on a web page can post `text/plain`
+anywhere without the browser asking first, and cannot say it is JSON.
 
 Replies `{"reply": "...", "via": "local"}`, where `via` says which model
 answered. An optional `client` in the body keeps a conversation of its own;

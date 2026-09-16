@@ -18,7 +18,16 @@ export const McpServer = z.discriminatedUnion("transport", [
     transport: z.literal("stdio"),
     command: z.string(),
     args: z.array(z.string()).default([]),
+    /**
+     * The server's own environment. It does not inherit ours beyond PATH, HOME,
+     * LANG and TMPDIR, so anything else it needs goes here.
+     */
     env: z.record(z.string()).default({}),
+    /**
+     * Name of one environment variable to pass through from ours, so a token
+     * can live in `secrets.env` rather than in this file.
+     */
+    tokenEnv: z.string().optional(),
   }),
   z.object({
     transport: z.literal("http"),
@@ -99,10 +108,33 @@ function transportFor(server: McpServerConfig): Transport {
     return new StdioClientTransport({
       command: server.command,
       args: server.args,
-      env: { ...(process.env as Record<string, string>), ...server.env },
+      env: childEnvironment(server.env, server.tokenEnv),
     });
   }
   return httpTransport(new URL(server.url), server.tokenEnv ? process.env[server.tokenEnv] : undefined);
+}
+
+/** Enough for a server to find its runtime and a writable temp dir, no more. */
+const INHERITED_ENV = ["PATH", "HOME", "LANG", "TMPDIR"];
+
+/**
+ * The environment a stdio server is spawned with. `main.ts` copies every
+ * secret into `process.env` for the providers that read a named variable, so
+ * passing it through whole would hand each third-party server every token
+ * the house holds. A server gets the allow-list, the one variable its
+ * `tokenEnv` names, and its own `env` block, which wins.
+ */
+export function childEnvironment(
+  serverEnv: Record<string, string>,
+  tokenEnv?: string,
+  parent: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const key of tokenEnv ? [...INHERITED_ENV, tokenEnv] : INHERITED_ENV) {
+    const value = parent[key];
+    if (value !== undefined) env[key] = value;
+  }
+  return { ...env, ...serverEnv };
 }
 
 /** Tool names must be stable and safe for both APIs, so namespace and clean. */

@@ -5,9 +5,10 @@ import { emit } from "../core/events.ts";
 import { logger } from "../core/logger.ts";
 import type { Paths } from "../core/paths.ts";
 import type { Check, Diagnosable } from "../core/ports.ts";
-import { type ProviderContext, type ProviderKind, resolveProvider } from "../core/providers.ts";
+import { type ProviderContextFactory, type ProviderKind, resolveProvider } from "../core/providers.ts";
 import { loadSecrets, type Secrets } from "../core/secrets.ts";
 import { AGENT_LABEL, serviceSpecs } from "../core/services.ts";
+import { connectorStore } from "../integrations/connectors/store.ts";
 import { pickServiceManager } from "../providers/service/index.ts";
 import { findServer } from "../server/discovery.ts";
 import { type Command, parseCli } from "./args.ts";
@@ -69,6 +70,7 @@ async function server(config: Config, secrets: Secrets, paths: Paths): Promise<C
         : `PARLOUR_TOKEN is not set, so the server answers this machine only. parlour secrets set PARLOUR_TOKEN`,
     });
   }
+  checks.push(...(await forgottenConnectors(config, paths)));
   try {
     const agent = await buildAgent(config, secrets, paths, { audio: false });
     try {
@@ -87,15 +89,43 @@ async function server(config: Config, secrets: Secrets, paths: Paths): Promise<C
 }
 
 /**
+ * `parlour connectors add` writes `connectors.json` and never `config.json`,
+ * so a config written before connectors were on by default can list an
+ * account the model will never see. No provider can say so, because the one
+ * that would is the one that is not loaded, which is why core asks.
+ */
+export async function forgottenConnectors(config: Config, paths: Paths): Promise<Check[]> {
+  if ("connectors" in config.integrations) return [];
+  const listed = await connectorStore(paths).list();
+  if (listed.length === 0) return [];
+  return [
+    {
+      name: "connectors",
+      status: "warn",
+      detail:
+        `${listed.map((connector) => connector.name).join(", ")} in ${paths.connectorsFile}, ` +
+        `but integrations.connectors is not in ${paths.configFile}, so the model never sees them. ` +
+        `Add "connectors": {} under integrations.`,
+    },
+  ];
+}
+
+/**
  * A satellite has no models, tools or keys of its own to check. What it
  * needs is a microphone, a speaker, the server and the token that lets it in.
  */
 async function satellite(config: Config, secrets: Secrets, paths: Paths): Promise<Check[]> {
   const checks: Check[] = [];
-  const context = (name: string): ProviderContext => ({ paths, secrets, log: logger(name), emit, config });
+  const context: ProviderContextFactory = (definition) => ({
+    paths,
+    secrets,
+    log: logger(definition.name),
+    emit,
+    config,
+  });
   const ask = async (kind: ProviderKind, name: string, slice: unknown) => {
     try {
-      const part = await resolveProvider<Diagnosable>(kind, name, slice, context(name));
+      const part = await resolveProvider<Diagnosable>(kind, name, slice, context);
       checks.push(...((await part.doctor?.()) ?? []));
     } catch (error) {
       checks.push({ name, status: "fail", detail: error instanceof Error ? error.message : String(error) });

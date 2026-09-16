@@ -3,7 +3,7 @@ import { z } from "zod";
 import { FRAME_SAMPLES } from "../../core/audio.ts";
 import type { Logger } from "../../core/logger.ts";
 import type { AudioSource, Check } from "../../core/ports.ts";
-import { findOnPath } from "../../core/process.ts";
+import { findOnPath, killOnExit, orphans } from "../../core/process.ts";
 import { defineProvider, type ProviderContext, registerProvider } from "../../core/providers.ts";
 
 /**
@@ -17,6 +17,13 @@ export const FfmpegSchema = z.object({
 });
 
 export type FfmpegOptions = z.infer<typeof FfmpegSchema>;
+
+/**
+ * The command line `frames()` spawns, as `ps` prints it. Anchored to the
+ * executable so a `grep ffmpeg` or an editor with the word in its arguments
+ * is not mistaken for one.
+ */
+export const STRAY_FFMPEG = /^(\S*\/)?ffmpeg\s.*-f avfoundation/;
 
 /**
  * Opens the microphone with ffmpeg and yields fixed-size frames forever.
@@ -40,25 +47,34 @@ export class Microphone implements AudioSource {
   }
 
   async *frames(signal?: AbortSignal): AsyncGenerator<Int16Array> {
-    const proc = spawn("ffmpeg", [
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-f",
-      "avfoundation",
-      "-i",
-      this.#device,
-      "-ac",
-      "1",
-      "-ar",
-      String(this.#sampleRate),
-      "-f",
-      "s16le",
-      "-acodec",
-      "pcm_s16le",
-      "-",
-    ]);
+    // Never detached: ffmpeg must belong to this process's group so a signal
+    // to the group reaches it too. If this process still dies without closing
+    // it, the exit hook is the last resort, because an orphaned ffmpeg holds
+    // the microphone until something kills it by hand.
+    const proc = spawn(
+      "ffmpeg",
+      [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "avfoundation",
+        "-i",
+        this.#device,
+        "-ac",
+        "1",
+        "-ar",
+        String(this.#sampleRate),
+        "-f",
+        "s16le",
+        "-acodec",
+        "pcm_s16le",
+        "-",
+      ],
+      { detached: false },
+    );
     this.#proc = proc;
+    killOnExit(proc);
     proc.stderr.on("data", (b: Buffer) => this.#log.warn(b.toString().trim()));
     proc.on("exit", (code) => this.#log.debug("ffmpeg exited", code));
     signal?.addEventListener("abort", () => proc.kill("SIGKILL"), { once: true });
@@ -81,13 +97,25 @@ export class Microphone implements AudioSource {
 
   async doctor(): Promise<Check[]> {
     const found = await findOnPath("ffmpeg");
-    return [
+    const checks: Check[] = [
       {
         name: "ffmpeg",
         status: found ? "ok" : "fail",
         detail: found ?? "brew install ffmpeg. It is how the microphone is read.",
       },
     ];
+    // An ffmpeg left behind by an earlier run keeps the device open, and
+    // enough of them stop the next run opening it. Name them, and how to
+    // clear them, rather than leave "it hears nothing" to be worked out.
+    const stray = await orphans(STRAY_FFMPEG);
+    if (stray.length > 0) {
+      checks.push({
+        name: "microphone",
+        status: "warn",
+        detail: `${stray.length} orphaned ffmpeg process(es) still hold it: kill -9 ${stray.join(" ")}`,
+      });
+    }
+    return checks;
   }
 }
 

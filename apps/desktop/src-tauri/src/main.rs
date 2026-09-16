@@ -91,7 +91,7 @@ struct CliOutput {
 
 /// Runs `parlour` with these arguments. This is how the window reads and
 /// writes everything that is Parlour's rather than the app's: `config show
-/// --json`, `secrets set`, `doctor --json`, `connectors list`. The one
+/// --raw`, `secrets set`, `doctor --json`, `connectors list`. The one
 /// command means the app and the terminal cannot disagree about a setting,
 /// because there is only the CLI's idea of it. `stdin` is for the commands
 /// that take a document or a secret that way rather than on the command line,

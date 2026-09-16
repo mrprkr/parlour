@@ -70,12 +70,22 @@ fn executable(path: &Path) -> bool {
 }
 
 /// A bundled app inherits almost no PATH, so anything outside the bundle has to
-/// be looked for in the places it is actually kept.
+/// be looked for on the PATH a terminal would have. That is the same PATH the
+/// CLI's `which` walks, so the app and `parlour doctor` agree on whether a
+/// tool is installed: an ffmpeg from MacPorts or conda counts for both, or for
+/// neither. The usual Homebrew and system directories are always on the end
+/// of that PATH, so a shell that would not say still finds a `brew install`.
 pub fn found(binary: &str) -> Option<PathBuf> {
-    ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
-        .iter()
+    found_on(shell_path(), binary)
+}
+
+/// `which`, over a given PATH: the first entry holding an executable of that
+/// name, in PATH order, so the copy a terminal would run is the one chosen.
+fn found_on(path: &str, binary: &str) -> Option<PathBuf> {
+    path.split(':')
+        .filter(|dir| !dir.is_empty())
         .map(|dir| Path::new(dir).join(binary))
-        .find(|path| path.is_file())
+        .find(|path| executable(path))
 }
 
 /// The PATH a terminal would have. A login shell is the only thing that knows
@@ -160,4 +170,63 @@ pub fn recent_enough(version: &str) -> bool {
         .next()
         .and_then(|major| major.parse::<u32>().ok())
         .is_some_and(|major| major >= 22)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A fresh directory under the system temp dir, removed when dropped, so
+    /// the test does not depend on what happens to be installed on the box.
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new(tag: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!(
+                "parlour-desktop-{tag}-{}",
+                std::process::id()
+            ));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            Self(dir)
+        }
+
+        fn file(&self, name: &str, mode: u32) -> PathBuf {
+            use std::os::unix::fs::PermissionsExt;
+            let path = self.0.join(name);
+            std::fs::write(&path, "#!/bin/sh\n").unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+            path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn found_on_walks_every_path_entry_in_order() {
+        let ports = TempDir::new("ports");
+        let brew = TempDir::new("brew");
+        let expected = ports.file("ffmpeg", 0o755);
+        brew.file("ffmpeg", 0o755);
+
+        // An ffmpeg somewhere other than the fixed Homebrew and system
+        // directories, which is what the fixed list used to miss.
+        let path = format!("{}:{}", ports.0.display(), brew.0.display());
+        assert_eq!(found_on(&path, "ffmpeg"), Some(expected));
+        assert_eq!(found_on(&path, "not-a-tool"), None);
+    }
+
+    #[test]
+    fn found_on_skips_files_that_cannot_run() {
+        let dir = TempDir::new("plain");
+        dir.file("ffmpeg", 0o644);
+        // An empty entry means the current directory to a shell; skipped here
+        // so a stray leading colon never makes the app look in its own cwd.
+        let path = format!(":{}", dir.0.display());
+        assert_eq!(found_on(&path, "ffmpeg"), None);
+    }
 }

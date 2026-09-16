@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 import { test } from "node:test";
-import { findOnPath, run, withTempWav } from "./process.ts";
+import { findOnPath, killOnExit, onShutdown, parseOrphans, run, withTempWav } from "./process.ts";
 
 test("run resolves when the command exits 0", async () => {
   await run("sh", ["-c", "exit 0"]);
@@ -65,4 +66,51 @@ test("findOnPath resolves a binary that exists and null for one that does not", 
   const sh = await findOnPath("sh");
   assert.ok(sh?.endsWith("/sh"));
   assert.equal(await findOnPath("parlour-no-such-command-xyz"), null);
+});
+
+test("onShutdown listens for Ctrl-C, launchd and a closed terminal alike", () => {
+  const before = (signal: NodeJS.Signals) => process.listenerCount(signal);
+  const counts = { SIGINT: before("SIGINT"), SIGTERM: before("SIGTERM"), SIGHUP: before("SIGHUP") };
+  const seen: string[] = [];
+  onShutdown((signal) => seen.push(signal));
+  assert.equal(process.listenerCount("SIGINT"), counts.SIGINT + 1);
+  assert.equal(process.listenerCount("SIGTERM"), counts.SIGTERM + 1);
+  assert.equal(process.listenerCount("SIGHUP"), counts.SIGHUP + 1);
+
+  // Emitting runs the handlers without the signal reaching the process.
+  process.emit("SIGTERM");
+  assert.deepEqual(seen, ["SIGTERM"]);
+  // The first signal stands down the others, so a second one is not handled twice
+  // and a stuck shutdown can still be ended with another Ctrl-C.
+  assert.equal(process.listenerCount("SIGINT"), counts.SIGINT);
+  assert.equal(process.listenerCount("SIGTERM"), counts.SIGTERM);
+  assert.equal(process.listenerCount("SIGHUP"), counts.SIGHUP);
+});
+
+test("killOnExit kills a child that is still running and lets go once it has gone", async () => {
+  const before = process.listenerCount("exit");
+  const child = spawn("sleep", ["30"]);
+  const gone = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+  const kill = killOnExit(child);
+  assert.equal(process.listenerCount("exit"), before + 1);
+
+  kill();
+  await gone;
+  assert.equal(child.signalCode, "SIGKILL");
+  assert.equal(process.listenerCount("exit"), before);
+  // A second call finds nothing to kill and does not throw.
+  kill();
+});
+
+test("parseOrphans picks out the matching processes that launchd has adopted", () => {
+  const ps = [
+    "    1     0 /sbin/launchd",
+    " 3318     1 ffmpeg -hide_banner -loglevel error -f avfoundation -i :0 -ac 1 -ar 16000 -f s16le -",
+    " 4000  3999 ffmpeg -hide_banner -loglevel error -f avfoundation -i :0 -ac 1 -ar 16000 -f s16le -",
+    " 4100     1 /opt/homebrew/bin/ffmpeg -f avfoundation -i :1 -f s16le -",
+    " 4200     1 ffmpeg -i film.mkv out.mp4",
+    " 4300     1 grep ffmpeg -f avfoundation",
+    "",
+  ].join("\n");
+  assert.deepEqual(parseOrphans(ps, /^(\S*\/)?ffmpeg\s.*-f avfoundation/), [3318, 4100]);
 });

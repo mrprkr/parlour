@@ -18,11 +18,14 @@ export type VoiceState = "idle" | "listening" | "thinking" | "speaking";
  * Keeping this an interface is what makes one pipeline serve both.
  */
 export interface VoiceSink {
-  say(text: string, answer: Answer): Promise<void>;
+  /** `ms` is how long the model took, from the end of speech to the answer. */
+  say(text: string, answer: Answer, ms: number): Promise<void>;
   /** True while sound is coming out, which decides the barge-in rule. */
   isSpeaking(): boolean;
   stop(): void;
   onState?(state: VoiceState, detail?: string): void;
+  /** A turn that failed part way, so the client can show why nothing was said. */
+  onError?(message: string): void;
 }
 
 export interface VoiceSessionOptions {
@@ -136,13 +139,15 @@ export class VoiceSession {
       sink.onState?.("thinking", text);
 
       const answer = await router.ask(text, { session: id, room });
-      log.info(`${id} replied in ${Date.now() - started}ms via ${answer.via}:`, answer.text);
+      const ms = Date.now() - started;
+      log.info(`${id} replied in ${ms}ms via ${answer.via}:`, answer.text);
 
       this.#enter("speaking");
-      await sink.say(answer.text, answer);
+      await sink.say(answer.text, answer, ms);
       return answer;
     } catch (error) {
       log.error(`${id}:`, error);
+      sink.onError?.(error instanceof Error ? error.message : String(error));
       return null;
     }
   }
@@ -169,9 +174,11 @@ export class LocalVoice implements VoiceSink {
 
   /**
    * The speaker already cuts sentences and cancels the previous turn. The
-   * answer is for sinks that send it over a socket; the room only hears it.
+   * reply goes out as an event before it is spoken, so the desktop app shows
+   * what was said and which model said it while the room is still hearing it.
    */
-  say(text: string, _answer?: Answer): Promise<void> {
+  say(text: string, answer: Answer, ms: number): Promise<void> {
+    this.#emit({ type: "reply", text, via: answer.via, ms });
     return this.#speaker.say(text);
   }
 
@@ -186,5 +193,9 @@ export class LocalVoice implements VoiceSink {
   onState(state: VoiceState, detail?: string): void {
     if (state === "thinking" && detail) this.#emit({ type: "heard", text: detail });
     else this.#emit({ type: "state", value: state });
+  }
+
+  onError(message: string): void {
+    this.#emit({ type: "error", message });
   }
 }

@@ -8,6 +8,8 @@ import {
   clearProviders,
   defineProvider,
   type ProviderContext,
+  ProviderKindError,
+  ProviderOptionsError,
   registeredProviders,
   registerProvider,
   resolveProvider,
@@ -54,6 +56,28 @@ test("a registered provider is created with parsed options", async () => {
   assert.deepEqual(made.options, { url: "x" });
 });
 
+test("options that fail the schema name the provider and the path", async () => {
+  registerProvider(
+    defineProvider({
+      kind: "tts",
+      name: "strict",
+      description: "",
+      schema: z.object({ greeting: z.string() }),
+      create: () => ({}),
+    }),
+  );
+  await assert.rejects(resolveProvider("tts", "strict", { greeting: 42 }, context), (e: unknown) => {
+    assert.ok(e instanceof ProviderOptionsError);
+    assert.equal(e.kind, "tts");
+    assert.equal(e.providerName, "strict");
+    // One line, not Zod's JSON dump, and it says which slice is wrong.
+    assert.match(e.message, /^Invalid options for tts provider "strict": greeting: /);
+    assert.ok(!e.message.includes("\n"));
+    assert.ok(e.cause instanceof z.ZodError);
+    return true;
+  });
+});
+
 test("a provider without a schema gets its options untouched", async () => {
   registerProvider(defineProvider({ kind: "tts", name: "raw", description: "", create: (o) => ({ o }) }));
   const made = await resolveProvider<{ o: unknown }>("tts", "raw", { anything: 1 }, context);
@@ -84,6 +108,19 @@ test("an importable module whose default export matches the kind is loaded and r
   );
 });
 
+test("a context factory is handed the definition, so the scope can be its own name", async () => {
+  // A provider tried from a checkout is named by an absolute path in config.
+  // The definition carries the name the package gave itself, which is what
+  // a log scope should be.
+  const path = fixture("named.mjs", definition("tts"));
+  let seen: string | undefined;
+  await resolveProvider("tts", path, {}, (found) => {
+    seen = found.name;
+    return context;
+  });
+  assert.equal(seen, "fake-voice");
+});
+
 test("resolving the same module twice reuses the first import", async () => {
   const path = fixture("twice.mjs", definition("tts"));
   await resolveProvider("tts", path, {}, context);
@@ -92,8 +129,24 @@ test("resolving the same module twice reuses the first import", async () => {
   assert.equal(registeredProviders("tts").length, 1);
 });
 
-test("a module whose default export is for another kind is not accepted", async () => {
+test("a module whose default export is for another kind says so, not that the name is unknown", async () => {
   const path = fixture("wrong-kind.mjs", definition("stt"));
+  await assert.rejects(resolveProvider("tts", path, {}, context), (e: unknown) => {
+    // The module loaded fine, so pointing at the path would send the
+    // contributor to the wrong place. The message names the kind instead.
+    assert.ok(e instanceof ProviderKindError);
+    assert.ok(!(e instanceof UnknownProviderError));
+    assert.equal(e.kind, "tts");
+    assert.equal(e.actualKind, "stt");
+    assert.equal(e.providerName, path);
+    assert.equal(e.message, `Provider "${path}" is a stt provider, not tts.`);
+    return true;
+  });
+  assert.equal(registeredProviders().length, 0);
+});
+
+test("a module whose default export is not a provider at all is an unknown name", async () => {
+  const path = fixture("not-a-provider.mjs", "export default { hello: 1 };\n");
   await assert.rejects(
     resolveProvider("tts", path, {}, context),
     (e: unknown) => e instanceof UnknownProviderError,
@@ -109,6 +162,26 @@ test("a module that fails to load reports the failure rather than an unknown nam
       !(e instanceof UnknownProviderError) &&
       (e as Error).message.includes(path) &&
       /boom/.test(String((e as Error).cause)),
+  );
+});
+
+test("a module whose own import is missing is a load failure, not an unknown name", async () => {
+  // Node raises the same not-found code here as for a package that does not
+  // exist, so this is the case that used to be reported as a typo.
+  const path = fixture("needs-peer.mjs", `import "parlour-no-such-peer";\n${definition("tts")}`);
+  await assert.rejects(
+    resolveProvider("tts", path, {}, context),
+    (e: unknown) =>
+      !(e instanceof UnknownProviderError) &&
+      (e as Error).message.includes(path) &&
+      /parlour-no-such-peer/.test(String((e as Error).cause)),
+  );
+});
+
+test("an absolute path to a file that does not exist is an unknown name", async () => {
+  await assert.rejects(
+    resolveProvider("tts", join(fixtures, "absent.mjs"), {}, context),
+    (e: unknown) => e instanceof UnknownProviderError,
   );
 });
 

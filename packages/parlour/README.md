@@ -5,8 +5,8 @@ model with tools, speech back, and a cloud model behind it for the questions
 the local one should not attempt. It controls Home Assistant over MCP and
 reaches anything else through MCP too.
 
-macOS with Node 22 or later. The rest (ffmpeg, whisper.cpp, the models) is
-fetched by `init`.
+macOS with Node 22 or later and [Homebrew](https://brew.sh). The rest
+(ffmpeg, whisper.cpp, the models) is fetched by `init` through `brew`.
 
 ```sh
 npm install -g parlour

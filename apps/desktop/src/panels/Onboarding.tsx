@@ -54,7 +54,6 @@ const PREFIX: Partial<Record<SetupEvent["kind"], string>> = {
   fail: "  ✗ ",
   warn: "  ! ",
   ok: "  ✓ ",
-  done: "\n",
 };
 
 type Tone = "ok" | "warn" | "bad";
@@ -327,6 +326,10 @@ export function Onboarding({
 
   useEffect(() => {
     const pending = onSetupEvent((event) => {
+      // `done` carries the verdict as "0" or "1", which is the exit status the
+      // Rust side reads, not a line for a person. The note by the button says
+      // how the job ended, so logging it would only leave a bare digit behind.
+      if (event.kind === "done") return;
       const element = logRef.current;
       atBottomRef.current = !element || element.scrollTop + element.clientHeight >= element.scrollHeight - 20;
       setLog((previous) => `${previous}${PREFIX[event.kind] ?? "    "}${event.text}\n`);

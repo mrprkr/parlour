@@ -1,4 +1,4 @@
-import { loadSecrets, type Secrets, writeSecret } from "../core/secrets.ts";
+import { loadSecrets, readSecretsFile, type Secrets, writeSecret } from "../core/secrets.ts";
 import { type Command, parseCli, readStdin, subcommand, UsageError } from "./args.ts";
 import { printJson, table } from "./output.ts";
 
@@ -35,11 +35,18 @@ export const command: Command = {
       // The environment counts, as it does for the running agent.
       const secrets = loadSecrets(paths);
       const present = Object.fromEntries(KNOWN.map(({ name, key }) => [name, Boolean(secrets[key])]));
+      // Anything else in the file is a provider's own key, set by name and
+      // read from the environment, so it is reported too rather than being
+      // the one secret this command cannot see.
+      const file = readSecretsFile(paths);
+      const others = Object.keys(file).filter((name) => !KNOWN.some((known) => known.name === name));
+      for (const name of others) present[name] = Boolean(process.env[name] ?? file[name]);
       if (values.json) {
         printJson(present);
         return;
       }
       const rows = KNOWN.map(({ name, what }) => [present[name] ? "set" : "unset", name, what]);
+      for (const name of others) rows.push([present[name] ? "set" : "unset", name, "in secrets.env"]);
       process.stdout.write(`${table(rows)}\n\n${paths.secretsFile}\n`);
       return;
     }

@@ -55,8 +55,42 @@ export async function addConnector(
   };
   const store = connectorStore(paths, secrets);
   await store.add(connector);
-  await signIn(store, connector);
+  try {
+    await signIn(store, connector);
+  } catch (error) {
+    // The entry is kept on purpose (see above), but a person who only reads
+    // "fetch failed" cannot know that, nor which URL failed, nor why. Node's
+    // fetch buries the real reason in `cause`, so unwind it here.
+    throw new Error(
+      `Could not sign in to ${connector.url}: ${reason(error)}. ` +
+        `The connector was kept so that the same command resumes the sign in; ` +
+        `run parlour connectors remove ${name} to forget it instead.`,
+      { cause: error },
+    );
+  }
   return connector;
+}
+
+/**
+ * The messages down an error's cause chain, most general first, so that
+ * "fetch failed" arrives as "fetch failed: connect ECONNREFUSED 127.0.0.1:9".
+ * An AggregateError (localhost tried over v4 and v6) contributes its first
+ * member, which is enough to name the fault without repeating it.
+ */
+function reason(error: unknown): string {
+  const parts: string[] = [];
+  for (let current: unknown = error; current !== undefined && current !== null; ) {
+    if (!(current instanceof Error)) {
+      parts.push(String(current));
+      break;
+    }
+    let message = current.message;
+    if (!message && current instanceof AggregateError && current.errors.length)
+      message = reason(current.errors[0]);
+    if (message && parts.at(-1) !== message) parts.push(message);
+    current = current.cause;
+  }
+  return parts.join(": ") || "unknown error";
 }
 
 /** True when there was one to remove. Its tokens go with it. */

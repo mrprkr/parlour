@@ -45,10 +45,14 @@ async function defaultWhich(binary: string): Promise<string | undefined> {
   }
 }
 
+/**
+ * `parlourBin` is the command that runs parlour, usually one executable and
+ * sometimes `[node, script]` when the script cannot be exec'd on its own.
+ */
 export async function serviceSpecs(
   config: Config,
   paths: Paths,
-  parlourBin: string,
+  parlourBin: string[],
   options: ServiceSpecOptions = {},
 ): Promise<ServiceSpec[]> {
   const which = options.which ?? defaultWhich;
@@ -64,9 +68,9 @@ export async function serviceSpecs(
   out.push({
     label: AGENT_LABEL,
     what: config.role === "satellite" ? "the satellite" : "the agent",
-    program: [parlourBin, "start"],
+    program: [...parlourBin, "start"],
     env: {
-      PATH: toolPath(parlourBin, node, await which("ffmpeg"), await which("afplay")),
+      PATH: toolPath(parlourBin[0], node, await which("ffmpeg"), await which("afplay")),
       PARLOUR_HOME: paths.home,
     },
     logPath: join(paths.logsDir, "agent.log"),
@@ -109,6 +113,25 @@ export async function serviceSpecs(
   }
 
   return out;
+}
+
+/**
+ * Every service parlour has ever installed that `specs` no longer mentions.
+ * `serviceSpecs` describes what the config would install now, but a server
+ * that became a satellite, or moved off whisper-cpp, still has the whisper
+ * LaunchAgent it was given as a server, and it keeps starting at login until
+ * something looks for it by name rather than by what the config says today.
+ * `uninstall` and `status` are that something.
+ */
+export function leftoverServices(
+  specs: Pick<ServiceSpec, "label">[],
+  paths: Paths,
+): Pick<ServiceSpec, "label" | "what" | "logPath">[] {
+  const known = [
+    { label: AGENT_LABEL, what: "the agent, left over", logPath: join(paths.logsDir, "agent.log") },
+    { label: WHISPER_LABEL, what: "whisper, left over", logPath: join(paths.logsDir, "whisper.log") },
+  ];
+  return known.filter((service) => !specs.some((spec) => spec.label === service.label));
 }
 
 function firstWhisperModel(paths: Paths): string | undefined {

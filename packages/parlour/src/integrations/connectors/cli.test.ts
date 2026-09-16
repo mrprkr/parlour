@@ -60,6 +60,31 @@ test("addConnector stores the connector before signing in, so a retry resumes", 
   assert.equal(row!.scope, "s");
 });
 
+test("addConnector names the URL and the cause when the sign in fails, and says the connector was kept", async () => {
+  // What Node's fetch throws for a server that is not there: the useful part
+  // is two levels down the cause chain.
+  const refused = new TypeError("fetch failed", {
+    cause: new Error("connect ECONNREFUSED 127.0.0.1:9"),
+  });
+  await assert.rejects(
+    addConnector(paths, "test", "http://127.0.0.1:9/mcp", {}, memory, async () => {
+      throw refused;
+    }),
+    (error: Error) => {
+      assert.match(error.message, /Could not sign in to http:\/\/127\.0\.0\.1:9\/mcp/);
+      assert.match(error.message, /fetch failed: connect ECONNREFUSED 127\.0\.0\.1:9/);
+      assert.match(error.message, /was kept/);
+      assert.match(error.message, /parlour connectors remove test/);
+      assert.equal(error.cause, refused);
+      return true;
+    },
+  );
+  assert.deepEqual(
+    (await listConnectors(paths, memory)).map((row) => [row.name, row.signedIn]),
+    [["test", false]],
+  );
+});
+
 test("removeConnector says whether there was one", async () => {
   await addConnector(paths, "cal", "https://a/", {}, memory, async () => {});
   assert.equal(await removeConnector(paths, "cal", memory), true);

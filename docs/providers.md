@@ -20,7 +20,10 @@ gate) are providers of kind `integration` and work the same way.
    name from config, so the next lookup hits.
 3. Parses the options with the definition's `schema`, if it has one.
 4. Calls `create(options, context)` and returns whatever comes back, awaiting
-   it if it is a promise.
+   it if it is a promise. The context can be a function of the definition
+   instead of a value, which is how the agent scopes each provider's logger
+   by the provider's own `name` rather than the specifier from config: a
+   provider tried by absolute path still logs as `piper`, not as the path.
 
 Only "nothing there" is reported as an unknown provider, with the registered
 alternatives listed. A package that exists but fails to load (a syntax error,
@@ -40,7 +43,7 @@ export type ProviderKind =
 
 export interface ProviderContext {
   paths: Paths;                       // configFile, secretsFile, modelsDir, logsDir...
-  secrets: Secrets;                   // haToken, anthropicKey, braveKey, token, logLevel
+  secrets: Secrets;                   // core's own: haToken, anthropicKey, braveKey, token, logLevel
   log: Logger;                        // scoped to the provider's name
   emit: (event: AgentEvent) => void;  // the NDJSON event stream, a no-op unless --events
   /** The whole config, for providers that need more than their own slice. */
@@ -63,6 +66,31 @@ export function defineProvider<T>(definition: ProviderDefinition<T>): ProviderDe
 and so a package's default export reads as what it is. `options` arrives as
 `unknown` even when there is a schema, so `create` casts it to the schema's
 inferred type, as every built-in does.
+
+### A secret of your own
+
+`context.secrets` is the closed set core reads for itself: `haToken`,
+`anthropicKey`, `braveKey`, `token` and `logLevel`. A provider for a hosted
+service needs a key of its own, and the way to get one is the environment:
+before any command runs, `parlour` copies every line of `secrets.env` into
+`process.env` (what is already set in the shell wins), so by the time
+`create` is called `process.env.MY_KEY` holds whatever `parlour secrets set
+MY_KEY` was given. Follow the built-in `openai-compatible` provider and take
+the variable's *name* as an option rather than the value:
+
+```ts
+const schema = z.object({ apiKeyEnv: z.string().default("MY_SERVICE_API_KEY") });
+
+function create(options: Options, context: ProviderContext) {
+  const apiKey = process.env[options.apiKeyEnv];
+  // Missing is a doctor() failure that says which name to set, not a throw here.
+}
+```
+
+This keeps the key out of `config.json`, which is the rule for every provider
+(see `CONTRIBUTING.md`), lets a person rename it, and means `parlour secrets
+status` reports it: every key in `secrets.env` is listed there, the four core
+ones by purpose and the rest as `in secrets.env`.
 
 The package exports everything a provider needs from its root:
 `defineProvider`, the `ProviderContext` and `ProviderDefinition` types, every
@@ -220,9 +248,36 @@ npm install -g parlour-tts-piper
 ```
 
 A global install works because `npm install -g` puts every global package in
-one `node_modules`, which Node walks up to from Parlour's own files. To try
-it before publishing, point config at the built file with an absolute path:
+one `node_modules`, which Node walks up to from Parlour's own files.
+
+### Against a checkout
+
+To try it before publishing, or against a Parlour checkout after, point
+config at the built file with an absolute path:
 `"provider": "/Users/you/src/parlour-tts-piper/dist/index.js"`.
+
+Getting that file built needs a `parlour` to compile against, and the peer
+dependency alone does not provide one: `npm install` fetches peers from the
+registry, and fails when the version it wants is not published there. Give
+the package the checkout as a dev dependency, which satisfies the peer at the
+same time:
+
+```json
+"devDependencies": { "parlour": "file:/Users/you/src/parlour/packages/parlour" }
+```
+
+Build the checkout first (`pnpm -C packages/parlour build`), because the link
+is to the package directory and its exports point at `dist`. `npm link` in
+`packages/parlour` and then `npm link parlour` in the provider does the same
+thing, at the cost of replacing any globally installed `parlour` with the
+checkout.
+
+The link has to stay in place at run time, not only for `tsc`. The `import
+... from "parlour"` in the built file is a real import, `defineProvider`
+being a function, and Node resolves it by walking up from the provider's own
+directory, not Parlour's. Without a `node_modules/parlour` next to the
+provider, `parlour doctor` reports the package as failing to load with
+`Cannot find package 'parlour'`, whichever Parlour is doing the loading.
 
 Then:
 
@@ -271,7 +326,12 @@ export interface Integration extends Diagnosable {
 
 It is selected by being a key under `integrations`, and the key is the
 provider name, so `"integrations": { "parlour-integration-sonos": {} }` loads
-that package and hands it `{}`. Tools are built with `defineTool(name,
+that package and hands it `{}`. The block replaces the default rather than
+adding to it, so a hand-written one that wants the house and the connectors
+(`parlour connectors add` writes `connectors.json`, never this block) must
+keep `"home-assistant": {}` and `"connectors": {}` in it; `parlour doctor`
+warns when a connector is listed that the config never loads. Tools are built
+with `defineTool(name,
 description, jsonSchema, handler)` from the package root; the handler returns
 a string the model reads. Keep names stable and short, because every tool
 description is in the local model's context on every turn, and a package with
@@ -285,9 +345,12 @@ doctor that checks the token, the API and the MCP endpoint.
 
 ## Testing
 
-`parlour/testing` exports `FakeChatModel`, `FakeSpeechToText`,
-`FakeTextToSpeech`, `FakeAudioSink`, `FakeWakeWordEngine` and `silentLogger`,
-so a provider or integration can be run through the same `VoiceSession` and
+`parlour/testing` exports a fake for every port: `FakeChatModel`,
+`FakeSpeechToText`, `FakeTextToSpeech`, `FakeAudioSource`, `FakeAudioSink`,
+`FakeWakeWordEngine` (and the `FakeWakeWordDetector` it hands out),
+`FakeSearchProvider`, `FakeSecretStore`, `FakeServiceManager` and
+`FakeIntegration`, plus `silentLogger`. Each one records what it was asked, so
+a provider or integration can be run through the same `VoiceSession` and
 `Router` the built-ins are tested against without hardware, a model or a
 network. A `ProviderContext` for a test is a few lines:
 

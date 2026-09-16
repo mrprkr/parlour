@@ -34,7 +34,8 @@
   },
   "scripts": {
     "dev": "node --experimental-strip-types --watch src/cli/main.ts start",
-    "build": "tsc -p tsconfig.build.json && cp -R src/server/web dist/server/web",
+    "clean": "rm -rf dist",
+    "build": "pnpm clean && tsc -p tsconfig.build.json && mkdir -p dist/server/web && cp -R src/server/web/. dist/server/web/",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
     "lint": "biome check ."

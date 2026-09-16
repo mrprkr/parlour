@@ -24,6 +24,8 @@ test("migrateLegacyConfig moves the house into an integration", () => {
     connectorsFile: "connectors.json",
   });
   assert.deepEqual(out.integrations, {
+    // Connectors were on in every legacy config, so the migrated one loads them too.
+    connectors: {},
     "home-assistant": { url: "http://h:8123", mcp: false, muteEntity: "input_boolean.m" },
     mcp: { servers: { a: { transport: "stdio", command: "x" } } },
   });
@@ -46,9 +48,36 @@ test("migrateLegacyConfig keeps an integrations block that already exists withou
     muteEntity: "input_boolean.m",
   });
   assert.deepEqual(out.integrations, {
+    connectors: {},
     "home-assistant": { rest: false, url: "http://h", muteEntity: "input_boolean.m" },
     other: { on: true },
   });
+});
+
+test("migrateLegacyConfig keeps the old default mute switch when the legacy file never set one", () => {
+  type House = { "home-assistant": Record<string, unknown> };
+  // The shipped example never set muteEntity, so it relied on the old default.
+  const out = migrateLegacyConfig({ homeAssistant: { baseUrl: "http://h" } });
+  assert.deepEqual((out.integrations as House)["home-assistant"], {
+    url: "http://h",
+    muteEntity: "input_boolean.home_agent_muted",
+  });
+  // An explicit empty string was a deliberate "never mute" and stays that way.
+  const off = migrateLegacyConfig({ homeAssistant: { baseUrl: "http://h" }, muteEntity: "" });
+  assert.equal((off.integrations as House)["home-assistant"].muteEntity, "");
+  // A mute already under `integrations` is not overridden by the old default.
+  const nested = migrateLegacyConfig({
+    integrations: { "home-assistant": { muteEntity: "input_boolean.x" } },
+  });
+  assert.equal((nested.integrations as House)["home-assistant"].muteEntity, "input_boolean.x");
+});
+
+test("migrateLegacyConfig does not overwrite a connectors block that is already set", () => {
+  const out = migrateLegacyConfig({
+    integrations: { connectors: { extra: true } },
+    homeAssistant: { baseUrl: "http://h" },
+  });
+  assert.deepEqual((out.integrations as Record<string, unknown>).connectors, { extra: true });
 });
 
 test("migrateLegacyConfig gives every present slice its default provider and drops wake.modelDir", () => {

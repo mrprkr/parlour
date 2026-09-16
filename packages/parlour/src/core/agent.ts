@@ -1,4 +1,3 @@
-import { ZodError } from "zod";
 import "./builtins.ts";
 import type { Config } from "./config.ts";
 import { emit } from "./events.ts";
@@ -17,8 +16,10 @@ import type {
   WakeWordEngine,
 } from "./ports.ts";
 import {
-  type ProviderContext,
+  type ProviderContextFactory,
   type ProviderKind,
+  ProviderKindError,
+  ProviderOptionsError,
   resolveProvider,
   UnknownProviderError,
 } from "./providers.ts";
@@ -76,9 +77,18 @@ export async function buildAgent(
 
   // One context per provider, differing only in the logger's scope, so a
   // line from Kokoro and a line from whisper can be told apart in the log.
-  const context = (name: string): ProviderContext => ({ paths, secrets, log: logger(name), emit, config });
+  // The scope is the provider's own name, not the specifier from config: a
+  // provider tried from a checkout is named by an absolute path, and that
+  // would not fit the column.
+  const context: ProviderContextFactory = (definition) => ({
+    paths,
+    secrets,
+    log: logger(definition.name),
+    emit,
+    config,
+  });
   const resolve = <T>(kind: ProviderKind, name: string, slice: unknown) =>
-    resolveProvider<T>(kind, name, slice, context(name));
+    resolveProvider<T>(kind, name, slice, context);
 
   const source = await resolve<AudioSource>("audioSource", config.audio.source, config.audio);
   const sink = await resolve<AudioSink>("audioSink", config.audio.sink, config.audio);
@@ -125,6 +135,7 @@ export async function buildAgent(
 
   const router = new Router({
     name: config.name,
+    locale: config.locale,
     local,
     cloud: cloud.value,
     registry,
@@ -134,14 +145,14 @@ export async function buildAgent(
   });
 
   if (audio) {
-    // The wake word is needed before the first frame; the voice is not, but
-    // Kokoro downloads itself on first use and the first reply should not
-    // wait for it. A voice that will not warm is left to its fallback or to
-    // fail out loud at the first reply, which the log will explain.
-    await Promise.all([
-      wake.load(),
-      tts.warm().catch((error) => log.warn("the voice did not warm up:", error)),
-    ]);
+    // The wake word is needed before the first frame, so it is loaded before
+    // the agent is ready. The voice is not: Kokoro downloads itself on first
+    // use, and the microphone, the server and the first reply should not wait
+    // for that, so the warm-up runs in the background. A voice that will not
+    // warm is left to its fallback or to fail out loud at the first reply,
+    // which the log will explain.
+    void tts.warm().catch((error) => log.warn("the voice did not warm up:", error));
+    await wake.load();
   }
 
   const status = () => ({ tools: registry.specs().length, cloud: cloud.value !== null });
@@ -203,21 +214,27 @@ export async function buildAgent(
 /**
  * The cloud model and web search are the two slots the house runs without.
  * A provider that cannot start (nearly always a missing key) is reported and
- * left out. A name that leads nowhere or an option that fails its schema is
- * a mistake in config, and is thrown rather than worked around, because a
- * house that quietly answers with the wrong model is worse than one that
- * refuses to start.
+ * left out. A name that leads nowhere, a package of the wrong kind or an
+ * option that fails its schema is a mistake in config, and is thrown rather
+ * than worked around, because a house that quietly answers with the wrong
+ * model is worse than one that refuses to start.
  */
 async function optional<T>(
   kind: ProviderKind,
   name: string,
   slice: unknown,
-  context: (name: string) => ProviderContext,
+  context: ProviderContextFactory,
 ): Promise<{ value: T | null; problem?: string }> {
   try {
-    return { value: await resolveProvider<T>(kind, name, slice, context(name)) };
+    return { value: await resolveProvider<T>(kind, name, slice, context) };
   } catch (error) {
-    if (error instanceof UnknownProviderError || error instanceof ZodError) throw error;
+    if (
+      error instanceof UnknownProviderError ||
+      error instanceof ProviderKindError ||
+      error instanceof ProviderOptionsError
+    ) {
+      throw error;
+    }
     return { value: null, problem: error instanceof Error ? error.message : String(error) };
   }
 }

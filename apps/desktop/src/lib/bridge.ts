@@ -96,10 +96,15 @@ export interface SetupEvent {
 }
 
 /**
- * Parlour's own config, as `parlour config show --json` prints it with every
- * default filled in, and as `parlour config write` takes it back. Only the
- * parts the window touches are named; everything else is carried through a
- * read and a write untouched, which is why the index signatures are here.
+ * Parlour's own config file as written, which is what `parlour config show
+ * --raw` prints and what `parlour config write` takes back. It is read raw
+ * rather than with the defaults filled in (`--json`) because a save hands the
+ * whole document back: written from the filled-in copy, every default would
+ * become an explicit value, and a later release that changes one would never
+ * reach this file. So a key is absent until someone sets it, and the panels
+ * carry their own fallbacks. Only the parts the window touches are named;
+ * everything else is carried through a read and a write untouched, which is
+ * why the index signatures are here.
  */
 export interface AgentConfig {
   [key: string]: unknown;
@@ -159,8 +164,9 @@ export const openPrivacySettings = () => invoke<void>("open_privacy_settings");
 
 // -------------------------------------------------------------- through the CLI
 
+/** The file as written. See `AgentConfig` for why it is not the effective config. */
 export const readConfig = async (): Promise<AgentConfig> =>
-  JSON.parse(await parlour(["config", "show", "--json"])) as AgentConfig;
+  JSON.parse(await parlour(["config", "show", "--raw"])) as AgentConfig;
 
 export const writeConfig = async (config: AgentConfig): Promise<void> => {
   await parlour(["config", "write"], JSON.stringify(config));

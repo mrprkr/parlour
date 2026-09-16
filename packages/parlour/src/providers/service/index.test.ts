@@ -8,6 +8,21 @@ test("macOS gets launchd", () => {
   assert.equal(typeof manager.tail, "function");
 });
 
+test("PARLOUR_LAUNCHCTL swaps the launchctl the manager runs", async () => {
+  // A path to nothing: the status call fails, which the manager reads as
+  // "not loaded", so the job is reported as not running rather than the
+  // real launchd being asked.
+  const manager = pickServiceManager("darwin", { PARLOUR_LAUNCHCTL: "/nonexistent/launchctl" });
+  const [state] = await manager.status([
+    { label: "io.parlour.agent", what: "the agent", logPath: "/nowhere.log" },
+  ]);
+  assert.equal(state?.running, false);
+  assert.equal(state?.pid, null);
+  // The empty string counts as unset, as the other PARLOUR_ variables do.
+  const fallback = pickServiceManager("darwin", { PARLOUR_LAUNCHCTL: "" });
+  assert.equal(typeof fallback.status, "function");
+});
+
 test("anywhere else every method names the gap rather than failing later", async () => {
   const manager = pickServiceManager("linux");
   const expected = /only supported on macOS so far/;

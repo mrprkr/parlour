@@ -7,6 +7,9 @@
 
 type Raw = Record<string, unknown>;
 
+/** What `muteEntity` meant when the key was missing from the old file. */
+const LEGACY_MUTE_ENTITY = "input_boolean.home_agent_muted";
+
 function isObject(value: unknown): value is Raw {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -87,10 +90,18 @@ export function migrateLegacyConfig(raw: Raw): Raw {
     }
   }
 
+  // The old config defaulted the mute switch to the entity its own package
+  // created, so a house that never set the key still had a working mute. The
+  // integration now defaults to no mute at all, which would silently switch
+  // it off for those houses, so the old default is written out explicitly.
+  if (!("muteEntity" in house)) house.muteEntity = LEGACY_MUTE_ENTITY;
+
   // Every legacy config had the house in it, so the integration is always
   // present even when nothing was set on it. The migrated house goes last so
   // that a block already under `integrations` cannot undo the rename.
-  out.integrations = { ...integrations, "home-assistant": house };
+  // Connectors were always on as well (the file `connectorsFile` named is
+  // copied across), and the key is what makes the new code load them.
+  out.integrations = { connectors: {}, ...integrations, "home-assistant": house };
   return out;
 }
 

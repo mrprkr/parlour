@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ChatModel } from "./ports.ts";
 import { ESCALATE_TOOL } from "./prompt.ts";
-import { ToolRegistry } from "./registry.ts";
+import { defineTool, ToolRegistry } from "./registry.ts";
 import { CONTEXT_TTL_MS, Router, type RouterOptions } from "./router.ts";
 import type { Completion, Message, ToolSpec } from "./types.ts";
 
@@ -40,11 +40,14 @@ const escalate = (question: string): Completion => ({
   toolCalls: [{ id: "1", name: ESCALATE_TOOL, args: { question } }],
 });
 
+/** A stand-in for the house's tools, so a test can see who was offered them. */
+const houseTool = defineTool("ha_call_service", "", { type: "object" }, async () => "ok");
+
 const router = (options: Partial<RouterOptions> & { local: ChatModel }) =>
   new Router({
     name: "Test",
     cloud: null,
-    registry: new ToolRegistry(),
+    registry: new ToolRegistry().add(houseTool),
     maxToolRounds: 3,
     onLocalFailure: true,
     ...options,
@@ -76,6 +79,13 @@ test("Router answers locally and remembers history per session", async () => {
   assert.deepEqual(turns(local.calls[2]), [["user", "third"]]);
 });
 
+test("Router passes the locale through to the persona", async () => {
+  const local = new FakeChatModel([say("x")]);
+  await router({ local, locale: "en-US" }).ask("hi");
+  const system = local.calls[0]?.messages[0] as { content: string };
+  assert.match(system.content, /American English/);
+});
+
 test("Router offers the escalation tool only when there is a cloud model", async () => {
   const alone = new FakeChatModel([say("x")]);
   await router({ local: alone }).ask("hi");
@@ -93,7 +103,9 @@ test("Router escalates to the cloud model with the rewritten question", async ()
 
   assert.deepEqual(await r.ask("capital of peru", { session: "a" }), { text: "Lima.", via: "cloud" });
   assert.deepEqual(turns(cloud.calls[0]), [["user", "What is the capital of Peru?"]]);
-  assert.equal(cloud.calls[0]?.tools.includes(ESCALATE_TOOL), false);
+  // The local model had the house tools; the cloud model gets none of them.
+  assert.equal(local.calls[0]?.tools.includes(houseTool.name), true);
+  assert.deepEqual(cloud.calls[0]?.tools, []);
 
   // History keeps what was actually said, not the rewritten hand-over.
   await r.ask("thanks", { session: "a" });
@@ -109,6 +121,8 @@ test("Router falls back to cloud when local throws and onLocalFailure", async ()
   const r = router({ local: new BrokenChatModel(), cloud, onLocalFailure: true });
   assert.deepEqual(await r.ask("hello"), { text: "from the cloud", via: "cloud" });
   assert.deepEqual(turns(cloud.calls[0]), [["user", "hello"]]);
+  // Falling over is not a reason to hand the house to the cloud either.
+  assert.deepEqual(cloud.calls[0]?.tools, []);
 });
 
 test("Router says so when local throws and there is no cloud", async () => {

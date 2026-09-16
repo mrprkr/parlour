@@ -48,10 +48,10 @@ interface Flash {
 }
 
 /**
- * What the providers fall back to when the config says nothing. `config show`
- * fills in the core schema only, so these keys arrive absent until `init` has
- * written them, and the form has to know the answer the box is standing in for.
- * They match the `.default()` on each provider's schema in packages/parlour.
+ * What the providers fall back to when the config says nothing. The config is
+ * read as written, so a key arrives absent until someone has set it, and the
+ * form has to know the answer the box is standing in for. These match the
+ * `.default()` on each provider's schema in packages/parlour.
  */
 const LOCAL_BASE_URL = "http://127.0.0.1:1234/v1";
 const LOCAL_MODEL = "qwen3-8b-mlx";
@@ -233,8 +233,9 @@ export function SettingsPanel({
         autostart: settings.autostart ?? false,
       }));
 
-      // `config show` fills in every default, so a missing file reads as the
-      // defaults rather than as an error, and the first save writes them out.
+      // The file as written, so a missing file reads as an empty document
+      // rather than as an error. What the form shows for an absent key is its
+      // own fallback below, and a save writes out only the keys the form sets.
       const config = await readConfig();
       if (!mine()) return;
 

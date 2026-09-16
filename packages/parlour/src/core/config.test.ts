@@ -24,7 +24,18 @@ test("an empty object is a complete config", () => {
   assert.equal(c.search.provider, "searxng");
   assert.equal(c.audio.source, "ffmpeg");
   assert.equal(c.audio.sink, "afplay");
-  assert.deepEqual(Object.keys(c.integrations), ["home-assistant"]);
+  assert.deepEqual(Object.keys(c.integrations), ["home-assistant", "connectors"]);
+});
+
+test("locale must be a tag ICU can parse, so a bad one fails here and not mid-turn", () => {
+  assert.equal(parseConfig({ locale: "en-US" }).locale, "en-US");
+  assert.throws(() => parseConfig({ locale: "en_GB" }), /locale: must be a BCP 47 language tag/);
+});
+
+test("connectors are on by default, since parlour connectors add never touches config.json", () => {
+  assert.deepEqual(parseConfig({}).integrations.connectors, {});
+  // A block the person wrote is theirs: the default fills a missing key, not a present one.
+  assert.deepEqual(Object.keys(parseConfig({ integrations: {} }).integrations), []);
 });
 
 test("provider slices keep unknown keys", () => {
@@ -40,7 +51,18 @@ test("outputDevice accepts null, which is how JSON says no explicit device", () 
 
 test("a bad value is rejected with the path in the message", () => {
   assert.throws(() => parseConfig({ role: "bogus" }), /role/);
-  assert.throws(() => parseConfig({ tts: { speed: -1 } }), /tts\.speed/);
+  assert.throws(() => parseConfig({ wake: { threshold: 2 } }), /wake\.threshold/);
+});
+
+test("core fills in no provider options, so a tts engine is not handed Kokoro's voice", () => {
+  // The same slice reaches the primary and the fallback, and a third-party
+  // engine that also calls its option `voice` would otherwise get "bf_emma".
+  assert.deepEqual(parseConfig({}).tts, { provider: "kokoro", fallback: "macos-say" });
+  assert.deepEqual(parseConfig({ tts: { provider: "piper", model: "alba" } }).tts, {
+    provider: "piper",
+    fallback: "macos-say",
+    model: "alba",
+  });
 });
 
 test("loadConfig without a file returns defaults and exists=false", () => {

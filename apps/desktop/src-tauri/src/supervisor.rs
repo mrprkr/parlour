@@ -68,14 +68,7 @@ impl Supervisor {
             ));
         }
 
-        // `--events` is what makes the status below possible: one JSON line
-        // per state change on stdout, alongside the ordinary log lines.
-        let mut child = Command::new(&settings.parlour_bin)
-            .args(["start", "--events"])
-            .env("PATH", shell_path())
-            .env("LOG_LEVEL", "info")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+        let mut child = agent_command(&settings.parlour_bin)
             .spawn()
             .map_err(|e| format!("could not start {}: {e}", settings.parlour_bin))?;
 
@@ -159,6 +152,21 @@ impl Supervisor {
     }
 }
 
+/// The command the supervisor runs. `--events` is what makes the status
+/// possible: one JSON line per state change on stdout, alongside the ordinary
+/// log lines. Only PATH is set, so `LOG_LEVEL` in `secrets.env` is honoured
+/// the same as it is in a terminal: the CLI only copies a value from the file
+/// when the variable is unset, and the logger defaults to `info` anyway.
+fn agent_command(parlour_bin: &str) -> Command {
+    let mut command = Command::new(parlour_bin);
+    command
+        .args(["start", "--events"])
+        .env("PATH", shell_path())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    command
+}
+
 fn apply(status: &Arc<Mutex<Status>>, event: &serde_json::Value) {
     let mut status = status.lock().unwrap();
     let text = |key: &str| event.get(key).and_then(|v| v.as_str()).map(str::to_owned);
@@ -184,5 +192,23 @@ fn apply(status: &Arc<Mutex<Status>>, event: &serde_json::Value) {
         }
         Some("error") => status.error = text("message"),
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::OsStr;
+
+    #[test]
+    fn agent_command_leaves_log_level_to_secrets_env() {
+        let command = agent_command("parlour");
+        let forced: Vec<_> = command
+            .get_envs()
+            .filter(|(key, _)| *key == OsStr::new("LOG_LEVEL"))
+            .collect();
+        assert!(forced.is_empty(), "LOG_LEVEL must not be forced: {forced:?}");
+        assert!(command.get_envs().any(|(key, _)| key == OsStr::new("PATH")));
+        assert_eq!(command.get_args().collect::<Vec<_>>(), ["start", "--events"]);
     }
 }

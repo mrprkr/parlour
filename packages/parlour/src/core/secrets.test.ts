@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { resolvePaths } from "./paths.ts";
-import { loadSecrets, parseEnvFile, writeSecret } from "./secrets.ts";
+import { loadSecrets, parseEnvFile, readSecretsFile, writeSecret } from "./secrets.ts";
 
 let home = "";
 let paths = resolvePaths({ HOME: "/nowhere" }, "darwin");
@@ -38,6 +38,12 @@ test("env overrides file, and AGENT_TOKEN is the fallback for PARLOUR_TOKEN", ()
   assert.equal(s.haToken, "env");
   assert.equal(s.token, "old");
   assert.equal(loadSecrets(paths, { PARLOUR_TOKEN: "new" }).token, "new");
+});
+
+test("readSecretsFile returns every key in the file, not only the named ones", () => {
+  assert.deepEqual(readSecretsFile(paths), {});
+  writeFileSync(paths.secretsFile, "HA_TOKEN=ha\n# a provider's own key\nMY_SERVICE_API_KEY=k\n");
+  assert.deepEqual(readSecretsFile(paths), { HA_TOKEN: "ha", MY_SERVICE_API_KEY: "k" });
 });
 
 test("loadSecrets without a file reads only the environment", () => {

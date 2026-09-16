@@ -30,13 +30,14 @@ const say = (text: string): Completion => ({ text, toolCalls: [] });
 
 /** A sink that only remembers, standing in for the speakers or a socket. */
 class RecordingSink implements VoiceSink {
-  readonly said: { text: string; answer: Answer }[] = [];
+  readonly said: { text: string; answer: Answer; ms: number }[] = [];
   readonly states: [VoiceState, string?][] = [];
+  readonly errors: string[] = [];
   speaking = false;
   stops = 0;
 
-  async say(text: string, answer: Answer): Promise<void> {
-    this.said.push({ text, answer });
+  async say(text: string, answer: Answer, ms: number): Promise<void> {
+    this.said.push({ text, answer, ms });
   }
 
   isSpeaking(): boolean {
@@ -49,6 +50,10 @@ class RecordingSink implements VoiceSink {
 
   onState(state: VoiceState, detail?: string): void {
     this.states.push(detail === undefined ? [state] : [state, detail]);
+  }
+
+  onError(message: string): void {
+    this.errors.push(message);
   }
 }
 
@@ -77,9 +82,9 @@ function pipeline(overrides: Partial<VoiceSessionOptions> = {}, replies = [say("
 }
 
 /** Answering happens off the frame loop, so a test waits for the state to settle. */
-async function settled(session: VoiceSession, states: [VoiceState, string?][]): Promise<void> {
+async function settled(session: VoiceSession, seen: { length: number }): Promise<void> {
   for (let i = 0; i < 1000; i++) {
-    if (session.state === "idle" && states.length > 0) return;
+    if (session.state === "idle" && seen.length > 0) return;
     await new Promise((resolve) => setImmediate(resolve));
   }
   throw new Error("the session never came back to idle");
@@ -96,11 +101,35 @@ test("VoiceSession: wake, endpoint, transcribe, answer, speak", async () => {
     ["hello"],
   );
   assert.equal(sink.said[0]?.answer.via, "local");
+  assert.ok((sink.said[0]?.ms ?? -1) >= 0, "the sink is told how long the answer took");
   assert.deepEqual(sink.states, [["listening"], ["thinking"], ["thinking", "hi"], ["speaking"], ["idle"]]);
   // The wake word cut off whatever was being said, once.
   assert.equal(sink.stops, 1);
   assert.equal(model.calls.length, 1);
   assert.equal(model.calls[0]?.messages.at(-1)?.content, "hi");
+});
+
+test("VoiceSession through LocalVoice emits the reply the desktop app reads", async () => {
+  // The Status tab's "last reply" card only ever sees events, and the server
+  // role speaks through LocalVoice, so this is the path that has to produce one.
+  const events: AgentEvent[] = [];
+  const voice = new LocalVoice(new Speaker(new FakeTextToSpeech(), new FakeAudioSink()), (event) =>
+    events.push(event),
+  );
+  const { session } = pipeline({ sink: voice });
+  const frames = [wakeFrame(), loud(), loud(), loud(), ...Array.from({ length: 11 }, quiet)];
+  for (const frame of frames) await session.push(frame);
+  await settled(session, events);
+
+  const reply = events.find((event) => event.type === "reply");
+  assert.ok(reply?.type === "reply", "a reply event follows the answer");
+  assert.equal(reply.text, "hello");
+  assert.equal(reply.via, "local");
+  assert.ok(reply.ms >= 0, "the reply carries how long the model took");
+  assert.deepEqual(
+    events.map((event) => event.type),
+    ["state", "state", "heard", "state", "reply", "state"],
+  );
 });
 
 test("VoiceSession: gate true ignores the wake", async () => {
@@ -144,6 +173,20 @@ test("VoiceSession: utterance() skips wake and endpointing", async () => {
   assert.equal(wake.detectors[0]?.resets, 0);
 });
 
+test("VoiceSession: a failed turn is reported to the sink and returns null", async () => {
+  const stt = {
+    transcribe: async () => {
+      throw new Error("whisper fell over");
+    },
+  };
+  const { session, sink } = pipeline({ stt });
+  const answer = await session.utterance([loud()]);
+  assert.equal(answer, null);
+  assert.deepEqual(sink.said, []);
+  assert.deepEqual(sink.errors, ["whisper fell over"]);
+  assert.equal(session.state, "idle");
+});
+
 test("VoiceSession: frames are dropped while speaking unless barge-in is on", async () => {
   const { session, sink, wake } = pipeline();
   sink.speaking = true;
@@ -157,28 +200,31 @@ test("VoiceSession: frames are dropped while speaking unless barge-in is on", as
   assert.equal(bargeIn.session.state, "listening");
 });
 
-test("LocalVoice speaks through the speaker and reports what it heard as events", async () => {
+test("LocalVoice speaks through the speaker and reports the turn as events", async () => {
   const tts = new FakeTextToSpeech();
   const audio = new FakeAudioSink();
   const events: AgentEvent[] = [];
   const voice = new LocalVoice(new Speaker(tts, audio), (event) => events.push(event));
 
-  await voice.say("The kitchen light is on and the heating is set to twenty one.", {
-    text: "",
-    via: "local",
-  });
+  const text = "The kitchen light is on and the heating is set to twenty one.";
+  await voice.say(text, { text, via: "cloud" }, 420);
   assert.deepEqual(
     audio.played.map((wav) => wav.toString()),
-    ["The kitchen light is on and the heating is set to twenty one."],
+    [text],
   );
   assert.equal(voice.isSpeaking(), false);
 
   voice.onState("listening");
   voice.onState("thinking", "turn on the light");
+  voice.onError("the model timed out");
   voice.onState("idle");
+  // The desktop app draws its status from exactly these lines, so the reply
+  // and the failure both have to be here, not only in the log.
   assert.deepEqual(events, [
+    { type: "reply", text, via: "cloud", ms: 420 },
     { type: "state", value: "listening" },
     { type: "heard", text: "turn on the light" },
+    { type: "error", message: "the model timed out" },
     { type: "state", value: "idle" },
   ]);
 
