@@ -23,6 +23,8 @@ Every stage is a provider behind an interface, chosen by name in one config
 file. The built-in ones are the fastest thing that runs on Apple silicon; a
 different one is an npm package away. See [docs/providers.md](docs/providers.md).
 
+The short version lives at [parlour-mrprkr-team.vercel.app](https://parlour-mrprkr-team.vercel.app).
+
 ## Quick start
 
 macOS with Node 22 or later and [Homebrew](https://brew.sh). Everything
