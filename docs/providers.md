@@ -1,38 +1,46 @@
 # Writing a provider
 
 Every stage of Parlour is a provider behind a port, chosen by name in
-`config.json`. A built-in one is a file under `packages/parlour/src/providers`;
-a third-party one is an npm package with a default export, and core needs no
-change to load it. Integrations (a source of tools, prompt lines and a mute
-gate) are providers of kind `integration` and work the same way.
+`config.json`. A built-in provider is a file under
+`packages/parlour/src/providers`; a third-party one is an npm package with a
+default export, and Parlour loads it without needing any change of its own.
+Integrations (a source of tools, prompt lines and a mute gate) are providers
+of kind `integration` and work the same way.
+
+This guide walks through the mechanism, then builds a real one. If you have
+ever wrapped a command line tool in a function, you already know most of it.
 
 ## How a name becomes a running thing
 
-`resolveProvider(kind, name, options, context)` in `core/providers.ts`:
+`resolveProvider(kind, name, options, context)` in `core/providers.ts` does
+the work:
 
-1. Looks up `(kind, name)` in the registry. Built-ins are there because their
-   modules call `registerProvider` at import.
-2. If nothing is registered, does `await import(name)`. A name containing
-   `..` is refused; an absolute path is allowed, so a provider can be tried
+1. It looks up `(kind, name)` in the registry. The built-ins are there
+   because their modules call `registerProvider` when they are imported.
+2. If nothing is registered, it does `await import(name)`. A name containing
+   `..` is refused; an absolute path is allowed, so you can try a provider
    from a checkout before it is published. The module's `default` export is
    accepted when it is an object whose `kind` matches, whose `name` is a
    string and whose `create` is a function. It is then registered under the
-   name from config, so the next lookup hits.
-3. Parses the options with the definition's `schema`, if it has one.
-4. Calls `create(options, context)` and returns whatever comes back, awaiting
-   it if it is a promise. The context can be a function of the definition
-   instead of a value, which is how the agent scopes each provider's logger
-   by the provider's own `name` rather than the specifier from config: a
-   provider tried by absolute path still logs as `piper`, not as the path.
+   name from config, so the next lookup finds it straight away.
+3. It parses the options with the definition's `schema`, if there is one.
+4. It calls `create(options, context)` and returns whatever comes back,
+   awaiting it if it is a promise. The context can be a function of the
+   definition instead of a plain value, which is how the agent scopes each
+   provider's logger by the provider's own `name` rather than the specifier
+   from config: a provider tried by absolute path still logs as `piper`, not
+   as the path.
 
 Only "nothing there" is reported as an unknown provider, with the registered
-alternatives listed. A package that exists but fails to load (a syntax error,
-a missing peer, an old Node) is reported as what it is.
+alternatives listed so you can spot a typo. A package that exists but fails
+to load (a syntax error, a missing peer, an old Node) is reported as exactly
+that.
 
-The options are the whole slice from config: for `"tts": { "provider":
-"x", "voice": "y" }` the provider is handed `{ provider: "x", voice: "y",
-fallback: "macos-say", speed: 1 }`. A `z.object` schema drops the keys it
-does not declare rather than rejecting them, which is what you want.
+The options are the whole slice from config. For
+`"tts": { "provider": "x", "voice": "y" }` your provider is handed
+`{ provider: "x", voice: "y", fallback: "macos-say", speed: 1 }`. A
+`z.object` schema drops the keys it does not declare rather than rejecting
+them, which is what you want here.
 
 ## The definition
 
@@ -65,44 +73,45 @@ export function defineProvider<T>(definition: ProviderDefinition<T>): ProviderDe
 `defineProvider` is the identity function. It exists so that `T` is inferred
 and so a package's default export reads as what it is. `options` arrives as
 `unknown` even when there is a schema, so `create` casts it to the schema's
-inferred type, as every built-in does.
+inferred type, the way every built-in does.
 
 ### A secret of your own
 
 `context.secrets` is the closed set core reads for itself: `haToken`,
 `anthropicKey`, `braveKey`, `token` and `logLevel`. A provider for a hosted
-service needs a key of its own, and the way to get one is the environment:
-before any command runs, `parlour` copies every line of `secrets.env` into
-`process.env` (what is already set in the shell wins), so by the time
-`create` is called `process.env.MY_KEY` holds whatever `parlour secrets set
-MY_KEY` was given. Follow the built-in `openai-compatible` provider and take
-the variable's *name* as an option rather than the value:
+service will need a key of its own, and the way to get one is the
+environment. Before any command runs, `parlour` copies every line of
+`secrets.env` into `process.env` (anything already set in the shell wins),
+so by the time `create` is called, `process.env.MY_KEY` holds whatever
+`parlour secrets set MY_KEY` was given. Follow the built-in
+`openai-compatible` provider and take the variable's *name* as an option
+rather than the value itself:
 
 ```ts
 const schema = z.object({ apiKeyEnv: z.string().default("MY_SERVICE_API_KEY") });
 
 function create(options: Options, context: ProviderContext) {
   const apiKey = process.env[options.apiKeyEnv];
-  // Missing is a doctor() failure that says which name to set, not a throw here.
+  // If it is missing, say so from doctor() with the name to set, rather than throwing here.
 }
 ```
 
-This keeps the key out of `config.json`, which is the rule for every provider
-(see `CONTRIBUTING.md`), lets a person rename it, and means `parlour secrets
-status` reports it: every key in `secrets.env` is listed there, the four core
-ones by purpose and the rest as `in secrets.env`.
+This keeps the key out of `config.json`, which is the rule for every
+provider (see `CONTRIBUTING.md`), lets people rename it if they want to, and
+means `parlour secrets status` reports it: every key in `secrets.env` is
+listed there, the four core ones by purpose and the rest as `in secrets.env`.
 
 The package exports everything a provider needs from its root:
-`defineProvider`, the `ProviderContext` and `ProviderDefinition` types, every
-port interface, `Check`, `defineTool` and `Tool` for integrations, and the
-message types a `ChatModel` sees. Fakes for every port are exported from
+`defineProvider`, the `ProviderContext` and `ProviderDefinition` types,
+every port interface, `Check`, `defineTool` and `Tool` for integrations, and
+the message types a `ChatModel` sees. Fakes for every port are exported from
 `parlour/testing`.
 
 ## A worked example: Piper as a voice
 
 [Piper](https://github.com/rhasspy/piper) is a fast local text to speech
-engine with a command line that reads text on stdin and writes a WAV. This
-package makes it a `tts` provider.
+engine with a command line that reads text on stdin and writes a WAV. Let us
+make it a `tts` provider.
 
 `package.json`:
 
@@ -125,7 +134,7 @@ package makes it a `tts` provider.
 `"type": "module"` matters: Parlour loads the package with `import()`, and a
 CommonJS module's `default` export is not the `module.exports` object you
 might expect. `parlour` is a peer dependency because the definition is
-imported from it and there must be one copy.
+imported from it and there must be exactly one copy.
 
 `index.ts`:
 
@@ -250,40 +259,41 @@ npm install -g parlour-tts-piper
 A global install works because `npm install -g` puts every global package in
 one `node_modules`, which Node walks up to from Parlour's own files.
 
-### Against a checkout
+### Trying it against a checkout
 
-To try it before publishing, or against a Parlour checkout after, point
+To try it before publishing, or against a Parlour checkout afterwards, point
 config at the built file with an absolute path:
 `"provider": "/Users/you/src/parlour-tts-piper/dist/index.js"`.
 
 Getting that file built needs a `parlour` to compile against, and the peer
 dependency alone does not provide one: `npm install` fetches peers from the
 registry, and fails when the version it wants is not published there. Give
-the package the checkout as a dev dependency, which satisfies the peer at the
-same time:
+the package the checkout as a dev dependency, which satisfies the peer at
+the same time:
 
 ```json
 "devDependencies": { "parlour": "file:/Users/you/src/parlour/packages/parlour" }
 ```
 
-Build the checkout first (`pnpm -C packages/parlour build`), because the link
-is to the package directory and its exports point at `dist`. `npm link` in
-`packages/parlour` and then `npm link parlour` in the provider does the same
-thing, at the cost of replacing any globally installed `parlour` with the
-checkout.
+Build the checkout first (`pnpm -C packages/parlour build`), because the
+link is to the package directory and its exports point at `dist`. `npm link`
+in `packages/parlour` and then `npm link parlour` in the provider does the
+same thing, at the cost of replacing any globally installed `parlour` with
+the checkout.
 
-The link has to stay in place at run time, not only for `tsc`. The `import
-... from "parlour"` in the built file is a real import, `defineProvider`
-being a function, and Node resolves it by walking up from the provider's own
-directory, not Parlour's. Without a `node_modules/parlour` next to the
-provider, `parlour doctor` reports the package as failing to load with
-`Cannot find package 'parlour'`, whichever Parlour is doing the loading.
+The link has to stay in place at run time, not just for `tsc`. The
+`import ... from "parlour"` in the built file is a real import,
+`defineProvider` being a function, and Node resolves it by walking up from
+the provider's own directory, not Parlour's. Without a `node_modules/parlour`
+next to the provider, `parlour doctor` reports the package as failing to
+load with `Cannot find package 'parlour'`, whichever Parlour is doing the
+loading.
 
 Then:
 
 ```sh
-parlour doctor      # the Piper check appears with the others
-parlour text        # nothing spoken here, but the provider is created
+parlour doctor      # the Piper check appears alongside the others
+parlour text        # nothing is spoken here, but the provider is created
 parlour start
 ```
 
@@ -303,10 +313,10 @@ kind:
 | `search` | `SearchProvider` | `search` |
 | `integration` | `Integration` | `integrations["your-name"]` |
 
-`secrets` and `service` providers are picked by platform rather than named in
-config, so adding one (a systemd `ServiceManager`, say) means registering it
-in `packages/parlour/src/providers/service/index.ts` and is a pull request
-rather than a package.
+`secrets` and `service` providers are picked by platform rather than named
+in config, so adding one (a systemd `ServiceManager`, say) means registering
+it in `packages/parlour/src/providers/service/index.ts`, which makes it a
+pull request rather than a package. We would love to see that one.
 
 ## An integration
 
@@ -325,23 +335,23 @@ export interface Integration extends Diagnosable {
 ```
 
 It is selected by being a key under `integrations`, and the key is the
-provider name, so `"integrations": { "parlour-integration-sonos": {} }` loads
-that package and hands it `{}`. The block replaces the default rather than
-adding to it, so a hand-written one that wants the house and the connectors
-(`parlour connectors add` writes `connectors.json`, never this block) must
-keep `"home-assistant": {}` and `"connectors": {}` in it; `parlour doctor`
-warns when a connector is listed that the config never loads. Tools are built
-with `defineTool(name,
-description, jsonSchema, handler)` from the package root; the handler returns
-a string the model reads. Keep names stable and short, because every tool
-description is in the local model's context on every turn, and a package with
-forty tools makes every answer slower.
+provider name, so `"integrations": { "parlour-integration-sonos": {} }`
+loads that package and hands it `{}`. One thing to know: the block replaces
+the default rather than adding to it, so a hand-written one that still
+wants the house and the connectors (`parlour connectors add` writes
+`connectors.json`, never this block) must keep `"home-assistant": {}` and
+`"connectors": {}` in it. `parlour doctor` warns when a connector is listed
+that the config never loads. Tools are built with
+`defineTool(name, description, jsonSchema, handler)` from the package root,
+and the handler returns a string the model reads. Keep names stable and
+short, because every tool description sits in the local model's context on
+every turn, and a package with forty tools makes every answer slower.
 
 `tools()` is called once at assembly, so a connection opened there stays
-open; `close()` is where it is shut. The Home Assistant integration in
-`packages/parlour/src/integrations/home-assistant/index.ts` is the reference:
-MCP tools, two REST tools, a prompt line, a gate that reads an entity, and a
-doctor that checks the token, the API and the MCP endpoint.
+open, and `close()` is where it is shut. The Home Assistant integration in
+`packages/parlour/src/integrations/home-assistant/index.ts` is a good
+reference: MCP tools, two REST tools, a prompt line, a gate that reads an
+entity, and a doctor that checks the token, the API and the MCP endpoint.
 
 ## Testing
 
@@ -349,10 +359,10 @@ doctor that checks the token, the API and the MCP endpoint.
 `FakeSpeechToText`, `FakeTextToSpeech`, `FakeAudioSource`, `FakeAudioSink`,
 `FakeWakeWordEngine` (and the `FakeWakeWordDetector` it hands out),
 `FakeSearchProvider`, `FakeSecretStore`, `FakeServiceManager` and
-`FakeIntegration`, plus `silentLogger`. Each one records what it was asked, so
-a provider or integration can be run through the same `VoiceSession` and
-`Router` the built-ins are tested against without hardware, a model or a
-network. A `ProviderContext` for a test is a few lines:
+`FakeIntegration`, plus `silentLogger`. Each one records what it was asked,
+so you can run your provider or integration through the same `VoiceSession`
+and `Router` the built-ins are tested against, without hardware, a model or
+a network. A `ProviderContext` for a test is only a few lines:
 
 ```ts
 import { resolvePaths, type ProviderContext } from "parlour";
@@ -368,5 +378,5 @@ const context: ProviderContext = {
 ```
 
 Providers that need hardware or a model are not unit tested in this
-repository either. Each has a `doctor()` instead, which is the part worth
+repository either. Each has a `doctor()` instead, and that is the part worth
 getting right: it is what a person sees when the thing does not work.

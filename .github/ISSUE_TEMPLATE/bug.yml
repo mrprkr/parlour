@@ -1,11 +1,11 @@
 name: Bug report
-description: Something Parlour does that it should not, or does not do that it should.
+description: Parlour did something it should not have, or did not do something it should.
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks. Most reports are answered by the doctor and the log, so please include both. Never paste a token or a key: `parlour secrets status` reports which are set without their values.
+        Thanks for taking the time to report this. Most problems can be pinned down from the doctor's output and the log, so please include both if you can. Never paste a token or a key: `parlour secrets status` reports which ones are set without showing their values.
   - type: textarea
     id: what
     attributes:
@@ -17,7 +17,7 @@ body:
     id: doctor
     attributes:
       label: parlour doctor
-      description: The whole output. If it hangs, say where.
+      description: The whole output. If it hangs, tell us where.
       render: text
     validations:
       required: true
@@ -25,19 +25,19 @@ body:
     id: log
     attributes:
       label: The log around the problem
-      description: "`parlour service logs`, the Logs tab in the app, or the terminal running `parlour start`. `LOG_LEVEL=debug` in secrets.env says more."
+      description: "`parlour service logs`, the Logs tab in the app, or the terminal running `parlour start`. Setting `LOG_LEVEL=debug` in secrets.env gives a lot more detail."
       render: text
   - type: textarea
     id: config
     attributes:
       label: Config
-      description: "`parlour config show`, with anything you consider private removed. There should be no secrets in it."
+      description: "`parlour config show`, with anything you would rather keep private removed. There should be no secrets in it."
       render: json
   - type: input
     id: version
     attributes:
       label: Version
-      description: "`parlour --version`, and the app's version if it is involved."
+      description: "`parlour --version`, and the app's version if the app is involved."
     validations:
       required: true
   - type: input
@@ -51,7 +51,7 @@ body:
     id: client
     attributes:
       label: Which client
-      description: Where the request came from, if it matters.
+      description: Where the request came from, if it makes a difference.
       options:
         - The server's own microphone
         - A satellite
