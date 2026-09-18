@@ -22,7 +22,8 @@ permissions:
 jobs:
   publish:
     name: Publish parlour to npm
-    runs-on: ubuntu-latest
+    # macOS, because the package's tests assume launchd and avfoundation, as CI does.
+    runs-on: macos-latest
     timeout-minutes: 20
     permissions:
       contents: read
