@@ -15,6 +15,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",
-    "nx": "^21.6.11"
+    "nx": "^23.2.1"
   }
 }
