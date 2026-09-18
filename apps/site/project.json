@@ -4,6 +4,8 @@
   "projectType": "application",
   "sourceRoot": "apps/site",
   "targets": {
-    "lint": { "command": "pnpm exec biome check apps/site", "options": { "cwd": "../.." } }
+    "lint": {
+      "command": "pnpm exec biome check apps/site"
+    }
   }
 }
