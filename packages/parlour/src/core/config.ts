@@ -58,7 +58,7 @@ export const ConfigSchema = z.object({
        * that does not hear the speaker, so leave it off with one box in one room. */
       bargeIn: z.boolean().default(false),
     })
-    .default({}),
+    .prefault({}),
 
   wake: ProviderSlice.extend({
     provider: z.string().default("openwakeword"),
@@ -67,9 +67,9 @@ export const ConfigSchema = z.object({
     threshold: z.number().min(0).max(1).default(0.5),
     /** Ignore further detections for this long after one fires, in ms. */
     refractoryMs: z.number().int().nonnegative().default(1500),
-  }).default({}),
+  }).prefault({}),
 
-  stt: ProviderSlice.extend({ provider: z.string().default("whisper-cpp") }).default({}),
+  stt: ProviderSlice.extend({ provider: z.string().default("whisper-cpp") }).prefault({}),
 
   tts: ProviderSlice.extend({
     provider: z.string().default("kokoro"),
@@ -78,27 +78,27 @@ export const ConfigSchema = z.object({
     // No `voice` or `speed` here. The whole slice goes to the primary and to the
     // fallback alike, so a default filled in by core would hand a Kokoro voice
     // id to every other engine. Each provider's schema supplies its own.
-  }).default({}),
+  }).prefault({}),
 
   llm: z
     .object({
-      local: ProviderSlice.extend({ provider: z.string().default("openai-compatible") }).default({}),
+      local: ProviderSlice.extend({ provider: z.string().default("openai-compatible") }).prefault({}),
       cloud: ProviderSlice.extend({
         provider: z.string().default("anthropic"),
         enabled: z.boolean().default(true),
         /** Escalate automatically when the local model fails or times out. */
         onLocalFailure: z.boolean().default(true),
-      }).default({}),
+      }).prefault({}),
       /** Hard ceiling on tool-call rounds per turn. */
       maxToolRounds: z.number().int().positive().default(6),
     })
-    .default({}),
+    .prefault({}),
 
   search: ProviderSlice.extend({
     /** "none" leaves the local model without a search tool. */
     provider: z.string().default("searxng"),
     maxResults: z.number().int().positive().default(5),
-  }).default({}),
+  }).prefault({}),
 
   /**
    * Keyed by integration name, which is also the provider name, so an
@@ -109,7 +109,7 @@ export const ConfigSchema = z.object({
    * the house has signed in to would never reach the model. The integration
    * costs nothing when that file is empty or missing.
    */
-  integrations: z.record(z.unknown()).default(() => ({ "home-assistant": {}, connectors: {} })),
+  integrations: z.record(z.string(), z.unknown()).default(() => ({ "home-assistant": {}, connectors: {} })),
 
   /**
    * The agent as a service on the house network, so that this machine's
@@ -128,7 +128,7 @@ export const ConfigSchema = z.object({
       /** Serve the push to talk page at / for phones. */
       web: z.boolean().default(true),
     })
-    .default({}),
+    .prefault({}),
 
   /**
    * Bonjour, so that a satellite or a phone finds the server by looking rather
@@ -140,7 +140,7 @@ export const ConfigSchema = z.object({
       /** How it appears when browsing. Empty means the machine's own name. */
       name: z.string().default(""),
     })
-    .default({}),
+    .prefault({}),
 
   /** Only read when role is "satellite". */
   satellite: z
@@ -157,7 +157,7 @@ export const ConfigSchema = z.object({
       /** Backoff ceiling when the server is down, in ms. */
       retryMs: z.number().int().positive().default(15000),
     })
-    .default({}),
+    .prefault({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

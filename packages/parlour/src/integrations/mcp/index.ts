@@ -22,7 +22,7 @@ export const McpServer = z.discriminatedUnion("transport", [
      * The server's own environment. It does not inherit ours beyond PATH, HOME,
      * LANG and TMPDIR, so anything else it needs goes here.
      */
-    env: z.record(z.string()).default({}),
+    env: z.record(z.string(), z.string()).default({}),
     /**
      * Name of one environment variable to pass through from ours, so a token
      * can live in `secrets.env` rather than in this file.
@@ -39,7 +39,7 @@ export const McpServer = z.discriminatedUnion("transport", [
 
 export type McpServerConfig = z.infer<typeof McpServer>;
 
-export const McpOptions = z.object({ servers: z.record(McpServer).default({}) });
+export const McpOptions = z.object({ servers: z.record(z.string(), McpServer).default({}) });
 
 /**
  * Connects to the configured MCP servers and turns every tool they advertise
