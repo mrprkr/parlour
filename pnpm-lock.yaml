@@ -77,10 +77,10 @@ importers:
     dependencies:
       '@anthropic-ai/sdk':
         specifier: ^0.123.0
-        version: 0.123.0(zod@3.25.76)
+        version: 0.123.0(zod@4.6.5)
       '@modelcontextprotocol/sdk':
         specifier: ^1.20.0
-        version: 1.30.0(zod@3.25.76)
+        version: 1.30.0(zod@4.6.5)
       bonjour-service:
         specifier: ^1.4.4
         version: 1.4.4
@@ -94,8 +94,8 @@ importers:
         specifier: ^8.18.0
         version: 8.21.3
       zod:
-        specifier: ^3.25.76
-        version: 3.25.76
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@types/node':
         specifier: ^22.15.3
@@ -2933,17 +2933,17 @@ packages:
     peerDependencies:
       zod: ^3.25.28 || ^4
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+  zod@4.6.5:
+    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
 
 snapshots:
 
-  '@anthropic-ai/sdk@0.123.0(zod@3.25.76)':
+  '@anthropic-ai/sdk@0.123.0(zod@4.6.5)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.1.1
     optionalDependencies:
-      zod: 3.25.76
+      zod: 4.6.5
 
   '@babel/runtime@7.29.7': {}
 
@@ -3154,7 +3154,7 @@ snapshots:
 
   '@leichtgewicht/ip-codec@2.0.5': {}
 
-  '@modelcontextprotocol/sdk@1.30.0(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.30.0(zod@4.6.5)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.8)
       ajv: 8.20.0
@@ -3171,8 +3171,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.2(zod@3.25.76)
+      zod: 4.6.5
+      zod-to-json-schema: 3.25.2(zod@4.6.5)
     transitivePeerDependencies:
       - supports-color
 
@@ -5569,8 +5569,8 @@ snapshots:
       y18n: 5.0.8
       yargs-parser: 21.1.1
 
-  zod-to-json-schema@3.25.2(zod@3.25.76):
+  zod-to-json-schema@3.25.2(zod@4.6.5):
     dependencies:
-      zod: 3.25.76
+      zod: 4.6.5
 
-  zod@3.25.76: {}
+  zod@4.6.5: {}
