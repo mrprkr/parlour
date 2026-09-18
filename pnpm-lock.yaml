@@ -27,8 +27,8 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       cn:
-        specifier: ^0.2.5
-        version: 0.2.6
+        specifier: ^0.3.0
+        version: 0.3.0
       lucide-react:
         specifier: ^1.41.0
         version: 1.46.0(react@19.3.0)
@@ -76,8 +76,8 @@ importers:
   packages/parlour:
     dependencies:
       '@anthropic-ai/sdk':
-        specifier: ^0.123.0
-        version: 0.123.0(zod@4.6.5)
+        specifier: ^0.126.0
+        version: 0.126.0(zod@4.6.5)
       '@modelcontextprotocol/sdk':
         specifier: ^1.20.0
         version: 1.30.0(zod@4.6.5)
@@ -109,8 +109,8 @@ importers:
 
 packages:
 
-  '@anthropic-ai/sdk@0.123.0':
-    resolution: {integrity: sha512-Y9oX9mPNGZClHQOFqrWRk43Srcu/UHuPq3rfxxOq7JgW0gi+lJA2MAOK4Ul3k/+AUrwRWFJvd0tK3oC0Pw25dw==}
+  '@anthropic-ai/sdk@0.126.0':
+    resolution: {integrity: sha512-VhiZl6rA/8uC+MgDaOhEcAWaIZ2tPnIY885jlZqxrGrutUW2nqCtophBtlsX0tk5kChBUjV/1NVjL3y0M4OwUg==}
     hasBin: true
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
@@ -1748,8 +1748,8 @@ packages:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
 
-  cn@0.2.6:
-    resolution: {integrity: sha512-+i4L0zUGgRcEnhsxueVrP7iBGxBx5iD0WOTYg1MwFEu2ZyCmH5Ov2V1cul2Ht5UchRQQgftCf4be/RxspuW6QQ==}
+  cn@0.3.0:
+    resolution: {integrity: sha512-qRoU0ARrZD3Bbj1wKFftEKxPjSnzTEdFkf22NVhW+zU9D/wajhoP+qUZ5DChhhSOBCH1onV12hrmGqfu1+5Z2Q==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -2937,7 +2937,7 @@ packages:
 
 snapshots:
 
-  '@anthropic-ai/sdk@0.123.0(zod@4.6.5)':
+  '@anthropic-ai/sdk@0.126.0(zod@4.6.5)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.1.1
@@ -4378,7 +4378,7 @@ snapshots:
 
   clsx@2.1.1: {}
 
-  cn@0.2.6: {}
+  cn@0.3.0: {}
 
   color-convert@2.0.1:
     dependencies:
