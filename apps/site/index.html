@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Parlour</title>
+    <meta
+      name="description"
+      content="A voice agent for the house that runs on a Mac you already own. Wake word, speech to text, a local model with tools and a cloud model behind it. Open source, MIT."
+    />
+    <meta property="og:title" content="Parlour" />
+    <meta property="og:description" content="A voice agent for the house, on a Mac you already own." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://parlour.vercel.app/" />
+    <meta name="theme-color" content="#eef0ea" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f1f1b" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Young+Serif&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="wordmark" href="/">Parlour</a>
+      <nav>
+        <a href="https://github.com/mrprkr/parlour/tree/main/docs">Docs</a>
+        <a href="https://github.com/mrprkr/parlour">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <h1>A voice agent for the house, on a Mac you already own.</h1>
+        <p class="lede">
+          It listens for a wake word, answers out loud, controls Home Assistant and reaches anything else
+          through MCP. A small local model handles the house. A cloud model handles the questions the local
+          one should not attempt, and only ever receives the sentence, never the audio.
+        </p>
+        <div class="actions">
+          <button class="install" type="button" data-copy="npm install -g parlour" aria-label="Copy the install command">
+            <code>npm install -g parlour</code>
+            <span class="copied" aria-live="polite"></span>
+          </button>
+          <a class="quiet" href="https://github.com/mrprkr/parlour#readme">Read the docs</a>
+        </div>
+      </section>
+
+      <section class="loop" aria-labelledby="loop-heading">
+        <h2 id="loop-heading" class="visually-hidden">What happens when you speak</h2>
+        <ol>
+          <li class="lit">
+            <span class="what">“Hey Jarvis”</span>
+            <span class="how">openWakeWord, in process, always on this machine</span>
+          </li>
+          <li>
+            <span class="what">Record</span>
+            <span class="how">stops itself after 800 ms of silence</span>
+          </li>
+          <li>
+            <span class="what">Speech to text</span>
+            <span class="how">whisper.cpp, kept warm so it answers in under a second</span>
+          </li>
+          <li>
+            <span class="what">The model</span>
+            <span class="how">a local model with tools: the house over MCP, timers, search, your connected accounts</span>
+          </li>
+          <li class="branch">
+            <span class="what">Hand over</span>
+            <span class="how">to Claude, only when the local model says it is out of its depth</span>
+          </li>
+          <li>
+            <span class="what">Speech</span>
+            <span class="how">Kokoro, in process, sentence by sentence while the rest is still being made</span>
+          </li>
+          <li>
+            <span class="what">The speakers</span>
+            <span class="how">or whichever room asked</span>
+          </li>
+        </ol>
+      </section>
+
+      <section class="pillars">
+        <div>
+          <h2>Nothing leaves the house</h2>
+          <p>
+            The wake word, the transcription, the model and the voice all run on the one machine. There is
+            no account and no server of ours. Escalation to the cloud is a decision the local model makes,
+            per question, and it hands over text.
+          </p>
+        </div>
+        <div>
+          <h2>Every stage is a provider</h2>
+          <p>
+            Wake word, speech to text, the models, the voice, search: each is chosen by name in one config
+            file. The built-in ones are the fastest thing that runs on Apple silicon. A different one is an
+            npm package that exports a definition, and <code>parlour doctor</code> will tell you whether it is
+            working.
+          </p>
+        </div>
+        <div>
+          <h2>One server, any number of rooms</h2>
+          <p>
+            One Mac runs the models and holds the tokens. Everything else with a microphone is a satellite
+            that finds it with Bonjour: another Mac, a phone holding a button, a Voice PE through Home
+            Assistant, or a board you soldered yourself streaming raw audio to a socket. Automations get an
+            endpoint that takes text and returns text.
+          </p>
+        </div>
+      </section>
+
+      <section class="house">
+        <h2>Built for Home Assistant, not bolted on</h2>
+        <p>
+          Home Assistant's MCP Server integration publishes whatever you have exposed to voice assistants as
+          tools, so Parlour can do exactly what you have allowed and nothing you have not. Expose a light and
+          it can turn it on; do not, and it cannot. A mute switch in the house, not on the Mac, stops it
+          acting while everyone is asleep. Point the OpenAI Conversation integration at Parlour and the
+          satellites you already own start using it as their brain.
+        </p>
+      </section>
+
+      <section class="start">
+        <h2>Ten minutes, one terminal</h2>
+        <pre><code>npm install -g parlour
+parlour init          <span class="c"># dependencies, models, questions, done</span>
+parlour text          <span class="c"># try it without a microphone</span>
+parlour start         <span class="c"># the real thing</span></code></pre>
+        <p>
+          macOS with Node 22 and Homebrew. <code>init</code> fetches ffmpeg, whisper.cpp and the models, asks
+          for your Home Assistant token and an Anthropic key if you want the cloud behind it, and offers to
+          run at login. Prefer a window? There is a
+          <a href="https://github.com/mrprkr/parlour/releases">menu bar app</a> that does the same thing
+          with buttons.
+        </p>
+      </section>
+
+      <section class="contribute">
+        <h2>Open source, and open to a hand</h2>
+        <p>
+          Parlour is MIT licensed. The most useful contribution is a provider: a new voice, a different
+          speech to text engine, a Linux service manager. The
+          <a href="https://github.com/mrprkr/parlour/blob/main/docs/providers.md">provider guide</a> walks
+          through one end to end, and
+          <a href="https://github.com/mrprkr/parlour/blob/main/CONTRIBUTING.md">contributing</a> covers the
+          rest.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Parlour is made in a house in Australia and released under the MIT licence.
+        <a href="https://github.com/mrprkr/parlour">Source</a>,
+        <a href="https://github.com/mrprkr/parlour/issues">issues</a>,
+        <a href="https://www.npmjs.com/package/parlour">npm</a>.
+      </p>
+    </footer>
+
+    <script>
+      // One job: copy the install command. Everything else on the page is a link.
+      const button = document.querySelector(".install");
+      const note = button.querySelector(".copied");
+      button.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(button.dataset.copy);
+          note.textContent = "copied";
+        } catch {
+          note.textContent = "select and copy";
+        }
+        setTimeout(() => (note.textContent = ""), 1800);
+      });
+    </script>
+  </body>
+</html>

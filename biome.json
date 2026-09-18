@@ -4,14 +4,33 @@
     "includes": [
       "packages/**",
       "apps/desktop/src/**",
+      "apps/site/**",
       "scripts/**",
       "!**/dist",
       "!**/node_modules",
       "!**/target"
     ]
   },
-  "formatter": { "indentStyle": "space", "lineWidth": 110 },
-  "linter": { "rules": { "recommended": true, "style": { "noNonNullAssertion": "off" } } },
-  "javascript": { "formatter": { "quoteStyle": "double" } },
-  "css": { "parser": { "tailwindDirectives": true } }
+  "formatter": {
+    "indentStyle": "space",
+    "lineWidth": 110
+  },
+  "linter": {
+    "rules": {
+      "recommended": true,
+      "style": {
+        "noNonNullAssertion": "off"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  }
 }
