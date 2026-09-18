@@ -65,11 +65,15 @@ jobs:
       - name: Build
         run: pnpm -C packages/parlour build
 
+      # Trusted publishing: npm trusts this workflow through the OIDC token
+      # above, so there is no NPM_TOKEN to rotate or leak. The package's
+      # settings on npmjs.com name this repository and this file as its
+      # trusted publisher. npm 11.5.1 or later is needed for it.
       - name: Publish
-        run: npm publish --provenance --access public
+        run: |
+          npm install -g npm@latest
+          npm publish --provenance --access public
         working-directory: packages/parlour
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   app:
     name: Build the app and attach it to the release
