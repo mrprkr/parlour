@@ -8,7 +8,7 @@ question is beyond it, a cloud model steps in, and all it ever gets is the
 sentence you said, never the audio.
 
 You can read the short version at
-[parlour-mrprkr-team.vercel.app](https://parlour-mrprkr-team.vercel.app).
+[heyparlour.app](https://heyparlour.app).
 
 ## What happens when you speak
 
