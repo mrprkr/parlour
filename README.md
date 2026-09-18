@@ -102,6 +102,7 @@ port can turn the heating on and read your shopping list. The details are in
 | [docs/home-assistant.md](docs/home-assistant.md) | The MCP Server integration, the OpenAI Conversation integration, muting, and moving over from the old config. |
 | [docs/desktop.md](docs/desktop.md) | The menu bar app. |
 | [docs/tuning.md](docs/tuning.md) | Which setting to turn when it keeps waking up for the television. |
+| [docs/wake-word.md](docs/wake-word.md) | Training a wake word of your own, and dropping it in. |
 
 ## The repository
 

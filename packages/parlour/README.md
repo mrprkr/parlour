@@ -64,5 +64,6 @@ The rest lives in the repository:
 - [Home Assistant](https://github.com/mrprkr/parlour/blob/main/docs/home-assistant.md)
 - [The menu bar app](https://github.com/mrprkr/parlour/blob/main/docs/desktop.md)
 - [Tuning](https://github.com/mrprkr/parlour/blob/main/docs/tuning.md)
+- [Your own wake word](https://github.com/mrprkr/parlour/blob/main/docs/wake-word.md)
 
 MIT. Copyright (c) 2026 Michael Parker.

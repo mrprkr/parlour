@@ -57,7 +57,8 @@ The stock words are `hey_jarvis`, `alexa` and `hey_mycroft`, and
 `parlour models fetch --wake hey_jarvis,alexa` fetches the ones you name into
 `~/Library/Caches/parlour/models/openwakeword/`. Any openWakeWord model works:
 drop `<word>.onnx` into that directory and add `<word>` to `words`. You can
-have more than one word live at once, for a small cost in CPU.
+have more than one word live at once, for a small cost in CPU. To train a
+word of your own, see [wake-word.md](wake-word.md).
 
 ## The voice
 

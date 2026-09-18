@@ -1,0 +1,74 @@
+# Your own wake word
+
+The stock words are `hey_jarvis`, `alexa` and `hey_mycroft`. If you would
+rather it answered to its own name, train one. openWakeWord makes this an
+hour on a free Colab GPU, and Parlour runs any model the notebook produces:
+the provider in `packages/parlour/src/providers/wake/openwakeword.ts` is the
+same three stage pipeline for every word, so a new word is a new `.onnx`
+file and one line of config.
+
+## Train it
+
+Open the simple notebook, and set the runtime to a GPU (Runtime > Change
+runtime type > T4):
+
+https://colab.research.google.com/drive/1q1oe2zOyZp7UsB3jJiQ1IFn8z5YfjwEb
+
+Fill in the form cell and run everything.
+
+| Field | Try | Why |
+| --- | --- | --- |
+| `target_word` | `hey parlor` | The training clips are synthesised by Piper, which reads spellings literally. The US spelling comes out right; "parlour" is sometimes read as "par-loor". The model learns the sound, not the spelling, so say it however you say it. |
+| `number_of_examples` | `2000` | The default is 1000. More examples cost minutes and tighten the model noticeably. |
+| `number_of_training_steps` | `20000` | The default is 10000. |
+| `false_activation_penalty` | `1500` | Leave it for the first model. Raise it towards 3000 if the result wakes for the television. |
+
+It downloads a couple of gigabytes of speech and noise that does not contain
+your word, generates the clips that do, trains, and writes
+`my_custom_model/hey_parlor.onnx`. Download that from the file browser on
+the left of the notebook.
+
+If the first model is either twitchy or deaf, the
+[full notebook](https://github.com/dscripka/openWakeWord/blob/main/notebooks/automatic_model_training.ipynb)
+is the same process with two extra levers that matter more than any of the
+numbers above: `target_phrase` takes a list of spellings
+(`["hey parlour", "hey parlor", "hey par lur"]`), and
+`custom_negative_phrases` takes things that sound like your word and should
+not fire (`["hey harlow", "hey carla", "parlay", "hey pilot"]`).
+
+## Install it
+
+```bash
+mv ~/Downloads/hey_parlor.onnx ~/Library/Caches/parlour/models/openwakeword/hey_parlour.onnx
+```
+
+The file name, without the `.onnx`, is what goes in the config:
+
+```json
+{ "wake": { "provider": "openwakeword", "words": ["hey_parlour"], "threshold": 0.5, "refractoryMs": 1500 } }
+```
+
+`parlour service restart` picks it up, and `parlour doctor` will say so, or
+name the file it cannot find. Keeping `hey_jarvis` in the list for the first
+day costs a little CPU and gives you a word you know works while you judge
+the new one.
+
+The provider feeds each word the last 16 speech embeddings. Models trained
+by the notebooks for a phrase of a few syllables expect exactly that, but it
+is worth a look before wondering why it is silent:
+
+```bash
+cd packages/parlour && node -e '
+const ort = require("onnxruntime-node");
+ort.InferenceSession.create(process.env.HOME + "/Library/Caches/parlour/models/openwakeword/hey_parlour.onnx")
+  .then((s) => console.log(s.inputNames, s.outputNames))'
+```
+
+## Tune it
+
+Every detection is logged with its score, `"hey_parlour" fired at 0.83 on
+local`, so leave it running and talk to it. Custom models tend to score a
+little lower than the stock ones, so `threshold` can reasonably come down to
+0.4. If it wakes for the room, raise `false_activation_penalty` and retrain
+rather than pushing the threshold much past 0.7, which mostly makes it
+deaf to you as well. The rest of the knobs are in [tuning.md](tuning.md).
