@@ -7,10 +7,10 @@
       "apps/site/**",
       "scripts/**",
       "!**/dist",
-      "!**/node_modules",
-      "!**/target",
       "!**/.next",
-      "!apps/site/next-env.d.ts"
+      "!**/next-env.d.ts",
+      "!**/node_modules",
+      "!**/target"
     ]
   },
   "formatter": {

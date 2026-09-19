@@ -1,28 +1,30 @@
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata, Viewport } from "next";
 import { Young_Serif } from "next/font/google";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import "./globals.css";
 
-const serif = Young_Serif({
+const youngSerif = Young_Serif({
   weight: "400",
   subsets: ["latin"],
-  variable: "--serif-face",
   display: "swap",
+  variable: "--font-young-serif",
 });
+
+const description =
+  "Parlour is a voice assistant for your home that runs on a Mac you already own. A local wake word, local speech to text, a local model with tools, and a cloud model only when it is needed. Open source, MIT.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://heyparlour.app"),
   title: { default: "Parlour", template: "%s - Parlour" },
-  description:
-    "Parlour is a voice assistant for your home that runs on a Mac you already own. A local wake word, local speech to text, a local model with tools, and a cloud model only when it is needed. Open source, MIT.",
+  description,
   openGraph: {
     title: "Parlour",
     description: "A voice assistant for your home, on a Mac you already own.",
     type: "website",
     url: "https://heyparlour.app/",
   },
-  icons: { icon: "/favicon.svg" },
 };
 
 export const viewport: Viewport = {
@@ -34,7 +36,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en-GB" className={serif.variable}>
+    <html lang="en-GB" className={youngSerif.variable}>
       <body>
         <header className="top">
           <Link className="wordmark" href="/">
@@ -55,6 +57,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <a href="https://www.npmjs.com/package/parlour">npm</a>.
           </p>
         </footer>
+        <Analytics />
       </body>
     </html>
   );
