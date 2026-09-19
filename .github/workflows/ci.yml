@@ -39,6 +39,19 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      # Cheap, and it stands between a typo and a tag that fails after half an
+      # hour of release build: the bundler reads these three at the very end,
+      # when it signs, and a missing entitlements file is only a problem then.
+      - name: Check the bundle's signing configuration
+        run: |
+          plutil -lint apps/desktop/src-tauri/Info.plist apps/desktop/src-tauri/Entitlements.plist
+          entitlements="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').bundle.macOS.entitlements")"
+          if [ ! -f "apps/desktop/src-tauri/$entitlements" ]; then
+            echo "tauri.conf.json names $entitlements, which is not next to it." >&2
+            exit 1
+          fi
+          echo "Info.plist and $entitlements are both there and both parse."
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -62,3 +75,49 @@ jobs:
 
       - name: Check the Rust side compiles
         run: pnpm exec nx run desktop:cargo-check
+
+  bundle:
+    name: Build the app bundle
+    # Not on pull requests. A release build with lto on takes long enough that
+    # running it per push would cost more than it catches, and cargo-check
+    # above already covers the Rust. On main it is the release path rehearsed
+    # without the signing, so a tag is not the first time the bundler runs.
+    if: github.event_name != 'pull_request'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache the Cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The same one step the release runs: icons, frontend, binary, .app, dmg.
+      # No Apple variables here, so it signs nothing, which is the point: the
+      # bundle has to build without a certificate as well as with one.
+      - name: Build the app
+        run: pnpm -C apps/desktop build
+
+      # With no credentials this notarises nothing and says so. It runs anyway,
+      # because finding exactly one dmg where the release expects one is worth
+      # knowing before a tag, and because the script is easier to break than
+      # it looks.
+      - name: Check the release would find the dmg
+        run: scripts/notarise.sh
