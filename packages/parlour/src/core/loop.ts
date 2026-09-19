@@ -6,6 +6,16 @@ import type { Message, ToolSpec } from "./types.ts";
 
 const log = logger("loop");
 
+/**
+ * What the local model is told when it asks to hand over and there is nobody
+ * to hand over to. Phrased as an instruction rather than an error, because it
+ * is read by a model deciding what to do next, and "unknown tool" reads as a
+ * dead end.
+ */
+export const NO_CLOUD =
+  "There is no other model to hand this to. Answer it yourself: use the tools you have if they help, " +
+  "and otherwise say what you know in one or two sentences.";
+
 export interface TurnResult {
   text: string;
   /** Set when the model asked to hand the question over. */
@@ -40,12 +50,27 @@ export async function runTurn(opts: {
     if (!completion.toolCalls.length) return { text: completion.text, messages };
 
     for (const call of completion.toolCalls) {
-      if (opts.allowEscalation && call.name === ESCALATE_TOOL) {
-        const question = String(call.args.question ?? "");
-        log.info("escalating:", question);
-        // Drop the escalation call itself: the cloud model gets the question,
-        // not the local model's decision to give up.
-        return { text: completion.text, escalateTo: question, messages: opts.messages };
+      if (call.name === ESCALATE_TOOL) {
+        if (opts.allowEscalation) {
+          const question = String(call.args.question ?? "");
+          log.info("escalating:", question);
+          // Drop the escalation call itself: the cloud model gets the question,
+          // not the local model's decision to give up.
+          return { text: completion.text, escalateTo: question, messages: opts.messages };
+        }
+        // No cloud model, and the model asked for one anyway: small models
+        // trained on this pattern reach for it even when it is not in their
+        // tool list. Answered as a tool result rather than left to the
+        // registry's "no tool called that", so the next round is told what to
+        // do instead of only what went wrong.
+        log.debug("escalation asked for with no cloud model");
+        messages.push({
+          role: "tool",
+          toolCallId: call.id,
+          name: call.name,
+          content: NO_CLOUD,
+        });
+        continue;
       }
 
       log.debug("tool", call.name, call.args);
