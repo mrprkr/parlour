@@ -144,8 +144,16 @@ knowledge it is unsure of. When it does, the rewritten question and the
 session's history go to the cloud model, which has server-side web search
 and no house tools. If the local model throws or times out and
 `llm.cloud.onLocalFailure` is true, the cloud model gets the original
-question instead. With no cloud model configured, failures are final and the
-escalation tool is not offered at all.
+question instead.
+
+With no cloud model configured, three things change together, and they have
+to: the escalation tool is not offered, the persona stops naming it, and
+failures are final. A prompt that tells a small model to hand over while
+giving it nothing to hand over to is how a local-only house ends up
+apologising instead of turning the light off. If the model asks for the
+clever one anyway, which small models trained on the pattern do, the loop
+answers the call with "there is nobody to hand this to, use the tools you
+have" rather than with an unknown-tool error, so the next round does the job.
 
 `core/loop.ts` runs the tool rounds for whichever model is answering, up to
 `llm.maxToolRounds`, and stops with an apology rather than looping forever.
@@ -156,9 +164,9 @@ escalation tool is not offered at all.
 | --- | --- |
 | `config.json`, `secrets.env`, `connectors.json` | `~/.config/parlour/`, or `$PARLOUR_HOME` |
 | Just the config file | `$PARLOUR_CONFIG`, or `parlour --config <file>` |
-| Models | `~/Library/Caches/parlour/models/{openwakeword,whisper}` |
-| Logs | `~/Library/Logs/parlour/{agent,whisper}.log` |
-| LaunchAgent labels | `io.parlour.agent`, `io.parlour.whisper` |
+| Models | `~/Library/Caches/parlour/models/{openwakeword,whisper,llm}` |
+| Logs | `~/Library/Logs/parlour/{agent,whisper,llm}.log` |
+| LaunchAgent labels | `io.parlour.agent`, `io.parlour.whisper`, `io.parlour.llm` |
 | Bonjour service type | `_parlour._tcp` |
 | Keychain service for connector tokens | `parlour-connector` |
 | The desktop app's own settings | `~/Library/Application Support/io.parlour.desktop/settings.json` |
@@ -187,7 +195,7 @@ scraping log text. Without the flag, stdout is a log for a person.
 | Wake word | openWakeWord, ONNX, in process | Free, offline, and it runs in the same Node process as everything else, which is what makes barge-in possible. |
 | Capture | ffmpeg on avfoundation | Nothing to compile, and the only reliable way to pin one input device on macOS. |
 | Speech to text | whisper.cpp `small.en`, kept warm | Loading the model costs more than transcribing a sentence, so it runs as a server. |
-| Model | LM Studio, MLX build | The fastest way to run an 8B model on Apple silicon, and it speaks the OpenAI API, so the runtime stays swappable. |
+| Model | llama.cpp with a Qwen2.5 GGUF, kept warm | It comes with Parlour, so a house answers after `init` rather than after somebody installs LM Studio and remembers to press Start Server. It speaks the OpenAI API, so LM Studio, Ollama or anything else can take its place. |
 | Escalation | Claude with server-side web search | The local model is fast and private but wrong more often. Handing over is cheap; being wrong out loud is not. |
 | Speech | Kokoro 82M, ONNX | Close to a cloud voice, runs in process, and has British voices. `say` is the fallback for when it fails. |
 

@@ -20,6 +20,13 @@ export const OpenAiCompatibleSchema = z.object({
   temperature: z.number().min(0).max(2).default(0.3),
   timeoutMs: z.number().int().positive().default(30000),
   /**
+   * True when Parlour runs this server itself: llama-server, kept warm by
+   * launchd with a model from its own catalogue. It changes nothing about how
+   * the model is talked to and everything about whose fault it is when the
+   * port does not answer, which is what the check below has to say.
+   */
+  managed: z.boolean().default(false),
+  /**
    * The name of an environment variable holding a bearer token, for a hosted
    * endpoint. The key itself stays out of config, like every other secret.
    */
@@ -33,6 +40,8 @@ export interface LocalModelOptions {
   model: string;
   temperature: number;
   timeoutMs: number;
+  /** Whether Parlour is the one meant to be running this server. */
+  managed?: boolean;
   apiKey?: string;
   log?: Logger;
 }
@@ -109,11 +118,17 @@ export class OpenAiCompatibleModel implements ChatModel {
     } catch {
       served = null;
     }
+    // A server that is not answering is the usual failure, and what to do
+    // about it depends on whose server it is: Parlour's own is a service to
+    // restart, anybody else's is a window to go and open.
+    const down = this.#opts.managed
+      ? `${baseUrl} is not answering. parlour restart, or parlour service logs for why it stopped.`
+      : `${baseUrl} is not answering. Start the server in LM Studio, or run parlour init to have Parlour run one.`;
     const detail = served
       ? served.length
         ? `served: ${served.join(", ")}. Configured: ${model}.`
         : "the server is up but has no model loaded."
-      : `${baseUrl} is not answering. Start the server in LM Studio.`;
+      : down;
     return [{ name: "local model", status: served?.includes(model) ? "ok" : "fail", detail }];
   }
 

@@ -95,12 +95,21 @@ export function createLaunchd(options: LaunchdOptions = LaunchdSchema.parse({}))
    * `bootstrap` is the modern way in and `load` is what older systems answer
    * to. Both are tried because the failure mode of guessing wrong is a service
    * that silently never starts.
+   *
+   * "stop" is "unload" without the `-w`: the old flag writes the job into
+   * launchd's disabled list, which survives a reboot, and a person who asked
+   * for it to stop until the next login would find it never coming back.
    */
-  async function launch(action: "load" | "unload", label: string): Promise<boolean> {
+  async function launch(action: "load" | "unload" | "stop", label: string): Promise<boolean> {
     const file = plistPath(label);
     const domain = `gui/${process.getuid?.() ?? 0}`;
     const modern = action === "load" ? ["bootstrap", domain, file] : ["bootout", `${domain}/${label}`];
-    const legacy = action === "load" ? ["load", "-w", file] : ["unload", "-w", file];
+    const legacy =
+      action === "load"
+        ? ["load", "-w", file]
+        : action === "stop"
+          ? ["unload", file]
+          : ["unload", "-w", file];
     for (const args of [modern, legacy]) {
       try {
         await run(options.launchctl, args);
@@ -159,6 +168,17 @@ export function createLaunchd(options: LaunchdOptions = LaunchdSchema.parse({}))
         removed.push(label);
       }
       return removed;
+    },
+
+    async stop(specs) {
+      // Booted out, not deleted: the plist stays, so launchd starts it again
+      // at the next login and `parlour service status` still lists it. That is
+      // the difference a person means between "stop it" and "get rid of it".
+      for (const spec of specs) {
+        if (!existsSync(plistPath(spec.label))) continue;
+        await launch("stop", spec.label);
+      }
+      return Promise.all(specs.map(state));
     },
 
     async restart(specs) {

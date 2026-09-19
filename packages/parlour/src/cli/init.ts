@@ -5,6 +5,7 @@ import { hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { type Config, loadConfig, parseConfig, writeConfig } from "../core/config.ts";
+import { LOCAL_MODELS, MANAGED_LLM_BASE_URL, suggestLocalModel, thisMachine } from "../core/localmodel.ts";
 import { isLegacyConfig, migrateLegacyConfig, migrateLegacyEnv } from "../core/migrate.ts";
 import type { Paths } from "../core/paths.ts";
 import { findOnPath } from "../core/process.ts";
@@ -15,9 +16,10 @@ import { kokoroSchema } from "../providers/tts/kokoro.ts";
 import { findServer } from "../server/discovery.ts";
 import { type Command, parseCli } from "./args.ts";
 import { diagnose } from "./doctor.ts";
+import { setupHomeAssistant } from "./homeassistant.ts";
 import { fetchModels } from "./models.ts";
 import { formatChecks, headline, humanReporter, porcelainReporter, type Reporter } from "./output.ts";
-import { ask, canAsk, confirm, secret } from "./prompts.ts";
+import { ask, canAsk, confirm, secret, select } from "./prompts.ts";
 import { describeState, parlourBin } from "./service.ts";
 import { runSetup, stream } from "./setup.ts";
 
@@ -27,6 +29,7 @@ const USAGE = [
   "parlour init --no-deps     never touch Homebrew",
   "parlour init --no-service  never write a LaunchAgent, for an experiment in another PARLOUR_HOME",
   "parlour init --porcelain   one JSON line per event, for the desktop app",
+  "parlour init --local-model auto|none|<id>   answer the local model question without a terminal",
 ];
 
 const run = promisify(execFile);
@@ -42,6 +45,15 @@ interface InitOptions {
    * would otherwise replace the one running the real house.
    */
   service: boolean;
+  /**
+   * The local model question, answered on the command line: "auto" is the
+   * largest model this Mac can hold, "none" leaves the model server to
+   * somebody else, and anything else names a catalogue entry. It exists for
+   * the desktop app and for a script, neither of which has a terminal to be
+   * asked in, and both of which should be able to say yes to the download
+   * rather than only to be told it did not happen.
+   */
+  localModel?: string;
   report: Reporter;
 }
 
@@ -67,12 +79,14 @@ export const command: Command = {
       "no-deps": { type: "boolean" },
       "no-service": { type: "boolean" },
       porcelain: { type: "boolean" },
+      "local-model": { type: "string" },
     });
     const report = values.porcelain ? porcelainReporter() : humanReporter();
     const options: InitOptions = {
       yes: values.yes === true,
       deps: values["no-deps"] !== true,
       service: values["no-service"] !== true,
+      localModel: typeof values["local-model"] === "string" ? values["local-model"] : undefined,
       report,
     };
     try {
@@ -101,10 +115,16 @@ async function init(paths: Paths, options: InitOptions): Promise<void> {
   report.ok("One box in the house runs the models and answers. Everything else");
   report.ok("with a microphone is a satellite: it streams to that box and plays");
   report.ok("back what it says. A satellite needs no models, no keys and no GPU.");
-  const role = yes ? config.role : await ask("server or satellite", config.role);
-  if (role !== "server" && role !== "satellite") {
-    throw new Error(`That is not a role. It is "server" or "satellite", not "${role}".`);
-  }
+  const role = yes
+    ? config.role
+    : await select(
+        "What is this machine",
+        [
+          { value: "server" as const, label: "Server", hint: "the models, the tools and the answers" },
+          { value: "satellite" as const, label: "Satellite", hint: "a microphone in another room" },
+        ],
+        config.role,
+      );
   set(raw, ["role"], role);
   if (role === "satellite") {
     const room = yes
@@ -114,34 +134,13 @@ async function init(paths: Paths, options: InitOptions): Promise<void> {
   }
   config = parseConfig(raw);
 
-  // ------------------------------------------------------------ the mechanics
-
-  if (!(await runSetup({ paths, config, deps: options.deps, service: options.service }, report))) {
-    report.warn("Some of the setup did not finish. The check at the end will say what.");
-  }
-  if (options.deps && role === "server" && (await findOnPath("brew"))) {
-    // A multi-gigabyte cask, so it is offered only to a person who can say
-    // no. The app runs this without a terminal and makes the offer itself.
-    if (existsSync("/Applications/LM Studio.app")) {
-      report.ok("have LM Studio");
-    } else if (report.porcelain || !canAsk()) {
-      report.warn("LM Studio is not installed. Without it there is no local model.");
-    } else if (await confirmOr(yes, "Install LM Studio? It is what runs the local model.")) {
-      if ((await stream("brew", ["install", "--cask", "lm-studio"], report)) !== 0) {
-        report.warn("could not install LM Studio");
-      }
-    } else {
-      report.warn("Without it there is no local model, and every question goes to the cloud.");
-    }
-  }
-
   // ----------------------------------------------------------------- secrets
 
   // Read once, for both roles: a satellite needs the server's token and
   // nothing else, and losing that distinction is how a satellite ends up
   // generating a token of its own and never being let in.
   const secrets = loadSecrets(paths);
-  const house = config.integrations["home-assistant"] as { url?: string } | undefined;
+  const house = config.integrations["home-assistant"] as { url?: string; muteEntity?: string } | undefined;
   let haToken = secrets.haToken ?? "";
   let token = secrets.token ?? "";
   // The Anthropic key alone is read from the file and not the shell.
@@ -151,6 +150,22 @@ async function init(paths: Paths, options: InitOptions): Promise<void> {
   // Parlour's own, so finding them in the environment is no accident.
   let anthropicKey = loadSecrets(paths, {}).anthropicKey ?? "";
   const ambientKey = secrets.anthropicKey ?? "";
+
+  // ---------------------------------------------------------------- the brains
+
+  // Before the mechanics, because the answers decide what the mechanics do:
+  // which Homebrew formulae, which model file to fetch, and whether there is a
+  // model server for launchd to keep warm.
+  if (role === "server") {
+    anthropicKey = await brains(raw, config, { ...options, anthropicKey, ambientKey });
+    config = parseConfig(raw);
+  }
+
+  // ------------------------------------------------------------ the mechanics
+
+  if (!(await runSetup({ paths, config, deps: options.deps, service: options.service }, report))) {
+    report.warn("Some of the setup did not finish. The check at the end will say what.");
+  }
 
   if (role === "satellite") {
     report.step("The server");
@@ -179,55 +194,35 @@ async function init(paths: Paths, options: InitOptions): Promise<void> {
     if (!token) report.warn("Without it the server will refuse this satellite.");
   } else {
     if (house) {
-      report.step("Home Assistant");
-      report.ok("A long lived access token: your profile page in Home Assistant,");
-      report.ok("Security tab, right at the bottom. It is the whole house, so it goes");
-      report.ok("in secrets.env and never into git.");
-      const url = yes
-        ? (house.url ?? "http://homeassistant.local:8123")
-        : await ask("Home Assistant address", house.url ?? "http://homeassistant.local:8123");
       // A fresh file has no `integrations` yet, and writing only the house
       // into it would pin the block to the house alone: the defaults apply
       // to a missing key, not to a present one. Seed it with every default
       // integration first, so a connector added later is actually loaded. A
       // block that is already there is the person's own and is left alone.
       if (!("integrations" in raw)) raw.integrations = structuredClone(config.integrations);
-      set(raw, ["integrations", "home-assistant", "url"], url);
-      haToken = (await keepOrAsk("Home Assistant token", haToken, yes)).value;
-      if (haToken) {
-        if (await reachable(`${url.replace(/\/+$/, "")}/api/`, haToken)) report.ok(`reached ${url}`);
-        else
-          report.warn(`Could not reach ${url} with that token. Carrying on; parlour doctor will say so too.`);
-      }
-    }
-
-    if (config.llm.cloud.provider === "anthropic") {
-      report.step("Cloud escalation");
-      report.ok("The local model hands over anything it is not confident about.");
-      report.ok("Leave this empty to run local only.");
-      // Not a secret `--yes` stops for: the house works without it. The
-      // switch is turned on only by a key given this run, never by one kept
-      // from last time, and a key found in the shell is offered rather than
-      // taken, so a run that asked nothing (no terminal counts as asking
-      // nothing) cannot turn the cloud on behind someone's back.
-      if (yes || !canAsk()) {
-        if (anthropicKey) report.ok("keeping the existing key");
-        else if (ambientKey)
-          report.ok(
-            "ANTHROPIC_API_KEY is in this shell but not in secrets.env, so it is left there. " +
-              "parlour secrets set ANTHROPIC_API_KEY if the house should use it.",
-          );
-        else report.ok("no key, so the local model is on its own");
+      const answers = await setupHomeAssistant({
+        url: house.url ?? "",
+        token: haToken,
+        muteEntity: house.muteEntity ?? "",
+        yes,
+        report,
+      });
+      haToken = answers.token;
+      if (!answers.enabled) {
+        // Said no to the house. Left out rather than left broken: an
+        // integration that is present and cannot be reached is a failing
+        // check on every doctor run for something nobody has. A token
+        // already in secrets.env is left where it is: nothing reads it now,
+        // and init has no business deleting a credential it did not create.
+        delete (raw.integrations as Raw)["home-assistant"];
       } else {
-        const answer =
-          !anthropicKey &&
-          ambientKey &&
-          (await confirm("ANTHROPIC_API_KEY is set in this shell. Use it here?"))
-            ? { value: ambientKey, entered: true }
-            : await keepOrAsk("Anthropic API key", anthropicKey, yes);
-        anthropicKey = answer.value;
-        if (answer.entered) set(raw, ["llm", "cloud", "enabled"], true);
+        set(raw, ["integrations", "home-assistant", "url"], answers.url);
+        // Only when there is one: an empty string here would be an explicit
+        // "no mute entity" in a file that is meant to stay readable.
+        if (answers.muteEntity)
+          set(raw, ["integrations", "home-assistant", "muteEntity"], answers.muteEntity);
       }
+      config = parseConfig(raw);
     }
 
     report.step("The rest of the house");
@@ -247,21 +242,39 @@ async function init(paths: Paths, options: InitOptions): Promise<void> {
   // ------------------------------------------------------------------- voice
 
   report.step("Voice");
-  // Both roles need a microphone. Only the server needs a wake word, a
-  // speaking voice and a model: a satellite streams what it hears and plays
-  // back what it is sent.
-  if (!yes && canAsk()) {
-    for (const device of await audioInputs()) report.ok(`  ${device}`);
-  }
-  const inputDevice = yes
-    ? config.audio.inputDevice
-    : await ask('Input device (":0" is the default microphone)', config.audio.inputDevice);
+  // Both roles need a microphone. Only the server needs a wake word and a
+  // speaking voice: a satellite streams what it hears and plays back what it
+  // is sent.
+  const devices = yes || !canAsk() ? [] : await audioInputs();
+  const inputDevice = devices.length
+    ? await select(
+        "Input device",
+        [
+          ...devices.map((device) => ({ value: device.index, label: device.name })),
+          { value: config.audio.inputDevice, label: "Leave it as it is", hint: config.audio.inputDevice },
+        ],
+        config.audio.inputDevice,
+      )
+    : yes
+      ? config.audio.inputDevice
+      : await ask('Input device (":0" is the default microphone)', config.audio.inputDevice);
   set(raw, ["audio", "inputDevice"], inputDevice);
   report.ok(`microphone ${inputDevice}`);
 
   const word = config.wake.words[0] ?? "hey_jarvis";
   if (role === "server") {
-    const wake = yes ? word : await ask("Wake word (hey_jarvis, alexa, hey_mycroft)", word);
+    const wake = yes
+      ? word
+      : await select(
+          "Wake word",
+          [
+            { value: "hey_jarvis", label: "Hey Jarvis" },
+            { value: "alexa", label: "Alexa" },
+            { value: "hey_mycroft", label: "Hey Mycroft" },
+            { value: word, label: "Leave it as it is", hint: word },
+          ],
+          word,
+        );
     // The question is about the first word only. A list that is already set
     // stays as it is unless the answer changed it, so a re-run under --yes
     // cannot quietly trim a second word off.
@@ -278,21 +291,19 @@ async function init(paths: Paths, options: InitOptions): Promise<void> {
     const current = (config.tts as { voice?: string }).voice ?? kokoroSchema.parse({}).voice;
     const voice = yes
       ? current
-      : await ask("Speaking voice (bf_emma, bf_isabella, bm_george, bm_lewis)", current);
+      : await select(
+          "Speaking voice",
+          [
+            { value: "bf_emma", label: "Emma", hint: "British, warm" },
+            { value: "bf_isabella", label: "Isabella", hint: "British, brighter" },
+            { value: "bm_george", label: "George", hint: "British, low" },
+            { value: "bm_lewis", label: "Lewis", hint: "British, clipped" },
+            { value: current, label: "Leave it as it is", hint: current },
+          ],
+          current,
+        );
     set(raw, ["tts", "voice"], voice);
     report.ok(`wake word ${wake}, voice ${voice}`);
-
-    if (config.llm.local.provider === "openai-compatible") {
-      const local = config.llm.local as { baseUrl?: string; model?: string };
-      const baseUrl = local.baseUrl ?? "http://127.0.0.1:1234/v1";
-      const model = local.model ?? "qwen3-8b-mlx";
-      set(raw, ["llm", "local", "baseUrl"], yes ? baseUrl : await ask("Local model server", baseUrl));
-      set(
-        raw,
-        ["llm", "local", "model"],
-        yes ? model : await ask("Local model id, as LM Studio reports it", model),
-      );
-    }
   }
 
   // ------------------------------------------------------------------- write
@@ -384,6 +395,169 @@ async function init(paths: Paths, options: InitOptions): Promise<void> {
     afterword(config, paths, token);
   }
   report.done(broken.length > 0);
+}
+
+/**
+ * `--local-model` as an answer to the two questions in the local model step.
+ * Undefined means nobody said, so the questions are asked as usual. A name
+ * that is not on the list is a mistake worth stopping for: the alternative is
+ * quietly setting up a different model from the one that was asked for.
+ */
+function askedFor(flag: string | undefined): { runner: "parlour" | "elsewhere"; model?: string } | null {
+  if (flag === undefined) return null;
+  if (flag === "none") return { runner: "elsewhere" };
+  if (flag === "auto") return { runner: "parlour", model: suggestLocalModel().id };
+  const model = LOCAL_MODELS.find((entry) => entry.id === flag);
+  if (!model) {
+    throw new Error(
+      `No local model called "${flag}". It is auto, none, or one of: ` +
+        `${LOCAL_MODELS.map((entry) => entry.id).join(", ")}.`,
+    );
+  }
+  return { runner: "parlour", model: model.id };
+}
+
+interface BrainsOptions extends InitOptions {
+  /** The key in secrets.env, which is the only one the house may use. */
+  anthropicKey: string;
+  /** A key in this shell, offered rather than taken. */
+  ambientKey: string;
+}
+
+/**
+ * Where the answers come from: a model on this machine, and optionally a
+ * larger one in the cloud for the questions it cannot manage.
+ *
+ * Parlour can bring the local half itself now, which is the difference
+ * between a house that works after `init` and one that works after `init`
+ * plus installing LM Studio, downloading a model in it, and remembering to
+ * press Start Server. LM Studio is still an answer for anyone who wants the
+ * window; so is a server already running somewhere else.
+ *
+ * Returns the Anthropic key to write, which is the one thing here that is a
+ * secret rather than config.
+ */
+async function brains(raw: Raw, config: Config, options: BrainsOptions): Promise<string> {
+  const { report, yes } = options;
+  let anthropicKey = options.anthropicKey;
+
+  if (config.llm.local.provider === "openai-compatible") {
+    const local = config.llm.local as { baseUrl?: string; model?: string; managed?: boolean };
+    report.step("The local model");
+    report.ok("Nearly every request is answered here, on this machine: the lights,");
+    report.ok("the timers, the questions about the house. Nothing leaves the box.");
+
+    const machine = thisMachine();
+    const suggestion = suggestLocalModel(machine);
+    const hasLmStudio = existsSync("/Applications/LM Studio.app");
+    const asked = askedFor(options.localModel);
+    const runner = asked
+      ? asked.runner
+      : yes || !canAsk()
+        ? local.managed === true
+          ? "parlour"
+          : "elsewhere"
+        : await select(
+            "Who runs it",
+            [
+              {
+                value: "parlour" as const,
+                label: "Parlour",
+                hint: "llama.cpp and a model, kept running for you",
+              },
+              {
+                value: "elsewhere" as const,
+                label: "Something else",
+                hint: hasLmStudio ? "LM Studio, which you have" : "LM Studio, Ollama, a box in the cupboard",
+              },
+            ],
+            local.managed === true ? "parlour" : "elsewhere",
+          );
+
+    if (runner === "parlour") {
+      report.ok(
+        `${Math.round(machine.memoryGb)} GB of memory: ${suggestion.label} is the largest this Mac ` +
+          "should hold comfortably.",
+      );
+      const chosen = asked?.model
+        ? asked.model
+        : yes || !canAsk()
+          ? // A re-run must not quietly swap the model out from under a house
+            // that is working: the configured one wins when it is still on the
+            // list, and the suggestion is only the default for a fresh setup.
+            (LOCAL_MODELS.find((model) => model.id === local.model)?.id ?? suggestion.id)
+          : await select(
+              "Which model",
+              LOCAL_MODELS.map((model) => ({
+                value: model.id,
+                label: model.label,
+                hint: `${model.sizeGb} GB, ${model.needsGb} GB machine: ${model.note}`,
+              })),
+              local.model ?? suggestion.id,
+            );
+      const model = LOCAL_MODELS.find((entry) => entry.id === chosen) ?? suggestion;
+      set(raw, ["llm", "local", "managed"], true);
+      set(raw, ["llm", "local", "model"], model.id);
+      // Moved off 1234 so a running LM Studio and this can both exist. A
+      // baseUrl already pointing somewhere else is left alone: somebody who
+      // moved the port meant it.
+      if (!local.baseUrl || local.baseUrl === "http://127.0.0.1:1234/v1") {
+        set(raw, ["llm", "local", "baseUrl"], MANAGED_LLM_BASE_URL);
+      }
+      report.ok(`${model.label} it is. The download and the server come next.`);
+    } else {
+      set(raw, ["llm", "local", "managed"], false);
+      const baseUrl = local.baseUrl ?? "http://127.0.0.1:1234/v1";
+      const model = local.model ?? "qwen3-8b-mlx";
+      set(raw, ["llm", "local", "baseUrl"], yes ? baseUrl : await ask("Local model server", baseUrl));
+      set(
+        raw,
+        ["llm", "local", "model"],
+        yes ? model : await ask("Local model id, as the server reports it", model),
+      );
+      if (options.deps && !hasLmStudio && !yes && canAsk() && (await findOnPath("brew"))) {
+        // A multi-gigabyte cask, so it is only ever offered, never taken.
+        if (await confirm("Install LM Studio? It is the friendliest of these to drive.", false)) {
+          if ((await stream("brew", ["install", "--cask", "lm-studio"], report)) !== 0) {
+            report.warn("could not install LM Studio");
+          }
+        }
+      }
+      report.ok("Start that server before asking anything. The check at the end says whether it answered.");
+    }
+  }
+
+  if (config.llm.cloud.provider === "anthropic") {
+    report.step("Cloud escalation");
+    report.ok("The local model hands over anything it is not confident about.");
+    report.ok("Leave this empty to run local only: it keeps the tools and answers");
+    report.ok("everything itself, and never sends a word out of the house.");
+    // Not a secret `--yes` stops for: the house works without it. The
+    // switch is turned on only by a key given this run, never by one kept
+    // from last time, and a key found in the shell is offered rather than
+    // taken, so a run that asked nothing (no terminal counts as asking
+    // nothing) cannot turn the cloud on behind someone's back.
+    if (yes || !canAsk()) {
+      if (anthropicKey) report.ok("keeping the existing key");
+      else if (options.ambientKey)
+        report.ok(
+          "ANTHROPIC_API_KEY is in this shell but not in secrets.env, so it is left there. " +
+            "parlour secrets set ANTHROPIC_API_KEY if the house should use it.",
+        );
+      else report.ok("no key, so the local model is on its own");
+    } else {
+      const answer =
+        !anthropicKey &&
+        options.ambientKey &&
+        (await confirm("ANTHROPIC_API_KEY is set in this shell. Use it here?"))
+          ? { value: options.ambientKey, entered: true }
+          : await keepOrAsk("Anthropic API key", anthropicKey, yes);
+      anthropicKey = answer.value;
+      if (answer.entered) set(raw, ["llm", "cloud", "enabled"], true);
+    }
+  }
+
+  return anthropicKey;
 }
 
 /** What to try next, printed once at the end for a person to read. */
@@ -506,33 +680,40 @@ function confirmOr(yes: boolean, question: string): Promise<boolean> {
   return yes ? Promise.resolve(true) : confirm(question);
 }
 
-/** `[0] MacBook Pro Microphone` lines from ffmpeg, or nothing when it is not installed. */
-async function audioInputs(): Promise<string[]> {
+export interface AudioInput {
+  /** As `audio.inputDevice` wants it: avfoundation's index, with the colon. */
+  index: string;
+  name: string;
+}
+
+/**
+ * The microphones ffmpeg can see, so the device can be chosen from a list
+ * rather than guessed at as a number. Nothing when ffmpeg is not installed,
+ * which the Tools step has already complained about.
+ */
+export function parseAudioInputs(ffmpegOutput: string): AudioInput[] {
+  const lines = ffmpegOutput.split("\n");
+  const start = lines.findIndex((line) => /audio devices/i.test(line));
+  if (start < 0) return [];
+  const inputs: AudioInput[] = [];
+  for (const line of lines.slice(start + 1)) {
+    // `[AVFoundation indev @ 0x...] [0] MacBook Pro Microphone`, and the video
+    // list above it has the same shape, which is why only what follows the
+    // audio heading is read.
+    const match = /\[AVFoundation[^\]]*\]\s*\[(\d+)\]\s*(.+?)\s*$/.exec(line);
+    if (!match) break;
+    inputs.push({ index: `:${match[1]}`, name: match[2] as string });
+  }
+  return inputs;
+}
+
+async function audioInputs(): Promise<AudioInput[]> {
   try {
     await run("ffmpeg", ["-f", "avfoundation", "-list_devices", "true", "-i", ""]);
     return [];
   } catch (error) {
     // ffmpeg exits non-zero after listing, and the list is on stderr.
-    const text = (error as { stderr?: string }).stderr ?? "";
-    const lines = text.split("\n");
-    const start = lines.findIndex((line) => /audio devices/i.test(line));
-    if (start < 0) return [];
-    return lines
-      .slice(start + 1)
-      .map((line) => /\[AVFoundation[^\]]*\]\s*(\[\d+\].*)$/.exec(line)?.[1])
-      .filter((line): line is string => Boolean(line));
-  }
-}
-
-async function reachable(url: string, token: string): Promise<boolean> {
-  try {
-    const response = await fetch(url, {
-      headers: { authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(6000),
-    });
-    return response.ok;
-  } catch {
-    return false;
+    return parseAudioInputs((error as { stderr?: string }).stderr ?? "");
   }
 }
 

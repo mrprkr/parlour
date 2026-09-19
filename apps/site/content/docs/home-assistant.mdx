@@ -17,10 +17,35 @@ the system prompt, and a mute switch. It is on by default and lives under
 
 The token is `HA_TOKEN` in `secrets.env`. It is a long-lived access token
 from your profile page in Home Assistant, on the Security tab, right at the
-bottom. `parlour init` asks for it and checks it against your instance, or
-`parlour secrets set HA_TOKEN` takes it on stdin. That token controls the
-whole house, so it stays in `secrets.env` with mode 600 and never goes into
-git.
+bottom. That token controls the whole house, so it stays in `secrets.env`
+with mode 600 and never goes into git.
+
+## Setting it up
+
+`parlour init` has a part of its own for this, because there are four ways
+for it to go wrong and all four look identical from the outside: the wrong
+address, no token, a token for something else, and the MCP Server
+integration never added. So each one is checked as it is answered:
+
+1. **The address.** It tries the one in your config, then
+   `homeassistant.local:8123`, `homeassistant:8123` and `localhost:8123`,
+   and takes the first that answers the way a Home Assistant does: `401`
+   from `/api/` without a token, which a router's own login page does not.
+   Nothing found means typing it, and a wrong one is not accepted quietly.
+2. **The token.** It prints the exact page to make one on
+   (`<your url>/profile/security`), reads it without echoing it, and checks
+   it against `/api/` before moving on. Three goes: a pasted token is easy
+   to truncate.
+3. **The MCP Server integration.** If `<url>/mcp_server/sse` does not
+   answer, it says where to add it and offers to look again once you have.
+4. **The mute entity**, if you want one.
+
+Say no to the first question and the house is left out of the config
+entirely, rather than left in it and failing every `parlour doctor` run for
+something you do not have. Run `init` again whenever you change your mind:
+every answer defaults to what is already set, and a token that still works
+is kept rather than asked for twice. `parlour secrets set HA_TOKEN` takes
+one on stdin if you would rather not run the whole thing.
 
 ## What Parlour can do with it
 

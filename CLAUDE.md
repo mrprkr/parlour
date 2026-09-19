@@ -35,7 +35,9 @@ never run `init` without `--no-service` against a scratch home.
 
 Desktop app (`apps/desktop`, Tauri + React + Tailwind): `pnpm -C apps/desktop app` for the window
 with live reload; `pnpm exec nx run desktop:cargo-check` for the Rust side. It only ever shells out
-to the `parlour` CLI, so a capability the app needs must exist in the CLI first.
+to the `parlour` CLI, so a capability the app needs must exist in the CLI first. Release builds are
+signed and notarised: `src-tauri/Entitlements.plist` and the `macOS` block in `tauri.conf.json` are
+what allow it, and `scripts/notarise.sh` does the dmg, which Tauri signs but does not notarise.
 
 Site (`apps/site`, Next.js): the front page in `app/page.tsx`, the docs in `content/docs/*.mdx` served
 by `app/docs/[slug]` from the list in `app/docs/pages.ts`, looks in `app/globals.css`, header, footer,

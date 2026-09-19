@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { parseConfig } from "../core/config.ts";
-import { HOMEBREW_FORMULAE, modelsFor } from "./setup.ts";
+import { formulaeFor, HOMEBREW_FORMULAE, localModelFor, modelsFor } from "./setup.ts";
 
 test("setup never asks Homebrew for node", () => {
   // Node 22 is the stated prerequisite, so it is already there by the time
@@ -24,6 +24,26 @@ test("both READMEs name Homebrew as a prerequisite next to Node", async () => {
     assert.ok(prerequisites, `${readme} states the Node prerequisite`);
     assert.match(prerequisites, /Homebrew/, `${readme} names Homebrew next to Node`);
   }
+});
+
+test("llama.cpp is installed only for a house that asked Parlour to run the model", () => {
+  // Somebody pointing llm.local.baseUrl at LM Studio, at Ollama or at a box
+  // in the cupboard already has a server; a second one is a formula and a
+  // gigabyte of weights they did not ask for.
+  assert.deepEqual(formulaeFor(parseConfig({})), ["ffmpeg", "whisper-cpp"]);
+  assert.equal(localModelFor(parseConfig({})), null);
+
+  const managed = parseConfig({ llm: { local: { managed: true, model: "qwen2.5-7b-instruct" } } });
+  assert.ok(formulaeFor(managed).includes("llama.cpp"));
+  assert.equal(localModelFor(managed)?.file, "Qwen2.5-7B-Instruct-Q4_K_M.gguf");
+  assert.equal(modelsFor(managed)?.llm?.id, "qwen2.5-7b-instruct");
+
+  // A satellite has no model server of its own, whatever the llm block says.
+  assert.ok(!formulaeFor(parseConfig({ role: "satellite", ...{} })).includes("llama.cpp"));
+
+  // A file dropped in by hand is not ours to re-download.
+  const mine = parseConfig({ llm: { local: { managed: true, model: "something-of-my-own" } } });
+  assert.equal(localModelFor(mine), null);
 });
 
 test("setup fetches no models for a satellite unless the wake word runs there", () => {

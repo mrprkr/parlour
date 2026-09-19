@@ -190,3 +190,31 @@ test("Router says Done. when the model says nothing", async () => {
   const r = router({ local: new FakeChatModel([say("")]) });
   assert.equal((await r.ask("turn it off")).text, "Done.");
 });
+
+test("the persona stops naming the escalation tool when there is no cloud model", async () => {
+  const alone = new FakeChatModel([say("x")]);
+  await router({ local: alone }).ask("hi");
+  const system = alone.calls[0]?.messages[0] as { content: string };
+  assert.doesNotMatch(system.content, new RegExp(ESCALATE_TOOL));
+  assert.match(system.content, /only model in this house/);
+
+  const paired = new FakeChatModel([say("x")]);
+  await router({ local: paired, cloud: new FakeChatModel([]) }).ask("hi");
+  const withCloud = paired.calls[0]?.messages[0] as { content: string };
+  assert.match(withCloud.content, new RegExp(ESCALATE_TOOL));
+});
+
+test("a local-only house still runs its tools when the model reaches for the clever one", async () => {
+  // The escalation call is answered rather than refused, so the round after
+  // it is the model doing the job with what it has.
+  const local = new FakeChatModel([
+    escalate("who can do this"),
+    { text: "", toolCalls: [{ id: "2", name: houseTool.name, args: {} }] },
+    say("Done."),
+  ]);
+  const answer = await router({ local }).ask("turn the hall light off");
+  assert.deepEqual(answer, { text: "Done.", via: "local" });
+  const told = local.calls[1]?.messages.at(-1) as { role: string; content: string };
+  assert.equal(told.role, "tool");
+  assert.match(told.content, /no other model/);
+});

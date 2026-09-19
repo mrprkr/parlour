@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Notarising a build means signing it with the hardened runtime, and the
+    hardened runtime refuses the microphone to an app that has not asked for
+    it here. Info.plist says the sentence the system shows; this says the app
+    is allowed to be asked about at all, and without it the prompt never
+    appears and recording fails with no reason given.
+
+    Parlour records in ffmpeg rather than in this process, but the child is
+    not the process the system asks about: the permission is attributed to
+    the app that started it, so the entitlement belongs here too.
+  -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+</dict>
+</plist>

@@ -138,6 +138,8 @@ test("--help lists the commands and an unknown command fails with one line", asy
   for (const command of [
     "init",
     "start",
+    "stop",
+    "restart",
     "text",
     "doctor",
     "service",
@@ -315,6 +317,56 @@ test("init --porcelain --yes --no-deps in a temp home writes config without touc
 
   // The app owns the agent under --porcelain, so no agent LaunchAgent is written.
   assert.equal(existsSync(join(home, "Library", "LaunchAgents", "io.parlour.agent.plist")), false);
+});
+
+test("init --local-model answers the model question without a terminal", async () => {
+  // The desktop app and a script have no terminal to be asked in, and both
+  // should be able to say yes to the bundled model rather than only to be
+  // told it did not happen.
+  const configDir = join(home, "config");
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(
+    join(configDir, "config.json"),
+    JSON.stringify({ integrations: {}, search: { provider: "none" }, llm: { cloud: { enabled: false } } }),
+  );
+  const read = () =>
+    JSON.parse(readFileSync(join(configDir, "config.json"), "utf8")) as {
+      llm: { local?: { managed?: boolean; model?: string; baseUrl?: string } };
+    };
+
+  const auto = await parlour(
+    ["init", "--porcelain", "--yes", "--no-deps", "--no-service", "--local-model", "auto"],
+    {
+      env: { PARLOUR_TOKEN: "net-secret", PARLOUR_SKIP_MODELS: "1" },
+    },
+  );
+  assert.equal(auto.code, 0, auto.stderr);
+  const managed = read().llm.local;
+  assert.equal(managed?.managed, true);
+  assert.match(String(managed?.model), /^qwen/, `a catalogue model: ${managed?.model}`);
+  // Its own port, so a running LM Studio on 1234 and this can both exist.
+  assert.equal(managed?.baseUrl, "http://127.0.0.1:8920/v1");
+
+  const none = await parlour(
+    ["init", "--porcelain", "--yes", "--no-deps", "--no-service", "--local-model", "none"],
+    {
+      env: { PARLOUR_TOKEN: "net-secret", PARLOUR_SKIP_MODELS: "1" },
+    },
+  );
+  assert.equal(none.code, 0, none.stderr);
+  assert.equal(read().llm.local?.managed, false);
+
+  // A name that is not on the list stops the run rather than quietly setting
+  // up a different model from the one that was asked for.
+  const bogus = await parlour(
+    ["init", "--porcelain", "--no-deps", "--no-service", "--local-model", "llama-9000"],
+    {
+      env: { PARLOUR_SKIP_MODELS: "1" },
+    },
+  );
+  assert.equal(bogus.code, 1);
+  assert.match(bogus.stderr, /No local model called "llama-9000"/);
+  assert.match(bogus.stderr, /auto, none, or one of/);
 });
 
 test("init on a file with no integrations block writes every default integration, not only the house", async () => {
@@ -560,6 +612,41 @@ test("doctor --json reports checks and exits 1 when something fails", async () =
   );
   // No models and no whisper on a fresh machine, so this is not a clean bill.
   assert.equal(run.code, checks.some((check) => check.status === "fail") ? 1 : 0);
+});
+
+test("stop and restart say what they would have stopped when nothing is installed", async () => {
+  // The stub answers "not loaded" whatever the host's launchd has. Neither
+  // command may invent a job: a person who runs the agent under the menu bar
+  // app has nothing here to stop, and should be told where to look instead.
+  const stopped = await parlour(["stop"]);
+  assert.equal(stopped.code, 0, stopped.stderr);
+  assert.match(stopped.stdout, /Nothing is installed to stop/);
+  assert.match(stopped.stdout, /menu bar app/);
+
+  const restarted = await parlour(["restart"]);
+  assert.equal(restarted.code, 0, restarted.stderr);
+  assert.match(restarted.stdout, /Nothing is installed to restart/);
+  assert.ok(
+    !launchctlCalls().some((call) => /^(bootstrap|load) /.test(call)),
+    `nothing was loaded: ${launchctlCalls().join("; ")}`,
+  );
+});
+
+test("stop leaves the LaunchAgent in place for the next login", async () => {
+  const plist = join(home, "Library", "LaunchAgents", `${AGENT_LABEL}.plist`);
+  assert.equal((await parlour(["service", "install"])).code, 0);
+  const before = launchctlCalls().length;
+
+  const run = await parlour(["stop"]);
+  assert.equal(run.code, 0, run.stderr);
+  assert.ok(existsSync(plist), "stopping is not forgetting: the plist stays");
+  assert.ok(
+    launchctlCalls()
+      .slice(before)
+      .some((call) => call === `bootout gui/${process.getuid?.() ?? 0}/${AGENT_LABEL}`),
+    `booted out through the stub: ${launchctlCalls().slice(before).join("; ")}`,
+  );
+  assert.match(run.stdout, /io\.parlour\.agent/);
 });
 
 test("service status without an install says so", async () => {

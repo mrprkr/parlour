@@ -76,23 +76,32 @@ is `macos-say`).
 ```json
 {
   "llm": {
-    "local": { "provider": "openai-compatible", "baseUrl": "http://127.0.0.1:1234/v1", "model": "qwen3-8b-mlx", "temperature": 0.3, "timeoutMs": 30000 },
+    "local": { "provider": "openai-compatible", "managed": true, "baseUrl": "http://127.0.0.1:8920/v1", "model": "qwen2.5-7b-instruct", "temperature": 0.3, "timeoutMs": 30000 },
     "cloud": { "provider": "anthropic", "enabled": true, "model": "claude-opus-5", "maxTokens": 1024, "onLocalFailure": true },
     "maxToolRounds": 6
   }
 }
 ```
 
+- **`local.managed`** is Parlour running the model itself: llama.cpp from
+  Homebrew, a GGUF from its own catalogue, kept warm by launchd on port 8920
+  exactly as whisper is. `parlour models suggest` lists the catalogue and
+  says which one this Mac should hold; `parlour models fetch --llm <id>`
+  downloads another. Turn it off and Parlour talks to whatever server
+  `baseUrl` names instead, and starts none of its own.
 - **`local.model`** is the id exactly as the server reports it. `parlour
   doctor` lists what is being served next to what is configured, which is
-  the usual mismatch after loading a different model in LM Studio.
+  the usual mismatch after loading a different model in LM Studio. A managed
+  server answers to the catalogue id, so the two only differ when the model
+  named was never fetched.
 - **`local.timeoutMs`** applies to each completion. A model that regularly
   runs past it is too big for the machine, and with `cloud.onLocalFailure`
   on, every timeout turns into a cloud answer, which is slower and not
   private.
-- **`cloud.enabled: false`** keeps everything local. The escalation tool is
-  not offered and the local model answers everything, including the
-  questions it probably should not.
+- **`cloud.enabled: false`**, or simply no `ANTHROPIC_API_KEY`, keeps
+  everything local. The escalation tool is not offered, the persona stops
+  telling the model to hand over, and it answers everything itself with the
+  house tools still in hand, including the questions it probably should not.
 - **`maxToolRounds`** stops a model that keeps calling tools. Six is enough
   for "turn the kitchen and hall lights off and set a timer".
 - A hosted OpenAI-compatible endpoint works as the local model too: add
