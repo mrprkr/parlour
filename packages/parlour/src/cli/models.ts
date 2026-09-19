@@ -4,11 +4,23 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream } from "node:stream/web";
+import {
+  LOCAL_MODELS,
+  type LocalModel,
+  localModel,
+  localModelDir,
+  localModelFile,
+  localModelUrl,
+  suggestLocalModel,
+  thisMachine,
+} from "../core/localmodel.ts";
 import { type Command, parseCli, subcommand } from "./args.ts";
-import { humanReporter, type Reporter } from "./output.ts";
+import { humanReporter, printJson, type Reporter, table } from "./output.ts";
 
 const USAGE = [
   "parlour models fetch [--wake w1,w2] [--whisper ggml-small.en.bin]   download what is missing",
+  "parlour models fetch --llm auto      the local model this Mac should run, or an id from suggest",
+  "parlour models suggest [--json]      which local model fits this machine",
 ];
 
 const OPENWAKEWORD = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1";
@@ -28,6 +40,8 @@ export interface FetchModelsOptions {
   wake?: string[];
   /** Null fetches no whisper model, for a satellite. */
   whisper?: string | null;
+  /** The GGUF for the bundled model server. Absent fetches none: it is gigabytes. */
+  llm?: LocalModel | null;
   report?: Reporter;
 }
 
@@ -52,8 +66,26 @@ export async function fetchModels(options: FetchModelsOptions): Promise<void> {
   }
   const whisper = options.whisper === undefined ? DEFAULT_WHISPER_MODEL : options.whisper;
   if (whisper) await fetchFile(`${WHISPER}/${whisper}`, join(whisperDir, whisper), report);
+  if (options.llm) await fetchLocalModel(options.modelsDir, options.llm, report);
 
   report.ok("Kokoro downloads itself on first use, into the transformers.js cache.");
+}
+
+/**
+ * The weights for the bundled model server. Separate from the rest because it
+ * is the one download measured in gigabytes: nothing fetches it unless it was
+ * asked for by name.
+ */
+export async function fetchLocalModel(
+  modelsDir: string,
+  model: LocalModel,
+  report: Reporter = humanReporter(),
+): Promise<string> {
+  const file = localModelFile(modelsDir, model);
+  mkdirSync(localModelDir(modelsDir), { recursive: true });
+  if (!existsSync(file)) report.ok(`${model.label} is about ${model.sizeGb} GB, so this takes a while`);
+  await fetchFile(localModelUrl(model), file, report);
+  return file;
 }
 
 /** An answer that will not change on a retry: a mistyped wake word is a 404 every time. */
@@ -107,12 +139,52 @@ export const command: Command = {
     const { positionals, values } = parseCli(argv, {
       wake: { type: "string" },
       whisper: { type: "string" },
+      llm: { type: "string" },
+      json: { type: "boolean" },
     });
-    subcommand(positionals, ["fetch"] as const, USAGE);
+    const sub = subcommand(positionals, ["fetch", "suggest"] as const, USAGE);
+    if (sub === "suggest") {
+      suggest(values.json === true);
+      return;
+    }
     await fetchModels({
       modelsDir: paths.modelsDir,
       wake: typeof values.wake === "string" ? values.wake.split(",").filter(Boolean) : undefined,
       whisper: typeof values.whisper === "string" ? values.whisper : undefined,
+      llm: typeof values.llm === "string" ? chosenLocalModel(values.llm) : undefined,
     });
   },
 };
+
+/** `--llm auto` is the suggestion for this machine; anything else names a catalogue entry. */
+function chosenLocalModel(id: string): LocalModel {
+  if (id === "auto") return suggestLocalModel();
+  const model = localModel(id);
+  if (model) return model;
+  throw new Error(`No local model called "${id}". Run parlour models suggest for the list.`);
+}
+
+/**
+ * What this Mac should run, and what else is on offer. Printed rather than
+ * acted on: which model a house wants is a matter of taste as much as memory,
+ * and the answer is an id to pass to `fetch --llm`.
+ */
+function suggest(asJson: boolean): void {
+  const machine = thisMachine();
+  const pick = suggestLocalModel(machine);
+  if (asJson) {
+    printJson({ machine: { ...machine, memoryGb: Math.round(machine.memoryGb) }, suggested: pick.id });
+    return;
+  }
+  const rows = LOCAL_MODELS.map((model) => [
+    model.id === pick.id ? "->" : "  ",
+    model.id,
+    `${model.sizeGb} GB`,
+    `${model.needsGb} GB machine`,
+    model.note,
+  ]);
+  process.stdout.write(
+    `${Math.round(machine.memoryGb)} GB of memory, ${machine.arch}.\n\n${table(rows)}\n\n` +
+      `parlour models fetch --llm ${pick.id}\n`,
+  );
+}

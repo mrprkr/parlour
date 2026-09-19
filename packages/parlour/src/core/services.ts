@@ -3,6 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { Config } from "./config.ts";
+import { installedLocalModel, MANAGED_LLM_PORT } from "./localmodel.ts";
 import type { Paths } from "./paths.ts";
 import type { ServiceSpec } from "./ports.ts";
 
@@ -17,6 +18,7 @@ const run = promisify(execFile);
 
 export const AGENT_LABEL = "io.parlour.agent";
 export const WHISPER_LABEL = "io.parlour.whisper";
+export const LLM_LABEL = "io.parlour.llm";
 
 export interface ServiceSpecOptions {
   /** The PATH lookup, replaceable so a test does not depend on what is installed. */
@@ -112,7 +114,60 @@ export async function serviceSpecs(
     }
   }
 
+  // The local model, when Parlour is the one running it. `llm.local.managed`
+  // is the openai-compatible provider's own option, so it is read untyped
+  // here rather than pulling a provider into core, as whisper's url is above.
+  // Without it the config is pointing at somebody else's server (LM Studio,
+  // Ollama, a box in the cupboard) and starting a second one would be rude.
+  if (config.role === "server" && config.llm.local.provider === "openai-compatible") {
+    const local = config.llm.local as { managed?: boolean; model?: string; baseUrl?: string };
+    const server = await which("llama-server");
+    const model = installedLocalModel(paths.modelsDir, local.model);
+    if (local.managed && server && model) {
+      out.push({
+        label: LLM_LABEL,
+        what: "the local model",
+        program: [
+          server,
+          "--host",
+          "127.0.0.1",
+          "--port",
+          String(portOf(local.baseUrl) ?? MANAGED_LLM_PORT),
+          "--model",
+          model.file,
+          // The name the server answers to, so config can say "qwen2.5-7b-instruct"
+          // rather than the file name of whatever quantisation was fetched.
+          "--alias",
+          model.id,
+          // The chat template, which is what turns a tool list into something
+          // the model has been trained to emit calls from. Without it the
+          // house has a model that talks and never touches a light.
+          "--jinja",
+          "--ctx-size",
+          "8192",
+          // Everything on the GPU where there is one. llama.cpp ignores this
+          // on a machine without, so it is safe on an Intel Mac.
+          "--n-gpu-layers",
+          "99",
+        ],
+        env: { PATH: toolPath(server) },
+        logPath: join(paths.logsDir, "llm.log"),
+      });
+    }
+  }
+
   return out;
+}
+
+/** The port out of a base url, for a config that moved the bundled server. */
+function portOf(baseUrl: string | undefined): number | undefined {
+  if (!baseUrl) return undefined;
+  try {
+    const port = Number(new URL(baseUrl).port);
+    return port > 0 ? port : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -130,6 +185,7 @@ export function leftoverServices(
   const known = [
     { label: AGENT_LABEL, what: "the agent, left over", logPath: join(paths.logsDir, "agent.log") },
     { label: WHISPER_LABEL, what: "whisper, left over", logPath: join(paths.logsDir, "whisper.log") },
+    { label: LLM_LABEL, what: "the local model, left over", logPath: join(paths.logsDir, "llm.log") },
   ];
   return known.filter((service) => !specs.some((spec) => spec.label === service.label));
 }
