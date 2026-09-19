@@ -21,7 +21,11 @@ name: Release
 #
 # The certificate expires after five years and the app-specific password when
 # somebody revokes it, and either one turns into a failed release rather than
-# a warning, so the preflight below names what is missing.
+# a warning, so the preflight below names what is missing. The preflight only
+# sees whether a secret is set, though, not whether it is right: a certificate
+# that does not decode or an identity with a typo in it gets as far as the
+# signing step before it says so. Run this workflow by hand after changing any
+# of them, and find out in a few minutes rather than during a release.
 #
 # Follow-ups, deliberately not done here:
 # - The dmg is built for Apple silicon only, because the runner is. An Intel
@@ -36,6 +40,11 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # A manual run builds, signs and notarises the app and stops there: no npm
+  # publish, no release. It is how the six secrets above get proved without
+  # spending a version number, and the only thing a real tag then adds is the
+  # publishing.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -43,6 +52,9 @@ permissions:
 jobs:
   publish:
     name: Publish parlour to npm
+    # Tags only. A manual run is a rehearsal of the app build, and npm is the
+    # one part of a release that cannot be taken back.
+    if: github.event_name == 'push'
     # macOS, because the package's tests assume launchd and avfoundation, as CI does.
     runs-on: macos-latest
     timeout-minutes: 20
@@ -183,7 +195,10 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: scripts/notarise.sh
 
+      # Tags only, for the same reason. A manual run has proved what it came to
+      # prove by this point: the dmg above is signed, notarised and stapled.
       - name: Create the release
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v3
         with:
           files: apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg
