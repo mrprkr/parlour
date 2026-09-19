@@ -1,5 +1,3 @@
-# Architecture
-
 If you want to know how Parlour is put together before you change it, this
 is the page. One npm package, `parlour`, holds a pure core, the built-in
 providers behind its ports, the integrations, the network server and the
@@ -78,7 +76,7 @@ Kokoro has a voice or that whisper has a URL.
 
 A name that is not registered is tried as a package: `await import(name)`,
 and the default export is accepted when its `kind` matches. That is the
-entire extension mechanism, and [providers.md](providers.md) walks through
+entire extension mechanism, and [Writing a provider](/docs/providers) walks through
 it.
 
 `secrets` and `service` are not chosen in config. Core picks them by

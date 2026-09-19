@@ -3,9 +3,9 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Parlour is a local-first voice assistant for the house that runs on a Mac. One npm package
-(`packages/parlour`) holds everything; the desktop app drives its CLI; the website is a Next.js page.
-`README.md` is the user-facing tour, `CONTRIBUTING.md` the conventions, and `docs/architecture.md`
-the long version of the architecture section below.
+(`packages/parlour`) holds everything; the desktop app drives its CLI; the website is a Next.js app with
+the docs in it. `README.md` is the user-facing tour, `CONTRIBUTING.md` the conventions, and
+`apps/site/content/docs/architecture.mdx` the long version of the architecture section below.
 
 ## Commands
 
@@ -37,8 +37,10 @@ Desktop app (`apps/desktop`, Tauri + React + Tailwind): `pnpm -C apps/desktop ap
 with live reload; `pnpm exec nx run desktop:cargo-check` for the Rust side. It only ever shells out
 to the `parlour` CLI, so a capability the app needs must exist in the CLI first.
 
-Site (`apps/site`, Next.js, one route): words in `app/page.tsx`, looks in `app/globals.css`, metadata,
-font and the analytics component in `app/layout.tsx`, security headers in `next.config.ts`.
+Site (`apps/site`, Next.js): the front page in `app/page.tsx`, the docs in `content/docs/*.mdx` served
+by `app/docs/[slug]` from the list in `app/docs/pages.ts`, looks in `app/globals.css`, header, footer,
+metadata, font and the analytics component in `app/layout.tsx`, security headers and the MDX plugins in
+`next.config.ts`.
 `pnpm -C apps/site dev` locally; `pnpm exec nx run-many -t typecheck lint build -p site` is what CI
 runs. Vercel builds it with the Next.js builder, Root Directory `apps/site`.
 

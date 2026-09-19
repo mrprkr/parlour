@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Good to hear from you. A quick note before you start: a new engine for an existing port (a voice, a speech to text engine, a model server, a search) can be an npm package that needs no change here at all, and docs/providers.md shows how. An issue is still very welcome if you would like one built in, or if the port you need does not exist yet.
+        Good to hear from you. A quick note before you start: a new engine for an existing port (a voice, a speech to text engine, a model server, a search) can be an npm package that needs no change here at all, and https://heyparlour.app/docs/providers shows how. An issue is still very welcome if you would like one built in, or if the port you need does not exist yet.
   - type: textarea
     id: problem
     attributes:

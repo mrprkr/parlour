@@ -5,7 +5,7 @@ and the contributions that help most are the ones that make it work in
 somebody else's: a provider for a different engine, an integration for a
 different platform, Linux. If you are not sure where to begin, a new voice
 or a new speech to text engine is a self-contained afternoon, and
-[docs/providers.md](docs/providers.md) walks you through one.
+[the provider guide](https://heyparlour.app/docs/providers) walks you through one.
 
 ## Setting up
 
@@ -46,14 +46,14 @@ with live reload. The CLI it drives is whichever `parlour` its settings point
 at, which is the global install by default. To have it run this checkout, set
 **The parlour command** on the Settings tab to the absolute path of
 `packages/parlour/bin/parlour-dev`; there is more in
-[docs/desktop.md](docs/desktop.md#running-the-app-against-a-checkout).
+[the menu bar app page](https://heyparlour.app/docs/desktop#running-the-app-against-a-checkout).
 `pnpm exec nx run desktop:cargo-check` is what CI runs on the Rust side.
 
 ## Where things go
 
 | Change | Where |
 | --- | --- |
-| A new engine for an existing port | `packages/parlour/src/providers/<kind>/<name>.ts`, registered in `providers/index.ts`. Or an npm package, which needs no change here at all: see [docs/providers.md](docs/providers.md). |
+| A new engine for an existing port | `packages/parlour/src/providers/<kind>/<name>.ts`, registered in `providers/index.ts`. Or an npm package, which needs no change here at all: see [the provider guide](https://heyparlour.app/docs/providers). |
 | A new source of tools | `packages/parlour/src/integrations/<name>/`, same choice. |
 | A new port | `core/ports.ts`, a slot in `core/config.ts`, wiring in `core/agent.ts`, a fake in `testing/`. Please open an issue first; a port is a promise to every provider. |
 | Linux | A `systemd` service provider and audio providers that do not need avfoundation. `core/paths.ts` already follows XDG, so that part is done. |

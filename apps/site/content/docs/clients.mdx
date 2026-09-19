@@ -1,5 +1,3 @@
-# Clients
-
 One machine in your house runs the models, holds the tokens and does the
 answering. Everything else with a microphone is a client: it sends what it
 hears, plays back what it is sent, and runs no models of its own. Nobody has
@@ -93,7 +91,7 @@ room, and changing it is one setting on one machine.
 This is the cheapest client of all, because the hardware is already in your
 house and already works. Home Assistant keeps doing the wake word, the speech
 to text and the speech back; only the thinking moves to Parlour. The setup
-is in [home-assistant.md](home-assistant.md). In short: point the OpenAI
+is in [Home Assistant](/docs/home-assistant). In short: point the OpenAI
 Conversation integration at `http://<the server>:8765/v1`, with model
 `parlour` and your token as the API key.
 

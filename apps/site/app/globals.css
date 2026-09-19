@@ -1,6 +1,7 @@
 /*
- * One lit thing on a quiet page. The loop is the hero and the lamp on the
- * wake word is the only colour; everything else is ink on a limewashed wall.
+ * One lit thing on a quiet page. On the front page the loop is the hero and
+ * the lamp on the wake word is the only colour; in the docs the lamp marks
+ * the page you are on. Everything else is ink on a limewashed wall.
  */
 
 :root {
@@ -17,6 +18,8 @@
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
 
   --measure: 40rem;
+  --doc-measure: 44rem;
+  --rail: 12rem;
   --gutter: clamp(1rem, 5vw, 3rem);
 }
 
@@ -71,7 +74,8 @@ code {
 }
 
 h1,
-h2 {
+h2,
+h3 {
   font-family: var(--serif);
   font-weight: 400;
   letter-spacing: -0.005em;
@@ -108,6 +112,21 @@ h2 {
 
 .top nav a:hover {
   color: var(--ink);
+}
+
+/* ---------------------------------------------------------------- footer */
+
+footer {
+  max-width: var(--measure);
+  margin: 5rem auto 0;
+  padding: 1.6rem 0 3rem;
+  border-top: 1px solid var(--rule);
+  color: var(--bracken);
+  font-size: 0.92rem;
+}
+
+footer p {
+  margin: 0;
 }
 
 /* ------------------------------------------------------------------ main */
@@ -313,19 +332,267 @@ section p {
   color: var(--bracken);
 }
 
-/* ---------------------------------------------------------------- footer */
+/* ------------------------------------------------------------ docs index */
 
-footer {
-  max-width: var(--measure);
-  margin: 5rem auto 0;
-  padding: 1.6rem 0 3rem;
+.docs-index {
+  padding-top: 5.5rem;
+}
+
+.docs-index h1 {
+  font-size: clamp(2rem, 5.5vw, 3.1rem);
+  line-height: 1.12;
+  margin-bottom: 1.4rem;
+}
+
+.docs-list {
+  list-style: none;
+  margin: 3rem 0 0;
+  padding: 0;
+}
+
+.docs-list li {
+  padding: 1.1rem 0;
   border-top: 1px solid var(--rule);
+}
+
+.docs-list li:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+.doc-link {
+  font-family: var(--serif);
+  font-size: 1.2rem;
+  text-decoration: none;
+}
+
+.doc-link:hover {
+  text-decoration: underline;
+}
+
+.docs-list .summary {
+  margin: 0.2rem 0 0;
   color: var(--bracken);
+  font-size: 0.95rem;
+}
+
+/* -------------------------------------------------------------- doc page */
+
+/*
+ * A doc is one column of prose with the list of pages beside it. The list
+ * sits above the text on a narrow screen and to the left on a wide one,
+ * where the page is allowed to be broader than the front page so the
+ * tables and the code have room.
+ */
+.doc {
+  max-width: var(--doc-measure);
+  padding-top: 3rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2.5rem 3rem;
+}
+
+@media (min-width: 64rem) {
+  .doc {
+    max-width: calc(var(--rail) + 3rem + var(--doc-measure));
+    grid-template-columns: var(--rail) minmax(0, var(--doc-measure));
+  }
+
+  .doc .rail {
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: 2rem;
+    align-self: start;
+  }
+
+  /* The header and the footer keep to the same edges as the page between them. */
+  body:has(.doc) .top,
+  body:has(.doc) footer {
+    max-width: calc(var(--rail) + 3rem + var(--doc-measure));
+  }
+}
+
+.rail {
   font-size: 0.92rem;
 }
 
-footer p {
-  margin: 0;
+.rail-home {
+  font-family: var(--serif);
+  text-decoration: none;
+  color: var(--bracken);
+}
+
+.rail-home:hover {
+  color: var(--ink);
+}
+
+.rail ol {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.2rem;
+}
+
+@media (min-width: 64rem) {
+  .rail ol {
+    display: block;
+  }
+}
+
+.rail li {
+  position: relative;
+  padding-left: 1.1rem;
+  line-height: 1.7;
+}
+
+.rail li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.72rem;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--rule);
+}
+
+/* The page you are on is the lit one. */
+.rail .lit::before {
+  background: var(--lamp);
+  box-shadow: 0 0 0 4px var(--lamp-glow);
+}
+
+.rail-link {
+  text-decoration: none;
+  color: var(--bracken);
+}
+
+.rail-link:hover,
+.rail .lit .rail-link {
+  color: var(--ink);
+}
+
+/* ----------------------------------------------------------------- prose */
+
+.prose h1 {
+  font-size: clamp(1.8rem, 4.5vw, 2.5rem);
+  line-height: 1.15;
+  margin-bottom: 1.6rem;
+}
+
+.prose h2 {
+  font-size: 1.45rem;
+  line-height: 1.25;
+  margin: 3rem 0 0.8rem;
+}
+
+.prose h3 {
+  font-size: 1.15rem;
+  line-height: 1.3;
+  margin: 2.2rem 0 0.6rem;
+}
+
+.prose p,
+.prose ul,
+.prose ol {
+  margin: 0 0 1rem;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.4rem;
+}
+
+.prose li {
+  margin-bottom: 0.4rem;
+}
+
+.prose pre {
+  background: var(--code);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  margin: 0 0 1.2rem;
+  line-height: 1.6;
+}
+
+.prose pre code {
+  font-size: 0.88rem;
+}
+
+.prose :not(pre) > code {
+  background: var(--code);
+  border-radius: 3px;
+  padding: 0.08em 0.3em;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  margin: 0 0 1.2rem;
+}
+
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95rem;
+}
+
+.prose th,
+.prose td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.55rem 1rem 0.55rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.prose th {
+  font-weight: 600;
+  color: var(--bracken);
+  font-size: 0.88rem;
+}
+
+.prose td:last-child,
+.prose th:last-child {
+  padding-right: 0;
+}
+
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 2.5rem 0;
+}
+
+/* Previous and next, at the foot of every doc. */
+.turn {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--rule);
+}
+
+.turn-link {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  text-decoration: none;
+}
+
+.turn-link:hover {
+  text-decoration: underline;
+}
+
+.turn-link:last-child {
+  text-align: right;
+}
+
+.turn .label {
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  color: var(--bracken);
 }
 
 /* --------------------------------------------------------------- utility */
