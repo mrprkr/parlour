@@ -1,5 +1,3 @@
-# Your own wake word
-
 The stock words are `hey_jarvis`, `alexa` and `hey_mycroft`. If you would
 rather it answered to its own name, train one. openWakeWord makes this an
 hour on a free Colab GPU, and Parlour runs any model the notebook produces:
@@ -71,4 +69,4 @@ local`, so leave it running and talk to it. Custom models tend to score a
 little lower than the stock ones, so `threshold` can reasonably come down to
 0.4. If it wakes for the room, raise `false_activation_penalty` and retrain
 rather than pushing the threshold much past 0.7, which mostly makes it
-deaf to you as well. The rest of the knobs are in [tuning.md](tuning.md).
+deaf to you as well. The rest of the knobs are in [Tuning](/docs/tuning).

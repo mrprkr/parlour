@@ -58,12 +58,12 @@ hardware.
 
 The rest lives in the repository:
 
-- [Architecture](https://github.com/mrprkr/parlour/blob/main/docs/architecture.md)
-- [Writing a provider](https://github.com/mrprkr/parlour/blob/main/docs/providers.md)
-- [Clients: satellites, phones, hardware, automations](https://github.com/mrprkr/parlour/blob/main/docs/clients.md)
-- [Home Assistant](https://github.com/mrprkr/parlour/blob/main/docs/home-assistant.md)
-- [The menu bar app](https://github.com/mrprkr/parlour/blob/main/docs/desktop.md)
-- [Tuning](https://github.com/mrprkr/parlour/blob/main/docs/tuning.md)
-- [Your own wake word](https://github.com/mrprkr/parlour/blob/main/docs/wake-word.md)
+- [Architecture](https://heyparlour.app/docs/architecture)
+- [Writing a provider](https://heyparlour.app/docs/providers)
+- [Clients: satellites, phones, hardware, automations](https://heyparlour.app/docs/clients)
+- [Home Assistant](https://heyparlour.app/docs/home-assistant)
+- [The menu bar app](https://heyparlour.app/docs/desktop)
+- [Tuning](https://heyparlour.app/docs/tuning)
+- [Your own wake word](https://heyparlour.app/docs/wake-word)
 
 MIT. Copyright (c) 2026 Michael Parker.

@@ -4,8 +4,13 @@
   "projectType": "application",
   "sourceRoot": "apps/site",
   "targets": {
-    "lint": {
-      "command": "pnpm exec biome check apps/site"
-    }
+    "build": {
+      "command": "pnpm run build",
+      "options": { "cwd": "apps/site" },
+      "outputs": ["{projectRoot}/.next"]
+    },
+    "dev": { "command": "pnpm run dev", "options": { "cwd": "apps/site" } },
+    "typecheck": { "command": "pnpm run typecheck", "options": { "cwd": "apps/site" } },
+    "lint": { "command": "pnpm exec biome check apps/site" }
   }
 }

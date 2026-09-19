@@ -24,3 +24,9 @@ apps/desktop/src-tauri/icons/
 # Written by `vercel link`; the project is identified by its git connection.
 .vercel/
 .env*.local
+
+# Next.js, for the site. next-env.d.ts is regenerated on every dev and build.
+apps/site/.next/
+apps/site/out/
+apps/site/next-env.d.ts
+*.tsbuildinfo

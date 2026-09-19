@@ -27,7 +27,7 @@ test("both READMEs name Homebrew as a prerequisite next to Node", async () => {
 });
 
 test("setup fetches no models for a satellite unless the wake word runs there", () => {
-  // docs/clients.md promises a satellite "no models, no keys, no GPU". Local
+  // The clients doc promises a satellite "no models, no keys, no GPU". Local
   // wake is the one thing that puts the wake word models on that box, and
   // whisper never leaves the server.
   assert.equal(modelsFor(parseConfig({ role: "satellite" })), null);

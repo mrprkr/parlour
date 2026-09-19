@@ -8,7 +8,9 @@
       "scripts/**",
       "!**/dist",
       "!**/node_modules",
-      "!**/target"
+      "!**/target",
+      "!**/.next",
+      "!apps/site/next-env.d.ts"
     ]
   },
   "formatter": {

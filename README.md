@@ -26,7 +26,7 @@ You can read the short version at
 Every stage is a provider behind a small interface, and you pick each one by
 name in a single config file. The built-in choices are the fastest things we
 have found for Apple silicon. If you would rather use something else, it is an
-npm package away: see [docs/providers.md](docs/providers.md).
+npm package away: see [the provider guide](https://heyparlour.app/docs/providers).
 
 ## Getting started
 
@@ -90,27 +90,29 @@ microphone is just one client among them, with no special privileges.
 All of them need `PARLOUR_TOKEN`. Without it the server only listens on
 loopback and does not advertise itself, because a voice assistant on an open
 port can turn the heating on and read your shopping list. The details are in
-[docs/clients.md](docs/clients.md).
+[the clients page](https://heyparlour.app/docs/clients).
 
 ## Documentation
 
+The docs live at [heyparlour.app/docs](https://heyparlour.app/docs), and
+in `apps/site/content/docs` in this repository.
+
 | Page | What it covers |
 | --- | --- |
-| [docs/architecture.md](docs/architecture.md) | The ports, the provider registry, the session state machine, and why the pieces are the pieces. |
-| [docs/providers.md](docs/providers.md) | Writing a provider or an integration as an npm package, with a worked example. |
-| [docs/clients.md](docs/clients.md) | Satellites, the phone page, custom hardware, `/ask`, and Bonjour. |
-| [docs/home-assistant.md](docs/home-assistant.md) | The MCP Server integration, the OpenAI Conversation integration, muting, and moving over from the old config. |
-| [docs/desktop.md](docs/desktop.md) | The menu bar app. |
-| [docs/tuning.md](docs/tuning.md) | Which setting to turn when it keeps waking up for the television. |
-| [docs/wake-word.md](docs/wake-word.md) | Training a wake word of your own, and dropping it in. |
+| [Architecture](https://heyparlour.app/docs/architecture) | The ports, the provider registry, the session state machine, and why the pieces are the pieces. |
+| [Writing a provider](https://heyparlour.app/docs/providers) | Writing a provider or an integration as an npm package, with a worked example. |
+| [Clients](https://heyparlour.app/docs/clients) | Satellites, the phone page, custom hardware, `/ask`, and Bonjour. |
+| [Home Assistant](https://heyparlour.app/docs/home-assistant) | The MCP Server integration, the OpenAI Conversation integration, muting, and moving over from the old config. |
+| [The menu bar app](https://heyparlour.app/docs/desktop) | What the app does, how it drives the CLI, and running it against a checkout. |
+| [Tuning](https://heyparlour.app/docs/tuning) | Which setting to turn when it keeps waking up for the television. |
+| [Your own wake word](https://heyparlour.app/docs/wake-word) | Training a wake word of your own, and dropping it in. |
 
 ## The repository
 
 ```text
 packages/parlour   the npm package: core, built-in providers, integrations, server, CLI
 apps/desktop       the menu bar app: Tauri, React and a Rust shell that drives the CLI
-apps/site          the website, one page and one stylesheet
-docs/              the pages above
+apps/site          the website: the front page and the docs, Next.js and MDX
 ```
 
 pnpm and nx. `pnpm install`, then `pnpm check` runs typecheck, lint and the
