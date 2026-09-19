@@ -96,6 +96,11 @@ export interface ServiceState {
 export interface ServiceManager {
   install(specs: ServiceSpec[]): Promise<ServiceState[]>;
   uninstall(labels: string[]): Promise<string[]>;
+  /**
+   * Stop what is running without forgetting it: the job is still installed
+   * and still starts at login. `uninstall` is the one that forgets.
+   */
+  stop(specs: Pick<ServiceSpec, "label" | "what" | "logPath">[]): Promise<ServiceState[]>;
   restart(specs: ServiceSpec[]): Promise<ServiceState[]>;
   status(specs: Pick<ServiceSpec, "label" | "what" | "logPath">[]): Promise<ServiceState[]>;
   tail(logPath: string, lines: number): Promise<string>;

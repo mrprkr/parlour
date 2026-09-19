@@ -50,8 +50,16 @@ test("FakeServiceManager reports what it installed as running", async () => {
   assert.equal(after?.running, true);
   assert.equal(typeof after?.pid, "number");
 
+  // Stopped is installed and not running, which is what a booted out
+  // LaunchAgent looks like: still there, still starting at the next login.
+  const [halted] = await manager.stop([spec]);
+  assert.equal(halted?.installed, true);
+  assert.equal(halted?.running, false);
+  assert.equal(halted?.pid, null);
+
   await manager.restart([spec]);
   assert.deepEqual(manager.restarts, [spec.label]);
+  assert.equal((await manager.status([spec]))[0]?.running, true, "restarting starts it again");
 
   manager.logs.set(spec.logPath, "started");
   assert.equal(await manager.tail(spec.logPath, 10), "started");
