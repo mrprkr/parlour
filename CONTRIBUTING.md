@@ -115,3 +115,10 @@ Tauri signs and notarises `Parlour.app` itself; `scripts/notarise.sh` does
 the dmg, which Tauri signs but leaves without a ticket, and then asks
 Gatekeeper about both. Run it by hand against a build of your own if you ever
 need to check the signing outside a release.
+
+The preflight only sees whether each secret is set, not whether it is right,
+so run the release workflow by hand (Actions, Release, Run workflow) after
+setting or rotating any of them. A manual run builds, signs and notarises the
+app and stops: nothing goes to npm and no release is created, which makes it
+a rehearsal you can spend freely rather than a version number you cannot get
+back.
