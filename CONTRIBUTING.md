@@ -95,5 +95,6 @@ already reads: "Move the agent into a workspace and call it Parlour".
 ## Releasing
 
 For maintainers. `pnpm version:set X.Y.Z` bumps both packages and the app;
-`CHANGELOG.md` is written by hand; pushing a `vX.Y.Z` tag publishes the
-package to npm and attaches the dmg to a GitHub release.
+pushing a `vX.Y.Z` tag publishes the package to npm and attaches the dmg to a
+GitHub release, with notes generated from the pull requests since the last
+tag.

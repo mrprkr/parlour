@@ -93,7 +93,7 @@ and a fake in `testing/`; open an issue first, a port is a promise to every prov
 - Biome formats and lints (double quotes, 110 columns, 2-space).
 - British English, no em dashes, in comments, docs and CLI output. Comments explain why, not what.
 - Commit messages are one imperative sentence, as the history reads. One change per pull request.
-- Releasing: `pnpm version:set X.Y.Z`, `CHANGELOG.md` by hand, a `vX.Y.Z` tag publishes.
+- Releasing: `pnpm version:set X.Y.Z`, then a `vX.Y.Z` tag publishes, with notes from the pull requests.
 
 ## graphify
 

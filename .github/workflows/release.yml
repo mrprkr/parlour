@@ -1,6 +1,6 @@
 name: Release
 
-# Tag a commit vX.Y.Z (after `pnpm version:set X.Y.Z` and a CHANGELOG entry)
+# Tag a commit vX.Y.Z (after `pnpm version:set X.Y.Z`)
 # and push the tag. The package goes to npm and the app to a GitHub release
 # on the tag, with notes generated from the pull requests since the last one.
 #
