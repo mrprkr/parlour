@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Parlour">
   <title>Parlour</title>
-  <rect width="32" height="32" rx="7" fill="#14312b"/>
-  <circle cx="16" cy="16" r="5" fill="#e9b84a"/>
-  <circle cx="16" cy="16" r="9" fill="none" stroke="#e9b84a" stroke-opacity="0.35" stroke-width="2"/>
+  <rect width="32" height="32" rx="7" fill="#fcfcfa"/>
+  <path d="M6 15 16 6l10 9" fill="none" stroke="#1c1c20" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M8 14v12h16V14" fill="none" stroke="#1c1c20" stroke-width="2.4" stroke-linejoin="round"/>
+  <rect x="8" y="19" width="16" height="2" fill="#1c1c20"/>
+  <circle cx="13" cy="24" r="2.2" fill="#3f7a3b"/>
 </svg>

@@ -1,15 +1,33 @@
 import { Analytics } from "@vercel/analytics/next";
 import type { Metadata, Viewport } from "next";
-import { Young_Serif } from "next/font/google";
+import { Alegreya, Alegreya_Sans, Alegreya_Sans_SC } from "next/font/google";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import "./globals.css";
 
-const youngSerif = Young_Serif({
-  weight: "400",
+// The book's three voices: the serif for the plate titles and the prose, the
+// sans for the key, the labels and the tables, and its small caps for the
+// running heads and the room names.
+const alegreya = Alegreya({
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  display: "swap",
+  variable: "--font-serif",
+});
+
+const alegreyaSans = Alegreya_Sans({
+  weight: ["400", "500", "700"],
+  style: ["normal", "italic"],
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-young-serif",
+  variable: "--font-sans",
+});
+
+const alegreyaSansSc = Alegreya_Sans_SC({
+  weight: ["500", "700"],
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-caps",
 });
 
 const description =
@@ -29,20 +47,20 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#eef0ea" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f1f1b" },
+    { media: "(prefers-color-scheme: light)", color: "#fcfcfa" },
+    { media: "(prefers-color-scheme: dark)", color: "#181716" },
   ],
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en-GB" className={youngSerif.variable}>
+    <html lang="en-GB" className={`${alegreya.variable} ${alegreyaSans.variable} ${alegreyaSansSc.variable}`}>
       <body>
-        <header className="top">
+        <header className="running-head">
           <Link className="wordmark" href="/">
             Parlour
           </Link>
-          <nav>
+          <nav aria-label="Site">
             <Link href="/docs">Docs</Link>
             <a href="https://github.com/mrprkr/parlour">GitHub</a>
           </nav>
@@ -50,12 +68,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 
         {children}
 
-        <footer>
+        <footer className="folio">
           <p>
             Parlour is released under the MIT licence. <a href="https://github.com/mrprkr/parlour">Source</a>,{" "}
             <a href="https://github.com/mrprkr/parlour/issues">issues</a>,{" "}
             <a href="https://www.npmjs.com/package/parlour">npm</a>.
           </p>
+          <p className="edition">Version 0.1.0</p>
         </footer>
         <Analytics />
       </body>
