@@ -11,8 +11,8 @@ export default function Home() {
           <h1 id="offer">A voice assistant for your home, on a Mac you already own.</h1>
           <div className="offer">
             <p className="lede">
-              Say the wake word and ask. Parlour turns the lights down, sets a timer, checks the calendar, and
-              answers out loud. Everything that hears you runs on the one Mac in the house.
+              Say the wake word and ask. Lights, timers, the calendar, answered out loud by the one Mac in the
+              house.
             </p>
             <div className="actions">
               <InstallButton />
@@ -251,18 +251,16 @@ export default function Home() {
 
       <section className="sheet house-assistant" aria-labelledby="ha-heading">
         <h2 id="ha-heading">Made for Home Assistant</h2>
-        <div className="two-col">
-          <p>
-            Home Assistant's MCP Server integration publishes whatever you have exposed to voice assistants as
-            tools, so Parlour can do exactly what you have allowed and nothing more. Expose a light and it can
-            turn it on; leave it unexposed and it cannot.
-          </p>
-          <p>
-            A mute switch lives in Home Assistant rather than on the Mac, so the house itself can keep Parlour
-            quiet while everyone is asleep. Point the OpenAI Conversation integration at Parlour and the voice
-            satellites you already own start using it as their brain.
-          </p>
-        </div>
+        <p>
+          Home Assistant's MCP Server integration publishes whatever you have exposed to voice assistants as
+          tools, so Parlour can do exactly what you have allowed and nothing more. Expose a light and it can
+          turn it on; leave it unexposed and it cannot.
+        </p>
+        <p>
+          A mute switch lives in Home Assistant rather than on the Mac, so the house itself can keep Parlour
+          quiet while everyone is asleep. Point the OpenAI Conversation integration at Parlour and the voice
+          satellites you already own start using it as their brain.
+        </p>
       </section>
 
       <section className="sheet not-shown" aria-labelledby="not-heading">

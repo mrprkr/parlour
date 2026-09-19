@@ -74,7 +74,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <a href="https://github.com/mrprkr/parlour/issues">issues</a>,{" "}
             <a href="https://www.npmjs.com/package/parlour">npm</a>.
           </p>
-          <p className="edition">Version 0.1.0</p>
         </footer>
         <Analytics />
       </body>

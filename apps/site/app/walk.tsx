@@ -103,11 +103,8 @@ export function Walk({ figure }: { figure: ReactNode }) {
             onClick={() => go(step - 1)}
             onKeyDown={onKey}
             disabled={step <= 0}
-            aria-label="Back"
           >
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M10 3 5 8l5 5" />
-            </svg>
+            Back
           </button>
           <button
             type="button"
@@ -115,11 +112,8 @@ export function Walk({ figure }: { figure: ReactNode }) {
             onClick={() => go(step + 1)}
             onKeyDown={onKey}
             disabled={step >= last}
-            aria-label="Next"
           >
-            <svg viewBox="0 0 16 16" aria-hidden="true">
-              <path d="m6 3 5 5-5 5" />
-            </svg>
+            Next
           </button>
         </div>
         <ol className="key-list">
