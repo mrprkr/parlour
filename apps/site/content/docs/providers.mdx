@@ -5,8 +5,8 @@ default export, and Parlour loads it without needing any change of its own.
 Integrations (a source of tools, prompt lines and a mute gate) are providers
 of kind `integration` and work the same way.
 
-This guide walks through the mechanism, then builds a real one. If you have
-ever wrapped a command line tool in a function, you already know most of it.
+This guide explains the mechanism, then builds a real one. If you have ever
+wrapped a command line tool in a function, you already know most of it.
 
 ## How a name becomes a running thing
 
@@ -314,7 +314,7 @@ kind:
 `secrets` and `service` providers are picked by platform rather than named
 in config, so adding one (a systemd `ServiceManager`, say) means registering
 it in `packages/parlour/src/providers/service/index.ts`, which makes it a
-pull request rather than a package. We would love to see that one.
+pull request rather than a package. That one would be very welcome.
 
 ## An integration
 
@@ -377,4 +377,4 @@ const context: ProviderContext = {
 
 Providers that need hardware or a model are not unit tested in this
 repository either. Each has a `doctor()` instead, and that is the part worth
-getting right: it is what a person sees when the thing does not work.
+getting right: it is what a person sees when something does not work.

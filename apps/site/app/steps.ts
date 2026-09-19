@@ -42,7 +42,7 @@ export const steps: Step[] = [
     n: 5,
     label: "Claude",
     detail: "text only, when asked",
-    how: "Asked only when the local model decides a question is beyond it, and given the sentence as text.",
+    how: "Asked only when the local model decides a question is beyond it. It gets the sentence as text, never audio.",
   },
   {
     n: 6,
@@ -54,6 +54,6 @@ export const steps: Step[] = [
     n: 7,
     label: "Your speakers",
     detail: "the room you asked",
-    how: "The answer arrives out loud, where you are.",
+    how: "The answer plays out loud in the room you asked from.",
   },
 ];

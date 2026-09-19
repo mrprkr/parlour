@@ -13,13 +13,12 @@ export const docPages: DocPage[] = [
   {
     slug: "architecture",
     title: "Architecture",
-    summary:
-      "The ports, the provider registry, the session state machine, and why the pieces are the pieces.",
+    summary: "The ports, the provider registry, the session state machine, and why each part was chosen.",
   },
   {
     slug: "providers",
     title: "Writing a provider",
-    summary: "A provider or an integration as an npm package, with a worked example.",
+    summary: "Add a voice, an engine or an integration as an npm package, with a worked example.",
   },
   {
     slug: "clients",
@@ -35,18 +34,18 @@ export const docPages: DocPage[] = [
   {
     slug: "desktop",
     title: "The menu bar app",
-    summary: "What the app does, how it drives the CLI, and running it against a checkout.",
+    summary: "What the app does, how it drives the CLI, and how to run it against a checkout.",
   },
   {
     slug: "tuning",
     title: "Tuning",
     summary:
-      "Wake sensitivity, how long it waits for you to finish, the voice, model sizes, and what to change when something is off.",
+      "Wake sensitivity, how long it waits for you to finish, the voice, model sizes, and what to change when something is wrong.",
   },
   {
     slug: "wake-word",
     title: "Your own wake word",
-    summary: "Training a wake word of your own, and dropping it in.",
+    summary: "Train a wake word of your own and drop it in.",
   },
 ];
 

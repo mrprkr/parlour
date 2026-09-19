@@ -26,7 +26,7 @@ your word, generates the clips that do, trains, and writes
 `my_custom_model/hey_parlor.onnx`. Download that from the file browser on
 the left of the notebook.
 
-If the first model is either twitchy or deaf, the
+If the first model fires too easily or not at all, the
 [full notebook](https://github.com/dscripka/openWakeWord/blob/main/notebooks/automatic_model_training.ipynb)
 is the same process with two extra levers that matter more than any of the
 numbers above: `target_phrase` takes a list of spellings
@@ -68,5 +68,5 @@ Every detection is logged with its score, `"hey_parlour" fired at 0.83 on
 local`, so leave it running and talk to it. Custom models tend to score a
 little lower than the stock ones, so `threshold` can reasonably come down to
 0.4. If it wakes for the room, raise `false_activation_penalty` and retrain
-rather than pushing the threshold much past 0.7, which mostly makes it
-deaf to you as well. The rest of the knobs are in [Tuning](/docs/tuning).
+rather than pushing the threshold much past 0.7, which mostly stops it
+hearing you as well. The other settings are in [Tuning](/docs/tuning).
