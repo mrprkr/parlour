@@ -22,15 +22,38 @@ app's settings point at, which on a fresh machine is the globally installed
 one rather than the checkout: see
 [Running the app against a checkout](#running-the-app-against-a-checkout).
 
-The build is unsigned for now. Copy `Parlour.app` into `/Applications` and,
-the first time, open it with a right click. Signing and notarising are on
-the list.
+A build from your own checkout is unsigned, which is fine on the machine
+that made it: copy `Parlour.app` into `/Applications` and, the first time,
+open it with a right click. The dmg on a release is signed with a Developer
+ID certificate and notarised, so that one opens the ordinary way, on a
+machine that has never seen this repository.
 
 The app does not bundle Node or the package. It expects `parlour` to be on
 your login shell's PATH, or in `/opt/homebrew/bin`, `/usr/local/bin` or
 `~/.npm-global/bin`, and offers to run `npm install -g parlour` at its own
 version when it cannot find one. One copy of Parlour on the machine is
 better than two that can disagree.
+
+## Signing
+
+Notarising means signing with the hardened runtime, and the hardened runtime
+takes the microphone away from an app that has not asked for it, so
+`src-tauri/Entitlements.plist` asks. `Info.plist` next to it is the sentence
+macOS shows when it puts the question to the person using it. The recording
+happens in ffmpeg rather than in the app, but ffmpeg is a child of the app
+and the system attributes the request to whoever started it, so both files
+belong to the app.
+
+The release workflow sets the Apple environment variables Tauri reads, and
+Tauri does the rest: a keychain of its own for the certificate, the signature,
+and then notarising `Parlour.app` and stapling the ticket into it. It signs
+the dmg but does not notarise it, and a disk image without a ticket of its
+own is refused before anybody reaches the app inside, so `scripts/notarise.sh`
+does that half and then asks Gatekeeper what it makes of both. That script
+runs from a checkout too, where it finds no credentials, says so and stops.
+
+[`.github/workflows/release.yml`](https://github.com/mrprkr/parlour/blob/main/.github/workflows/release.yml)
+lists the six repository secrets behind it and what each one is.
 
 ## The tabs
 

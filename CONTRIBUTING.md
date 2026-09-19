@@ -87,7 +87,8 @@ One change per pull request, please. Say what it does and why in the
 description (the diff already says what), and mention anything you could not
 test yourself, such as a Linux change made from a Mac. CI runs typecheck,
 lint, the tests, the build and `cargo check`, and needs to be green before we
-merge.
+merge. On main it also bundles the app the way a release does, minus the
+signing, so a tag is never the first time that build runs.
 
 Commit messages are a sentence in the imperative, the way the history
 already reads: "Move the agent into a workspace and call it Parlour".
@@ -98,3 +99,19 @@ For maintainers. `pnpm version:set X.Y.Z` bumps both packages and the app;
 pushing a `vX.Y.Z` tag publishes the package to npm and attaches the dmg to a
 GitHub release, with notes generated from the pull requests since the last
 tag.
+
+The dmg is signed with a Developer ID certificate and notarised, so it opens
+on a machine that has never seen this repository. That rests on six
+repository secrets, which
+[`.github/workflows/release.yml`](.github/workflows/release.yml) lists and
+explains: the certificate and its password, the signing identity, and an
+Apple ID with an app-specific password and a team. The workflow checks all
+six before it builds anything, because a tag that fails is better than a
+release nobody can open. The certificate lasts five years and the
+app-specific password until somebody revokes it, so both will eventually be
+the reason a release stops.
+
+Tauri signs and notarises `Parlour.app` itself; `scripts/notarise.sh` does
+the dmg, which Tauri signs but leaves without a ticket, and then asks
+Gatekeeper about both. Run it by hand against a build of your own if you ever
+need to check the signing outside a release.
