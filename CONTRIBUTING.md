@@ -59,7 +59,7 @@ at, which is the global install by default. To have it run this checkout, set
 | Linux | A `systemd` service provider and audio providers that do not need avfoundation. `core/paths.ts` already follows XDG, so that part is done. |
 | A CLI command | `packages/parlour/src/cli/<name>.ts` exporting a `Command`, listed in `cli/main.ts`. |
 | The app | `apps/desktop`. It drives the CLI, so if the CLI cannot do it yet, add that first. |
-| The website | `apps/site`. One HTML file and one stylesheet. |
+| The website | `apps/site`. A Next.js app with one route; words in `app/page.tsx`, looks in `app/globals.css`. |
 
 ## How we write it
 
