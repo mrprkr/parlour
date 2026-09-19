@@ -40,7 +40,8 @@ export const docPages: DocPage[] = [
   {
     slug: "tuning",
     title: "Tuning",
-    summary: "Which setting to turn when it keeps waking up for the television.",
+    summary:
+      "Wake sensitivity, how long it waits for you to finish, the voice, model sizes, and what to change when something is off.",
   },
   {
     slug: "wake-word",

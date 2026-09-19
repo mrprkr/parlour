@@ -9,12 +9,13 @@ export default function Home() {
       <section className="opening" aria-labelledby="offer">
         <div className="head">
           <h1 id="offer">
-            Ask your house. <span className="turn-line">Nothing you say leaves it.</span>
+            Give Home Assistant a voice. <span className="turn-line">And a brain for the rest.</span>
           </h1>
           <div className="offer">
             <p className="lede">
-              Parlour is a voice assistant for your home that runs on a Mac you already own. Lights, heating,
-              timers and questions, answered out loud in the room you asked from.
+              Parlour is a voice agent that runs on one Mac you already own and listens from anywhere in the
+              house. It works your rooms through Home Assistant, and answers everything else out loud,
+              wherever you asked from.
             </p>
             <div className="actions">
               <InstallButton />
@@ -28,7 +29,7 @@ export default function Home() {
       </section>
 
       <section className="sheet" aria-labelledby="private-heading">
-        <h2 id="private-heading">Your voice stays on your Mac</h2>
+        <h2 id="private-heading">Private and secure by design</h2>
         <div className="two-col">
           <p>
             The wake word, the recording, the transcription, the model and the voice all run on your Mac.
@@ -41,14 +42,44 @@ export default function Home() {
             in your house is reachable from the other side.
           </p>
         </div>
+        <ul className="notes">
+          <li>
+            <strong>Your house sets the permissions.</strong> Parlour reaches exactly what you have exposed to
+            voice assistants in Home Assistant, and nothing else.
+          </li>
+          <li>
+            <strong>Nothing on the network without a token.</strong> Without <code>PARLOUR_TOKEN</code> the
+            server binds to loopback and does not announce itself.
+          </li>
+          <li>
+            <strong>Secrets stay out of your config.</strong> Keys live in <code>secrets.env</code> or the
+            environment, never in <code>config.json</code>, and connector tokens go to the Keychain.
+          </li>
+          <li>
+            <strong>One household, one identity.</strong> Parlour does not tell voices apart, so everyone in
+            the house gets the same permissions and the same answers.
+          </li>
+          <li>
+            <strong>One server, and it waits.</strong> If the Mac is off, satellites wait for it rather than
+            electing a new one. A house with two brains that disagree is worse than a house with none.
+          </li>
+          <li>
+            <strong>One Mac to run it, anything to talk to it.</strong> The server wants macOS for now,
+            because the models are built for Apple silicon. Clients are not fussy: a phone, a Voice PE or a
+            board on the socket all work today, and the platform-specific parts sit behind interfaces, so a
+            Linux server is a contribution rather than a rewrite.
+          </li>
+        </ul>
       </section>
 
       <section className="sheet" aria-labelledby="rooms-heading">
         <h2 id="rooms-heading">One Mac, heard in every room</h2>
         <p>
-          One machine runs the models, holds the tokens and does the answering. Everything else with a
-          microphone is a client of it, including the Mac's own, which gets no special treatment. All of them
-          need <code>PARLOUR_TOKEN</code>; without it the server stays on loopback and never announces itself.
+          One Mac runs the models, holds the tokens and does the answering. Everything else with a microphone
+          is a client of it, and a client can be almost anything: a phone in your pocket, a Voice PE on a
+          shelf, a board you soldered talking raw audio down a socket, or a script posting a question as text.
+          The Mac's own microphone is just another client, with no special treatment. All of them need{" "}
+          <code>PARLOUR_TOKEN</code>; without it the server stays on loopback and never announces itself.
         </p>
         <div className="table-scroll">
           <table className="schedule">
@@ -240,37 +271,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="sheet" aria-labelledby="not-heading">
-        <h2 id="not-heading">What it does not do</h2>
-        <ul className="notes">
-          <li>
-            <strong>Tell voices apart.</strong> Everyone in the house is the same user.
-          </li>
-          <li>
-            <strong>Cancel its own echo.</strong> Which is why barge-in is off by default.
-          </li>
-          <li>
-            <strong>Fail over.</strong> There is one server. If it is off, satellites wait for it; a house
-            with two brains that disagree is worse than a house with none.
-          </li>
-          <li>
-            <strong>Keep connectors per person.</strong> Tokens belong to the household, because a satellite
-            cannot tell who is talking.
-          </li>
-          <li>
-            <strong>Run on Linux.</strong> Not yet. The platform-specific parts sit behind interfaces, so it
-            is a contribution rather than a rewrite, and one we would love to see.
-          </li>
-          <li>
-            <strong>Answer to “Parlour” out of the box.</strong> The install ships the stock{" "}
-            <code>hey_jarvis</code> model; <Link href="/docs/wake-word">training your own</Link> takes an
-            afternoon.
-          </li>
-        </ul>
-      </section>
-
       <section className="sheet installation" aria-labelledby="install-heading">
-        <h2 id="install-heading">Talking in ten minutes</h2>
+        <h2 id="install-heading">Install it and start talking</h2>
         <div className="two-col">
           <pre>
             <code>
@@ -284,22 +286,31 @@ export default function Home() {
             </code>
           </pre>
           <p>
-            You will need a Mac with Node 22 and Homebrew. <code>init</code> fetches ffmpeg, whisper.cpp and
-            the models, asks for your Home Assistant token, offers to add an Anthropic key if you want the
-            cloud behind it, and can start Parlour at login. If you would rather have a window than a
-            terminal, the <Link href="/docs/desktop">menu bar app</Link> does the same with buttons.
+            Ten minutes from an empty terminal to asking your house a question. <code>init</code> fetches
+            ffmpeg, whisper.cpp and the models, takes your Home Assistant token, and offers to start Parlour
+            at login, so the house is listening again after every reboot without you thinking about it. The
+            only machine that needs anything installed is the Mac running the server, with Node 22 and
+            Homebrew on it; everything else in the house just needs a microphone. Prefer a window to a
+            terminal? The <Link href="/docs/desktop">menu bar app</Link> does the same with buttons.
+          </p>
+          <p>
+            It answers to <code>hey_jarvis</code> out of the box, because that is the model the install ships.
+            Teaching it to answer to <Link href="/docs/wake-word">a word of your own</Link> takes an
+            afternoon.
           </p>
         </div>
       </section>
 
       <section className="sheet" aria-labelledby="source-heading">
-        <h2 id="source-heading">Open source, built to be taken apart</h2>
+        <h2 id="source-heading">Open source, contributions welcome</h2>
         <p>
-          Parlour is MIT licensed and at version 0.1.0. The most useful thing you could add is a provider: a
-          new voice, a different speech to text engine, a Linux service manager. The{" "}
-          <Link href="/docs/providers">provider guide</Link> walks through one from start to finish, the{" "}
+          Parlour is MIT licensed and at version 0.1.0, which is a good moment to arrive. The most useful
+          thing you could add is a provider: a new voice, a different speech to text engine, a Linux service
+          manager. The <Link href="/docs/providers">provider guide</Link> walks through one from start to
+          finish, the{" "}
           <a href="https://github.com/mrprkr/parlour/blob/main/CONTRIBUTING.md">contributing guide</a> covers
-          the rest, and questions are welcome in the issues.
+          the rest. Bug reports, questions and rough ideas are all welcome in the issues, and a first pull
+          request does not have to be a big one.
         </p>
       </section>
     </main>

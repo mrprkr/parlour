@@ -41,7 +41,7 @@ export const steps: Step[] = [
   {
     n: 5,
     label: "Claude",
-    detail: "text only",
+    detail: "text only, when asked",
     how: "Asked only when the local model decides a question is beyond it, and given the sentence as text.",
   },
   {

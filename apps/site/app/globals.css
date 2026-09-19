@@ -17,8 +17,7 @@
   --selection: #d5e5df;
 
   --serif: var(--font-serif), "Iowan Old Style", Georgia, serif;
-  --sans: var(--font-sans), "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --caps: var(--font-caps), var(--sans);
+  --sans: var(--font-sans), ui-sans-serif, "Helvetica Neue", Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
 
   --book: 74rem;
@@ -144,10 +143,9 @@ p {
 .running-head nav {
   display: flex;
   gap: 1.6rem;
-  font-family: var(--caps);
   font-weight: 500;
   font-size: 0.95rem;
-  letter-spacing: 0.07em;
+  letter-spacing: -0.005em;
 }
 
 .running-head nav a {
@@ -190,7 +188,7 @@ p {
   font-size: clamp(2.3rem, 4.6vw, 3.4rem);
   line-height: 1.04;
   letter-spacing: -0.018em;
-  max-width: 24ch;
+  max-width: 26ch;
 }
 
 /* The second sentence takes its own line rather than wrapping anywhere. */
@@ -285,45 +283,47 @@ p {
 
 /* -------------------------------------------------------------- flow */
 
+/*
+ * The drawing sticks while the stages pass it, and the page's own scroll is
+ * the only control. `data-step` on the wrapper says which stage is at the
+ * trigger line; everything lit follows from that in CSS.
+ */
 .flow {
   margin-top: clamp(2.5rem, 5vw, 4rem);
+}
+
+@media (min-width: 64rem) {
+  .flow {
+    display: grid;
+    grid-template-columns: 26rem minmax(0, 1fr);
+    gap: 0 clamp(2.5rem, 5vw, 4.5rem);
+    align-items: start;
+  }
 }
 
 .flow-figure {
   margin: 0;
   min-width: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-block: 0.8rem;
+  background: var(--page);
+}
+
+@media (min-width: 64rem) {
+  .flow-figure {
+    top: 17vh;
+    padding-block: 0;
+    background: none;
+  }
 }
 
 /* The drawing sits on its own sheet, inside a hairline. */
 .plate {
   background: var(--plate);
   border: 1px solid var(--rule);
-  padding: clamp(0.75rem, 2vw, 1.6rem);
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: thin;
-}
-
-.plate::-webkit-scrollbar {
-  height: 6px;
-}
-
-.plate::-webkit-scrollbar-thumb {
-  background: var(--rule);
-  border-radius: 3px;
-}
-
-.pan-cue {
-  display: none;
-  margin: 0;
-  color: var(--ink-2);
-  font-size: 0.88rem;
-}
-
-@media (max-width: 52rem) {
-  .pan-cue {
-    display: block;
-  }
+  padding: clamp(0.9rem, 2vw, 1.5rem);
 }
 
 .caption {
@@ -337,6 +337,207 @@ p {
 
 .caption p {
   margin: 0;
+}
+
+/* --------------------------------------------------------- the drawing */
+
+/*
+ * Portrait, so it runs the way the page is read and fits the column it
+ * sticks in. Capped by height rather than width, so the sheet can never grow
+ * taller than the screen it is pinned to.
+ */
+.diagram {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 58vh;
+  margin-inline: auto;
+  font-family: var(--sans);
+}
+
+/* The boundary: what runs on the one machine. */
+.diagram .boundary rect {
+  fill: none;
+  stroke: var(--rule);
+  stroke-width: 1.5;
+}
+
+.diagram .place {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  fill: var(--ink-2);
+}
+
+/*
+ * Every line takes its colour from one inherited property, so lighting a
+ * stretch of the path is a single declaration on the group above it rather
+ * than a selector for each stroke inside it.
+ */
+.diagram .seg,
+.diagram .branch {
+  --line: var(--ink-2);
+}
+
+.diagram .seg line,
+.diagram .seg .tip,
+.diagram .branch .lead {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The one line that leaves the machine: dashed, because it is occasional. */
+.diagram .branch .lead {
+  stroke-width: 1.3;
+  stroke-dasharray: 5 6;
+}
+
+.diagram .disc {
+  fill: var(--disc-fill, var(--plate));
+  stroke: var(--disc-stroke, var(--ink));
+  stroke-width: 1.8;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(var(--disc-scale, 1));
+}
+
+.diagram .num {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  fill: var(--num-fill, var(--ink));
+}
+
+.diagram .label {
+  font-size: 17px;
+  font-weight: 600;
+  fill: var(--ink);
+}
+
+.diagram .detail {
+  font-size: 14px;
+  fill: var(--ink-2);
+}
+
+/*
+ * The path fills as the question travels: every segment up to the current
+ * stage runs in the accent, so scrolling draws the line in. Only the current
+ * stage's disc is lit, so there is still one thing to look at.
+ */
+.flow[data-step="2"] :is(.seg.s2),
+.flow[data-step="3"] :is(.seg.s2, .seg.s3),
+.flow[data-step="4"] :is(.seg.s2, .seg.s3, .seg.s4),
+.flow[data-step="5"] :is(.seg.s2, .seg.s3, .seg.s4, .branch),
+.flow[data-step="6"] :is(.seg.s2, .seg.s3, .seg.s4, .seg.s6),
+.flow[data-step="7"] :is(.seg.s2, .seg.s3, .seg.s4, .seg.s6, .seg.s7) {
+  --line: var(--accent);
+}
+
+.flow[data-step="1"] .node.s1,
+.flow[data-step="2"] .node.s2,
+.flow[data-step="3"] .node.s3,
+.flow[data-step="4"] .node.s4,
+.flow[data-step="5"] .node.s5,
+.flow[data-step="6"] .node.s6,
+.flow[data-step="7"] .node.s7 {
+  --disc-fill: var(--accent);
+  --disc-stroke: var(--accent);
+  --num-fill: var(--page);
+  --disc-scale: 1.12;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Everything the scroll changes eases into place rather than jumping. */
+  .diagram .disc {
+    transition:
+      fill 380ms ease,
+      stroke 380ms ease,
+      transform 420ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+
+  .diagram .num {
+    transition: fill 380ms ease;
+  }
+
+  .diagram .seg line,
+  .diagram .seg .tip,
+  .diagram .branch .lead,
+  .diagram .aside {
+    transition:
+      stroke 450ms ease,
+      fill 450ms ease;
+  }
+
+  /* While the cloud is the current stage, the dashes run along the branch. */
+  .flow[data-step="5"] .branch .lead {
+    animation: travel 1.2s linear infinite;
+  }
+
+  @keyframes travel {
+    to {
+      stroke-dashoffset: -22;
+    }
+  }
+}
+
+/* --------------------------------------------------------- the stages */
+
+.key {
+  min-width: 0;
+}
+
+.key h2 {
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--ink);
+}
+
+.key-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.key-list li {
+  padding: 1.1rem 0;
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  align-content: center;
+}
+
+@media (min-width: 64rem) {
+  /* The stages are the scroll: each one needs room to pass the trigger line. */
+  .key-list li {
+    min-height: 22vh;
+    padding: 1.8rem 0;
+  }
+}
+
+.key-list .disc-inline {
+  margin-top: 0.05rem;
+  margin-right: 0.7rem;
+}
+
+.key-list .what {
+  font-weight: 600;
+  font-size: 0.97rem;
+}
+
+.key-list .how {
+  grid-column: 2;
+  color: var(--ink-2);
+  font-size: 0.88rem;
+  margin-top: 0.1rem;
 }
 
 /* The numbered discs, wherever they appear in text. */
@@ -355,322 +556,31 @@ p {
   line-height: 1;
   vertical-align: -0.28em;
   flex: none;
-  transition:
-    background-color 200ms ease-out,
-    color 200ms ease-out,
-    border-color 200ms ease-out;
-}
-
-/* --------------------------------------------------------- the drawing */
-
-/* Capped so the drawing's own type sits at the size of the page's type. */
-.diagram {
-  display: block;
-  width: 100%;
-  max-width: 60rem;
-  height: auto;
-  margin-inline: auto;
-  font-family: var(--sans);
-}
-
-@media (max-width: 52rem) {
-  /* Pan rather than shrink, so the line weights stay honest. */
-  .diagram {
-    min-width: 42rem;
-  }
-}
-
-/* The boundary: what runs on the one machine. */
-.diagram .boundary rect {
-  fill: none;
-  stroke: var(--rule);
-  stroke-width: 1.5;
-}
-
-.diagram .place {
-  font-family: var(--caps);
-  font-weight: 700;
-  font-size: 14px;
-  letter-spacing: 0.08em;
-  fill: var(--ink-2);
-}
-
-/* The spine, one segment per stage. */
-.diagram .seg line {
-  stroke: var(--ink-2);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  transition: stroke 220ms ease-out;
-}
-
-.diagram .seg .tip {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: stroke 220ms ease-out;
-}
-
-/* The one line that leaves the machine: dashed, because it is occasional. */
-.diagram .branch .lead {
-  fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 1.3;
-  stroke-dasharray: 5 6;
-  stroke-linecap: round;
-  transition: stroke 220ms ease-out;
-}
-
-.diagram .aside {
-  font-size: 13.5px;
-  font-style: italic;
-  fill: var(--ink-2);
-}
-
-.diagram .disc {
-  fill: var(--plate);
-  stroke: var(--ink);
-  stroke-width: 1.8;
-  transition:
-    fill 220ms ease-out,
-    stroke 220ms ease-out;
-}
-
-.diagram .num {
-  font-size: 14px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  fill: var(--ink);
-  transition: fill 220ms ease-out;
-}
-
-.diagram .label {
-  font-size: 16px;
-  font-weight: 600;
-  fill: var(--ink);
-}
-
-.diagram .detail {
-  font-size: 13.5px;
-  fill: var(--ink-2);
-}
-
-/* Which stage is lit. The numbers are the ones in the key. */
-.flow[data-step="1"] .s1 .disc,
-.flow[data-step="2"] .s2 .disc,
-.flow[data-step="3"] .s3 .disc,
-.flow[data-step="4"] .s4 .disc,
-.flow[data-step="5"] .s5 .disc,
-.flow[data-step="6"] .s6 .disc,
-.flow[data-step="7"] .s7 .disc {
-  fill: var(--accent);
-  stroke: var(--accent);
-}
-
-.flow[data-step="1"] .s1 .num,
-.flow[data-step="2"] .s2 .num,
-.flow[data-step="3"] .s3 .num,
-.flow[data-step="4"] .s4 .num,
-.flow[data-step="5"] .s5 .num,
-.flow[data-step="6"] .s6 .num,
-.flow[data-step="7"] .s7 .num {
-  fill: var(--page);
-}
-
-/* The segment that carries the question into the lit stage runs with it. */
-.flow[data-step="2"] .seg.s2 line,
-.flow[data-step="3"] .seg.s3 line,
-.flow[data-step="4"] .seg.s4 line,
-.flow[data-step="6"] .seg.s6 line,
-.flow[data-step="7"] .seg.s7 line,
-.flow[data-step="2"] .seg.s2 .tip,
-.flow[data-step="3"] .seg.s3 .tip,
-.flow[data-step="4"] .seg.s4 .tip,
-.flow[data-step="6"] .seg.s6 .tip,
-.flow[data-step="7"] .seg.s7 .tip,
-.flow[data-step="5"] .branch .lead {
-  stroke: var(--accent);
-}
-
-.flow[data-step="5"] .aside {
-  fill: var(--accent);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  /* The only motion on the site: the question moving along the line it is on. */
-  .flow[data-step="5"] .branch .lead {
-    animation: travel 1.2s linear infinite;
-  }
-
-  .flow[data-step="1"] .s1 .disc,
-  .flow[data-step="2"] .s2 .disc,
-  .flow[data-step="3"] .s3 .disc,
-  .flow[data-step="4"] .s4 .disc,
-  .flow[data-step="5"] .s5 .disc,
-  .flow[data-step="6"] .s6 .disc,
-  .flow[data-step="7"] .s7 .disc {
-    animation: settle 420ms cubic-bezier(0.2, 0.9, 0.3, 1) 1;
-    transform-box: fill-box;
-    transform-origin: center;
-  }
-
-  @keyframes travel {
-    to {
-      stroke-dashoffset: -22;
-    }
-  }
-
-  @keyframes settle {
-    from {
-      transform: scale(1.4);
-    }
-  }
-}
-
-/* --------------------------------------------------------- the key */
-
-.key {
-  margin-top: clamp(2.2rem, 4vw, 3.2rem);
-}
-
-/* The name of the list and the controls that drive it share one rule. */
-.key-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.8rem 1.5rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--ink);
-}
-
-.key h2 {
-  font-family: var(--caps);
-  font-weight: 700;
-  font-size: 0.95rem;
-  letter-spacing: 0.09em;
-  color: var(--ink-2);
-}
-
-.transport {
-  display: flex;
-  gap: 0.4rem;
-  align-items: center;
-}
-
-.play,
-.stepper {
-  font: inherit;
-  font-weight: 500;
-  font-size: 0.92rem;
-  color: var(--ink);
-  background: var(--plate);
-  border: 1px solid var(--ink);
-  border-radius: 2px;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    color 160ms ease-out;
-}
-
-.play {
-  padding: 0.4rem 0.9rem;
-  white-space: nowrap;
-}
-
-.play:hover,
-.stepper:hover:enabled {
-  background: var(--code-bg);
-}
-
-.play:active,
-.stepper:active:enabled {
-  transform: translateY(1px);
-}
-
-.play[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--plate);
-}
-
-.stepper {
-  padding: 0.4rem 0.7rem;
-}
-
-.stepper:disabled {
-  color: var(--ink-2);
-  border-color: var(--rule);
-  cursor: default;
-}
-
-.key-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  column-gap: 4rem;
-}
-
-@media (min-width: 52rem) {
-  .key-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 76rem) {
-  .key-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-.key-list li {
-  border-bottom: 1px solid var(--rule);
-}
-
-.key-list button {
-  font: inherit;
-  color: inherit;
-  background: none;
-  border: 0;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  padding: 0.65rem 0.3rem 0.65rem 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  line-height: 1.45;
-}
-
-.key-list .disc-inline {
-  margin-top: 0.05rem;
-  margin-right: 0.7rem;
-}
-
-.key-list .what {
-  font-weight: 600;
-  font-size: 0.97rem;
-}
-
-.key-list button:hover .what {
-  text-decoration: underline;
-  text-decoration-color: var(--rule);
-  text-underline-offset: 0.18em;
-}
-
-.key-list .how {
-  grid-column: 2;
-  color: var(--ink-2);
-  font-size: 0.88rem;
-  margin-top: 0.1rem;
 }
 
 .key-list .lit .disc-inline {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--page);
+}
+
+/*
+ * Before the section is reached every stage reads normally; once it is, the
+ * stage at the trigger line comes forward and the rest step back.
+ */
+.flow:not([data-step="0"]) .key-list li:not(.lit) {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .key-list li,
+  .disc-inline {
+    transition:
+      opacity 400ms ease,
+      background-color 300ms ease,
+      border-color 300ms ease,
+      color 300ms ease;
+  }
 }
 
 /* ------------------------------------------------------------ sheets */
@@ -736,11 +646,12 @@ p {
 .schedule caption {
   text-align: left;
   caption-side: top;
-  font-family: var(--caps);
-  font-size: 0.95rem;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--ink-2);
-  padding-bottom: 0.6rem;
+  padding-bottom: 0.7rem;
 }
 
 .schedule th,
@@ -752,10 +663,10 @@ p {
 }
 
 .schedule .col {
-  font-family: var(--caps);
-  font-weight: 700;
-  font-size: 0.85rem;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--ink-2);
   border-bottom: 1px solid var(--ink);
 }
@@ -808,9 +719,10 @@ p {
   .schedule td::before {
     content: attr(data-label);
     display: block;
-    font-family: var(--caps);
-    font-size: 0.8rem;
-    letter-spacing: 0.06em;
+    font-weight: 600;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
     color: var(--ink-2);
     margin-top: 0.4rem;
   }
@@ -864,15 +776,10 @@ p {
 
 /* ------------------------------------------------------- docs index */
 
-.docs-index {
-  padding-top: 3.2rem;
-}
-
 .contents {
   list-style: none;
-  margin: 3rem 0 0;
+  margin: 2.4rem 0 0;
   padding: 0;
-  max-width: 44rem;
 }
 
 .contents li {
@@ -946,9 +853,10 @@ p {
 }
 
 .rail-home {
-  font-family: var(--caps);
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   text-decoration: none;
   color: var(--ink-2);
 }
@@ -1012,6 +920,11 @@ p {
   line-height: 1.1;
   letter-spacing: -0.01em;
   margin-bottom: 1.6rem;
+}
+
+.prose .lede {
+  max-width: none;
+  margin: 0 0 1rem;
 }
 
 .prose h2 {
@@ -1081,10 +994,10 @@ p {
 }
 
 .prose th {
-  font-family: var(--caps);
-  font-weight: 700;
-  font-size: 0.85rem;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  font-size: 0.74rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--ink-2);
   border-bottom-color: var(--ink);
 }
@@ -1126,9 +1039,10 @@ p {
 }
 
 .turn .label {
-  font-family: var(--caps);
-  font-size: 0.85rem;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--ink-2);
 }
 

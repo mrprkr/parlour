@@ -1,20 +1,25 @@
 import { steps } from "./steps";
 
 /**
- * The signal path: a question crossing the machine from left to right, drawn
- * as a schematic rather than a picture of a house. Everything inside the
- * boundary runs on the Mac; the one branch that leaves it is dashed, carries
- * text, and is drawn crossing the boundary line on purpose. The `data-step`
- * attribute on the wrapper lights one stage at a time, so with no JavaScript
- * the whole diagram still renders, unlit and complete.
+ * The signal path, running down the page in the direction the reader scrolls.
+ * Everything inside the boundary runs on the Mac; the one branch that leaves
+ * it goes sideways, out through the boundary line, because that is the whole
+ * point of it. The `data-step` attribute on the wrapper lights one stage at a
+ * time, so with no JavaScript the drawing still renders, unlit and complete.
  */
 
-// The local stages, evenly spaced along the spine. Step 5 is the branch.
+// The local stages, top to bottom. Step 5 is the branch off to one side.
 const local = [1, 2, 3, 4, 6, 7];
-const first = 110;
-const gap = 148;
-const spine = 182;
-const radius = 15;
+const first = 96;
+const gap = 82;
+const spine = 246;
+const radius = 14;
+
+// Labels sit to the left of the spine, ranged right against it.
+const labelEnd = 216;
+
+// Where the branch leaves: level with "Thinking", the stage that decides.
+const cloud = { x: 360, reach: 346 };
 
 const at = (n: number) => first + local.indexOf(n) * gap;
 const step = (n: number) => steps.find((s) => s.n === n);
@@ -31,27 +36,27 @@ function Node({ n, x, y }: { n: number; x: number; y: number }) {
 }
 
 export function Diagram() {
-  const branchX = at(4);
+  const branch = at(4);
 
   return (
-    <svg className="diagram" viewBox="0 10 960 276" role="img" aria-labelledby="diagram-title diagram-desc">
+    <svg className="diagram" viewBox="0 0 440 580" role="img" aria-labelledby="diagram-title diagram-desc">
       <title id="diagram-title">How a question travels through Parlour</title>
       <desc id="diagram-desc">
-        Seven stages. Six of them sit inside a boundary marked “on your Mac”: the wake word, your voice,
-        speech to text with whisper.cpp, a local model, a voice from Kokoro, and your speakers. A single
-        dashed branch leaves the boundary from the local model up to Claude, labelled text only, and only when
-        the local model asks.
+        Seven stages, running down the page. Six of them sit inside a boundary marked “on your Mac”: the wake
+        word, your voice, speech to text with whisper.cpp, a local model, a voice from Kokoro, and your
+        speakers. A single dashed branch leaves the boundary sideways from the local model to Claude, carrying
+        text only, and only when asked.
       </desc>
 
-      {/* The boundary. Everything inside it runs on one machine. */}
+      {/* The boundary. Everything inside it runs on the one machine. */}
       <g className="boundary">
-        <rect x="40" y="134" width="880" height="140" />
-        <text className="place" x="40" y="122">
+        <rect x="12" y="42" width="270" height="518" />
+        <text className="place" x="12" y="32">
           On your Mac
         </text>
       </g>
 
-      {/* The spine, one segment per stage so the arriving segment can light. */}
+      {/* The spine, one segment per stage so the path can fill as it is read. */}
       <g className="path">
         {local.slice(1).map((n, i) => {
           const from = first + i * gap + radius;
@@ -59,8 +64,8 @@ export function Diagram() {
           const mid = (from + to) / 2;
           return (
             <g className={`seg s${n}`} key={n}>
-              <line x1={from} y1={spine} x2={to} y2={spine} />
-              <path className="tip" d={`M${mid - 4} ${spine - 5}l5 5l-5 5`} />
+              <line x1={spine} y1={from} x2={spine} y2={to} />
+              <path className="tip" d={`M${spine - 5} ${mid - 4}l5 5l5 -5`} />
             </g>
           );
         })}
@@ -68,34 +73,34 @@ export function Diagram() {
 
       {/* The one line that leaves, drawn crossing the boundary. */}
       <g className="branch s5">
-        <path className="lead" d={`M${branchX} ${spine - radius}V80`} />
-        <text className="aside" x={branchX + 26} y="112">
-          text only, and only when asked
-        </text>
+        <path className="lead" d={`M${spine + radius} ${branch}H${cloud.reach}`} />
       </g>
 
-      {/* The stages themselves. */}
+      {/* The local stages, each named beside its disc. */}
       {local.map((n) => {
         const s = step(n);
-        const x = at(n);
+        const y = at(n);
         return (
           <g key={n}>
-            <Node n={n} x={x} y={spine} />
-            <text className="label" x={x} y={spine + 42} textAnchor="middle">
+            <Node n={n} x={spine} y={y} />
+            <text className="label" x={labelEnd} y={y + 2} textAnchor="end">
               {s?.label}
             </text>
-            <text className="detail" x={x} y={spine + 62} textAnchor="middle">
+            <text className="detail" x={labelEnd} y={y + 22} textAnchor="end">
               {s?.detail}
             </text>
           </g>
         );
       })}
 
-      {/* Step 5, outside, named above its disc rather than below it. */}
-      <text className="label" x={branchX} y="36" textAnchor="middle">
+      {/* Step 5, outside, named above and below its disc rather than beside it. */}
+      <text className="label" x={cloud.x} y={branch - 30} textAnchor="middle">
         {step(5)?.label}
       </text>
-      <Node n={5} x={branchX} y={65} />
+      <Node n={5} x={cloud.x} y={branch} />
+      <text className="detail" x={cloud.x} y={branch + 34} textAnchor="middle">
+        {step(5)?.detail}
+      </text>
     </svg>
   );
 }

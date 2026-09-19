@@ -1,13 +1,13 @@
 import { Analytics } from "@vercel/analytics/next";
 import type { Metadata, Viewport } from "next";
-import { Alegreya, Alegreya_Sans, Alegreya_Sans_SC } from "next/font/google";
+import { Alegreya, Geist } from "next/font/google";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import "./globals.css";
 
-// Three voices from one superfamily: the serif sets the headings, the sans
-// sets everything that is read or consulted, and its small caps set the
-// running head, the table columns and the labels on the drawing.
+// Two faces. Alegreya gives the headings their character; Geist does
+// everything that is read, consulted or clicked, including the small tracked
+// capitals that label a column or a place on the drawing.
 const alegreya = Alegreya({
   subsets: ["latin"],
   style: ["normal", "italic"],
@@ -15,23 +15,15 @@ const alegreya = Alegreya({
   variable: "--font-serif",
 });
 
-const alegreyaSans = Alegreya_Sans({
-  weight: ["400", "500", "700"],
-  style: ["normal", "italic"],
+const geist = Geist({
+  weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
   display: "swap",
   variable: "--font-sans",
 });
 
-const alegreyaSansSc = Alegreya_Sans_SC({
-  weight: ["500", "700"],
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-caps",
-});
-
 const description =
-  "Parlour is a voice assistant for your home that runs on a Mac you already own. The wake word, the transcription, the model and the voice all stay on your machine, and the cloud is asked only when the local model cannot answer. Open source, MIT.";
+  "Parlour is a voice agent for Home Assistant. One Mac you already own runs it, anything with a microphone can talk to it, and the wake word, the transcription, the model and the voice all stay on that machine. Open source, MIT.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://heyparlour.app"),
@@ -39,7 +31,7 @@ export const metadata: Metadata = {
   description,
   openGraph: {
     title: "Parlour",
-    description: "Ask your house. Nothing you say leaves it.",
+    description: "Give Home Assistant a voice, and a brain for the rest.",
     type: "website",
     url: "https://heyparlour.app/",
   },
@@ -54,7 +46,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en-GB" className={`${alegreya.variable} ${alegreyaSans.variable} ${alegreyaSansSc.variable}`}>
+    <html lang="en-GB" className={`${alegreya.variable} ${geist.variable}`}>
       <body>
         <header className="running-head">
           <Link className="wordmark" href="/">

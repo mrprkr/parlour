@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { docPage, docPages, neighbours } from "../pages";
+import { DocsRail } from "../rail";
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -32,24 +33,7 @@ export default async function DocPage({ params }: Params) {
 
   return (
     <main className="doc">
-      <nav className="rail" aria-label="Docs">
-        <Link className="rail-home" href="/docs">
-          Docs
-        </Link>
-        <ol>
-          {docPages.map((entry) => (
-            <li key={entry.slug} className={entry.slug === slug ? "lit" : undefined}>
-              <Link
-                className="rail-link"
-                href={`/docs/${entry.slug}`}
-                aria-current={entry.slug === slug ? "page" : undefined}
-              >
-                {entry.title}
-              </Link>
-            </li>
-          ))}
-        </ol>
-      </nav>
+      <DocsRail current={slug} />
 
       <article className="prose">
         <h1>{page.title}</h1>
