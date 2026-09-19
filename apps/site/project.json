@@ -2,10 +2,14 @@
   "name": "site",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "projectType": "application",
-  "sourceRoot": "apps/site",
+  "sourceRoot": "apps/site/app",
   "targets": {
-    "lint": {
-      "command": "pnpm exec biome check apps/site"
-    }
+    "build": {
+      "command": "pnpm run build",
+      "options": { "cwd": "apps/site" },
+      "outputs": ["{projectRoot}/.next", "!{projectRoot}/.next/cache"]
+    },
+    "typecheck": { "command": "pnpm run typecheck", "options": { "cwd": "apps/site" } },
+    "lint": { "command": "pnpm exec biome check .", "options": { "cwd": "apps/site" } }
   }
 }

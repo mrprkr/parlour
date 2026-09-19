@@ -109,7 +109,7 @@ port can turn the heating on and read your shopping list. The details are in
 ```text
 packages/parlour   the npm package: core, built-in providers, integrations, server, CLI
 apps/desktop       the menu bar app: Tauri, React and a Rust shell that drives the CLI
-apps/site          the website, one page and one stylesheet
+apps/site          the website, a Next.js app with one page
 docs/              the pages above
 ```
 
