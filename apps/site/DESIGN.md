@@ -175,7 +175,7 @@ A white plate, near-black ink, one grey, one rule, and three illustrator's washe
 - **Leaf wash** (`{colors.leaf-wash}`): the tree canopy at rest, and the fill that the Mac's screen and the cloud body take when their step is lit.
 
 ### Secondary
-- **Slate** (`{colors.slate}`): sound and the machines that hear it. Microphones, the device outlines, the speech and speaker arcs, the dotted route through the house, the stays in the wall figure, and the focus ring (2px outline, 3px offset). Never used on text.
+- **Slate** (`{colors.slate}`): sound and the machines that hear it. Microphones, the device outlines, the speech and speaker arcs, the dotted route through the house, and the stays in the wall figure. A drawing colour only: never on text, never on a control.
 - **Slate wash** (`{colors.slate-wash}`): the Mac's screen at rest.
 - **Selection** (`{colors.selection}`): text selection only.
 
@@ -198,7 +198,7 @@ Under `prefers-color-scheme: dark` every token above is redefined on `:root`, no
 
 **The Poché Rule.** Brick is what the section cut through and nothing else. Floors, roof and stair are solid ink; walls are brick with an ink outline.
 
-**The Sound Is Slate Rule.** Anything that hears or carries sound is slate: microphones, arcs, the route, the screen. Slate is a drawing colour and a focus ring, never text.
+**The Sound Is Slate Rule.** Anything that hears or carries sound is slate: microphones, arcs, the route, the screen. Slate is a drawing colour, never text and never a control state.
 
 ## Typography
 
@@ -217,7 +217,7 @@ Under `prefers-color-scheme: dark` every token above is redefined on `:root`, no
 - **Lede** (400, 1.22rem, 1.42): the paragraph under a plate title, capped at 50ch.
 - **Body** (400, 18px, 1.5): all prose, capped at `{spacing.measure}` on the front page and `{spacing.doc-measure}` in the docs. Paragraphs wrap `pretty`, headings `balance`.
 - **Key** (400 and 700, 0.97rem to 1rem, 1.38 to 1.45): the key column, captions, tables, notes, the docs rail and the summary lines in the contents. Bold for the "what", ink 2 for the "how".
-- **Label** (700, 0.85rem to 1rem, 0.06em to 0.08em): true small caps for running-head navigation, the key heading, table captions and column heads, room names on the plate (15 SVG units), the folio's edition line, "Previous" and "Next", and the docs rail's home link.
+- **Label** (700, 0.85rem to 1rem, 0.06em to 0.08em): true small caps for running-head navigation, the key heading, table captions and column heads, room names on the plate (15 SVG units), "Previous" and "Next", and the docs rail's home link.
 - **Mono** (0.86em of its parent; 0.9rem to 0.95rem in blocks and the install control): commands, config keys, the `$` prompt.
 - **On the plate**: labels 14 units italic sans, the spoken line 17 units serif italic, notes 12.5 units ink 2, callout numerals 15 units sans 700 with tabular figures. Labels scale with the drawing, not the page.
 
@@ -260,9 +260,9 @@ Every control is a hairline box on the plate with an ink border, or a ruled row 
 - **Shape:** near-square (`{rounded.control}`), 1px solid ink.
 - **Install control** (`install-control`): the `$` prompt in ink 2 mono, the command in mono, and a reserved "copy" word in 0.85rem sans that becomes "copied" for 1.8s. Hover fills code bg over 160ms.
 - **Play** (`transport-play`): sans 500, `0.42rem 0.9rem`, labelled "Follow one sentence", "Pause" or "Again". When pressed it inverts to ink on plate.
-- **Steppers** (`transport-stepper`): 2.2rem square, a 1rem chevron drawn at 1.8 stroke, round caps. Disabled: ink 2 text, rule border.
+- **Steppers** (`transport-stepper`): the words "Back" and "Next" in sans 500, `0.42rem 0.7rem`; no icon. Disabled: ink 2 text, rule border.
 - **Key entries** (`key-entry`): no box. A full-width ruled row with a disc, a bold "what" and an ink 2 "how"; hover underlines the "what" in rule colour; the active entry lights its disc.
-- **Focus:** every control takes the global slate outline (2px, 3px offset).
+- **Focus:** every control and link takes the global leaf outline (2px, 3px offset), so interaction has one accent.
 
 ### Links
 Prose links are ink with a 1px underline in rule colour offset 0.2em; hover darkens the underline to the text colour. Running-head, rail and contents links carry no underline; they move from ink 2 to ink on hover, or underline on hover where they are serif titles.
@@ -276,14 +276,14 @@ Prose links are ink with a 1px underline in rule colour offset 0.2em; hover dark
 Ruled the way a schedule in a book is ruled. Sans at 0.97rem; a small-caps caption above in ink 2; small-caps column heads on an ink rule; serif row heads at 1.05rem; rule-colour hairlines between rows; an ink rule closing the body. Cells pad `0.7rem 1.4rem 0.7rem 0` with no right padding on the last column. On a phone rows stack and each cell prints its `data-label` in small caps.
 
 ### Notes and contents
-Lists with no bullets: each entry is a ruled row (`{spacing.row}` vertical), a hairline above, a hairline closing the last. The docs contents adds a 2.6rem column of serif folio numbers in ink 2.
+Lists with no bullets. The notes sit under one rule as a two-column grid at 56rem and above (`0.9rem 3rem` gaps), one column below, each entry capped at `{spacing.measure}`; no rules between entries. The docs contents keeps ruled rows (`{spacing.row}` vertical, a hairline above, a hairline closing the last) with a 2.6rem column of serif folio numbers in ink 2.
 
 ### Code blocks
 Code bg with a rule border and 2px corners, `1rem 1.1rem` padding, mono at 0.86rem to 0.9rem, comments in ink 2. Inline code in the docs takes the same fill with a `0.08em 0.3em` pad.
 
 ### Navigation
 - **Running head:** wordmark in serif 500 at 1.35rem; navigation in small caps 500 at 1rem, 0.06em tracking, ink 2 to ink on hover; a rule beneath. No mobile variant; there are two links.
-- **Folio:** sans 0.95rem in ink 2 above a rule; the edition line in small caps.
+- **Folio:** sans 0.95rem in ink 2 under a rule: the licence and the three links, nothing else. The version is stated once, in the Open source prose.
 - **Docs rail:** small-caps home link, then the pages as a list with a 7px ring before each; the current page's ring fills leaf and its text turns ink.
 - **Turn:** previous and next at the foot of a doc, serif 1.15rem under a small-caps label, right-aligned on the right.
 
@@ -309,7 +309,7 @@ An SVG house in section at `viewBox 0 0 960 640`, drawn once and lit by `data-st
 - **Don't** introduce a fourth face or fake small caps with `text-transform: uppercase`.
 - **Don't** use monospace outside `code`.
 - **Don't** add a kicker, eyebrow or badge above a heading; the plate title stands alone and sheet titles are one serif line.
-- **Don't** card the key, the tables or the notes; they are ruled rows.
+- **Don't** card the key, the tables or the notes; the key and tables are ruled rows, the notes a ruled block.
 - **Don't** animate anything that is not the sentence travelling, and never outside `prefers-reduced-motion: no-preference`.
 
 ## Departures from the brief
