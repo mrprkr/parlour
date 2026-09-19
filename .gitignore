@@ -27,6 +27,9 @@ apps/site/.next/
 apps/site/next-env.d.ts
 apps/site/tsconfig.tsbuildinfo
 
+# Claude Code's own worktrees; settings.json next to it is shared and checked in.
+.claude/worktrees/
+
 # Written by `vercel link`; the project is identified by its git connection.
 .vercel/
 .env*.local
