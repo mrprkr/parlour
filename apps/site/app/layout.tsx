@@ -5,9 +5,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import "./globals.css";
 
-// The book's three voices: the serif for the plate titles and the prose, the
-// sans for the key, the labels and the tables, and its small caps for the
-// running heads and the room names.
+// Three voices from one superfamily: the serif sets the headings, the sans
+// sets everything that is read or consulted, and its small caps set the
+// running head, the table columns and the labels on the drawing.
 const alegreya = Alegreya({
   subsets: ["latin"],
   style: ["normal", "italic"],
@@ -31,7 +31,7 @@ const alegreyaSansSc = Alegreya_Sans_SC({
 });
 
 const description =
-  "Parlour is a voice assistant for your home that runs on a Mac you already own. A local wake word, local speech to text, a local model with tools, and a cloud model only when it is needed. Open source, MIT.";
+  "Parlour is a voice assistant for your home that runs on a Mac you already own. The wake word, the transcription, the model and the voice all stay on your machine, and the cloud is asked only when the local model cannot answer. Open source, MIT.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://heyparlour.app"),
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   description,
   openGraph: {
     title: "Parlour",
-    description: "A voice assistant for your home, on a Mac you already own.",
+    description: "Ask your house. Nothing you say leaves it.",
     type: "website",
     url: "https://heyparlour.app/",
   },
@@ -47,8 +47,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fcfcfa" },
-    { media: "(prefers-color-scheme: dark)", color: "#181716" },
+    { media: "(prefers-color-scheme: light)", color: "#f4f3ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#111110" },
   ],
 };
 

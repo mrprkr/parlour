@@ -1,19 +1,20 @@
 import Link from "next/link";
-import { House } from "./house";
+import { Diagram } from "./diagram";
+import { Flow } from "./flow";
 import { InstallButton } from "./install-button";
-import { Plan } from "./plan";
-import { Walk } from "./walk";
 
 export default function Home() {
   return (
     <main className="book">
-      <section className="plate-1" aria-labelledby="offer">
+      <section className="opening" aria-labelledby="offer">
         <div className="head">
-          <h1 id="offer">A voice assistant for your home, on a Mac you already own.</h1>
+          <h1 id="offer">
+            Ask your house. <span className="turn-line">Nothing you say leaves it.</span>
+          </h1>
           <div className="offer">
             <p className="lede">
-              Say the wake word and ask. Lights, timers, the calendar, answered out loud by the one Mac in the
-              house.
+              Parlour is a voice assistant for your home that runs on a Mac you already own. Lights, heating,
+              timers and questions, answered out loud in the room you asked from.
             </p>
             <div className="actions">
               <InstallButton />
@@ -23,69 +24,35 @@ export default function Home() {
             </div>
           </div>
         </div>
-        <Walk figure={<House />} />
+        <Flow figure={<Diagram />} />
       </section>
 
-      <section className="sheet wall" aria-labelledby="wall-heading">
-        <h2 id="wall-heading">What leaves the house</h2>
+      <section className="sheet" aria-labelledby="private-heading">
+        <h2 id="private-heading">Your voice stays on your Mac</h2>
         <div className="two-col">
           <p>
             The wake word, the recording, the transcription, the model and the voice all run on your Mac.
-            There is no account to create and no server of ours in the middle. When the local model decides a
-            question is beyond it, and only then, it hands the sentence to Claude: the words you said, as
-            text, never the audio. The cloud gets one question at a time, and nothing in the house is
-            reachable from it.
+            There is no account to create and no server of ours in the middle, so there is nothing to trust
+            but the machine in your own house.
           </p>
-          <figure className="wall-figure" aria-labelledby="wall-caption">
-            <svg viewBox="0 0 364 150" role="img" aria-labelledby="wall-title">
-              <title id="wall-title">A wall in section: sound stays inside, one line of text leaves</title>
-              <rect className="wall-cut" x="150" y="0" width="14" height="150" />
-              <text className="side" x="70" y="22" textAnchor="middle">
-                inside
-              </text>
-              <text className="side" x="246" y="22" textAnchor="middle">
-                outside
-              </text>
-              <path
-                className="stays"
-                d="M40 62a14 14 0 0 1 0 26M54 54a24 24 0 0 1 0 42M68 46a34 34 0 0 1 0 58"
-              />
-              <text className="side" x="60" y="128" textAnchor="middle">
-                audio
-              </text>
-              <line className="stays" x1="90" y1="75" x2="138" y2="75" />
-              <path className="stays" d="M128 66l10 9-10 9" />
-              <path className="dashed" d="M164 75h130" />
-              <path className="dashed" d="M284 66l10 9-10 9" />
-              <text className="side" x="172" y="128">
-                the sentence, when asked
-              </text>
-            </svg>
-            <figcaption id="wall-caption">
-              Fig. 2. Sound never crosses the wall. Text does, on request.
-            </figcaption>
-          </figure>
+          <p>
+            When the local model decides a question is beyond it, and only then, it passes the sentence to
+            Claude as text. Your voice never goes with it, the cloud sees one question at a time, and nothing
+            in your house is reachable from the other side.
+          </p>
         </div>
       </section>
 
-      <section className="sheet rooms" aria-labelledby="rooms-heading">
-        <h2 id="rooms-heading">One Mac, every room</h2>
+      <section className="sheet" aria-labelledby="rooms-heading">
+        <h2 id="rooms-heading">One Mac, heard in every room</h2>
         <p>
           One machine runs the models, holds the tokens and does the answering. Everything else with a
-          microphone is a client of it, and the server's own microphone is one client among them, with no
-          special privileges. All of them need <code>PARLOUR_TOKEN</code>; without it the server listens on
-          loopback only and does not announce itself.
+          microphone is a client of it, including the Mac's own, which gets no special treatment. All of them
+          need <code>PARLOUR_TOKEN</code>; without it the server stays on loopback and never announces itself.
         </p>
-        <figure className="plan-figure" aria-labelledby="plan-caption">
-          <Plan />
-          <figcaption id="plan-caption">
-            Fig. 3. The same house in plan. Every microphone is a client of the one Mac; none of them is
-            special.
-          </figcaption>
-        </figure>
         <div className="table-scroll">
           <table className="schedule">
-            <caption>Table 1. The clients, and who listens for the wake word</caption>
+            <caption>What can listen, and who hears the wake word</caption>
             <thead>
               <tr>
                 <th scope="col" className="col">
@@ -102,7 +69,7 @@ export default function Home() {
             <tbody>
               <tr>
                 <th scope="row" className="row">
-                  The Mac's own microphone
+                  The Mac itself
                 </th>
                 <td data-label="How it connects">In process.</td>
                 <td data-label="Who hears the wake word">Parlour, with openWakeWord.</td>
@@ -112,22 +79,18 @@ export default function Home() {
                   Another Mac
                 </th>
                 <td data-label="How it connects">
-                  <code>role: "satellite"</code>. Finds the server with Bonjour and holds a socket open.
+                  <code>role: "satellite"</code>. Finds the server over Bonjour and holds a socket open.
                 </td>
-                <td data-label="Who hears the wake word">
-                  The server, over the stream. Or the satellite itself, with local wake.
-                </td>
+                <td data-label="Who hears the wake word">The server, or the satellite itself.</td>
               </tr>
               <tr>
                 <th scope="row" className="row">
-                  Voice PE, through Home Assistant
+                  Voice PE
                 </th>
                 <td data-label="How it connects">
-                  The OpenAI-compatible endpoint at <code>/v1</code>.
+                  Home Assistant, pointed at the OpenAI-compatible endpoint on <code>/v1</code>.
                 </td>
-                <td data-label="Who hears the wake word">
-                  The Voice PE, on the device. Home Assistant does the speech both ways.
-                </td>
+                <td data-label="Who hears the wake word">The device. Home Assistant does the speech.</td>
               </tr>
               <tr>
                 <th scope="row" className="row">
@@ -137,15 +100,15 @@ export default function Home() {
                   The page the server serves at <code>/</code>. Hold the button.
                 </td>
                 <td data-label="Who hears the wake word">
-                  Nobody. Your thumb is a better endpoint, and the phone is not listening all day.
+                  Nobody. Your thumb is better, and the phone is not listening all day.
                 </td>
               </tr>
               <tr>
                 <th scope="row" className="row">
-                  A board you soldered
+                  Something you built
                 </th>
                 <td data-label="How it connects">
-                  The socket at <code>/listen</code>, raw 16 kHz mono PCM.
+                  The socket on <code>/listen</code>, raw 16 kHz mono PCM.
                 </td>
                 <td data-label="Who hears the wake word">The server, or the board. Its choice.</td>
               </tr>
@@ -154,7 +117,7 @@ export default function Home() {
                   An automation
                 </th>
                 <td data-label="How it connects">
-                  <code>POST /ask</code> with text; an answer back as text.
+                  <code>POST /ask</code> with text, and an answer back as text.
                 </td>
                 <td data-label="Who hears the wake word">Nobody.</td>
               </tr>
@@ -163,23 +126,23 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="sheet parts" aria-labelledby="parts-heading">
-        <h2 id="parts-heading">Schedule of parts</h2>
+      <section className="sheet" aria-labelledby="parts-heading">
+        <h2 id="parts-heading">Swap any part of it</h2>
         <p>
-          Every stage is a provider behind a small interface, chosen by name in one config file. The built-in
-          ones are the fastest we have found for Apple silicon. Prefer something else? Publish it as an npm
-          package, name it in your config, and <code>parlour doctor</code> will tell you whether it is happy.
+          Every stage sits behind a small interface and is picked by name in one config file. What ships is
+          the fastest we have found for Apple silicon. Prefer something else? Publish it as an npm package,
+          name it in your config, and <code>parlour doctor</code> will tell you whether it is happy.
         </p>
         <div className="table-scroll">
           <table className="schedule">
-            <caption>Table 2. The slots, what fills them out of the box, and how to change one</caption>
+            <caption>The slots, what fills them, and the key that changes one</caption>
             <thead>
               <tr>
                 <th scope="col" className="col">
-                  Slot
+                  Stage
                 </th>
                 <th scope="col" className="col">
-                  Built in
+                  What ships
                 </th>
                 <th scope="col" className="col">
                   To swap
@@ -192,7 +155,7 @@ export default function Home() {
                   <span className="disc-inline">1</span>
                   Wake word
                 </th>
-                <td data-label="Built in">openWakeWord, in process</td>
+                <td data-label="What ships">openWakeWord, in process</td>
                 <td data-label="To swap">
                   <code>wake.provider</code>
                 </td>
@@ -202,7 +165,7 @@ export default function Home() {
                   <span className="disc-inline">3</span>
                   Speech to text
                 </th>
-                <td data-label="Built in">whisper.cpp, small.en, kept warm</td>
+                <td data-label="What ships">whisper.cpp, small.en, kept warm</td>
                 <td data-label="To swap">
                   <code>stt.provider</code>
                 </td>
@@ -212,7 +175,7 @@ export default function Home() {
                   <span className="disc-inline">4</span>
                   The local model
                 </th>
-                <td data-label="Built in">
+                <td data-label="What ships">
                   Anything speaking the OpenAI chat API; LM Studio is the easy one
                 </td>
                 <td data-label="To swap">
@@ -224,7 +187,7 @@ export default function Home() {
                   <span className="disc-inline">5</span>
                   The cloud model
                 </th>
-                <td data-label="Built in">Claude, with web search, no house tools</td>
+                <td data-label="What ships">Claude, with web search and no house tools</td>
                 <td data-label="To swap">
                   <code>llm.cloud.provider</code>
                 </td>
@@ -234,7 +197,7 @@ export default function Home() {
                   <span className="disc-inline">6</span>
                   Text to speech
                 </th>
-                <td data-label="Built in">Kokoro, in process; macOS say as the fallback</td>
+                <td data-label="What ships">Kokoro, in process, with macOS say behind it</td>
                 <td data-label="To swap">
                   <code>tts.provider</code>
                 </td>
@@ -243,7 +206,7 @@ export default function Home() {
                 <th scope="row" className="row">
                   Search
                 </th>
-                <td data-label="Built in">SearXNG, if you run one</td>
+                <td data-label="What ships">SearXNG, if you run one</td>
                 <td data-label="To swap">
                   <code>search.provider</code>
                 </td>
@@ -252,7 +215,7 @@ export default function Home() {
                 <th scope="row" className="row">
                   Tools
                 </th>
-                <td data-label="Built in">Home Assistant over MCP, connectors, timers</td>
+                <td data-label="What ships">Home Assistant over MCP, connectors, timers</td>
                 <td data-label="To swap">
                   <code>integrations</code>, as npm packages
                 </td>
@@ -262,44 +225,44 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="sheet house-assistant" aria-labelledby="ha-heading">
+      <section className="sheet" aria-labelledby="ha-heading">
         <h2 id="ha-heading">Made for Home Assistant</h2>
-        <p>
-          Home Assistant's MCP Server integration publishes whatever you have exposed to voice assistants as
-          tools, so Parlour can do exactly what you have allowed and nothing more. Expose a light and it can
-          turn it on; leave it unexposed and it cannot.
-        </p>
-        <p>
-          A mute switch lives in Home Assistant rather than on the Mac, so the house itself can keep Parlour
-          quiet while everyone is asleep. Point the OpenAI Conversation integration at Parlour and the voice
-          satellites you already own start using it as their brain.
-        </p>
+        <div className="two-col">
+          <p>
+            Home Assistant publishes whatever you have exposed to voice assistants, so Parlour can do exactly
+            that and nothing more. Expose a light and it can turn it on. Leave it unexposed and it cannot.
+          </p>
+          <p>
+            Mute lives in Home Assistant rather than on the Mac, so the house can keep Parlour quiet while
+            everyone sleeps. Point the OpenAI Conversation integration at it and the voice satellites you
+            already own get a new brain.
+          </p>
+        </div>
       </section>
 
-      <section className="sheet not-shown" aria-labelledby="not-heading">
-        <h2 id="not-heading">Not shown on this drawing, on purpose</h2>
+      <section className="sheet" aria-labelledby="not-heading">
+        <h2 id="not-heading">What it does not do</h2>
         <ul className="notes">
           <li>
-            <strong>Telling voices apart.</strong> Everyone in the house is the same user.
+            <strong>Tell voices apart.</strong> Everyone in the house is the same user.
           </li>
           <li>
-            <strong>Cancelling its own echo.</strong> Which is why barge-in is off by default.
+            <strong>Cancel its own echo.</strong> Which is why barge-in is off by default.
           </li>
           <li>
-            <strong>Failing over.</strong> There is one server. If it is off, the satellites wait for it
-            rather than electing a new one; a house with two brains that disagree is worse than a house with
-            none.
+            <strong>Fail over.</strong> There is one server. If it is off, satellites wait for it; a house
+            with two brains that disagree is worse than a house with none.
           </li>
           <li>
-            <strong>Per-person connectors.</strong> Tokens belong to the household. A satellite cannot tell
-            who is talking, so neither can Parlour.
+            <strong>Keep connectors per person.</strong> Tokens belong to the household, because a satellite
+            cannot tell who is talking.
           </li>
           <li>
-            <strong>Linux.</strong> Not yet. The platform-specific parts sit behind interfaces, so it is a
-            contribution rather than a rewrite, and one we would love to see.
+            <strong>Run on Linux.</strong> Not yet. The platform-specific parts sit behind interfaces, so it
+            is a contribution rather than a rewrite, and one we would love to see.
           </li>
           <li>
-            <strong>A wake word called Parlour, in the box.</strong> The install ships the stock{" "}
+            <strong>Answer to “Parlour” out of the box.</strong> The install ships the stock{" "}
             <code>hey_jarvis</code> model; <Link href="/docs/wake-word">training your own</Link> takes an
             afternoon.
           </li>
@@ -307,7 +270,7 @@ export default function Home() {
       </section>
 
       <section className="sheet installation" aria-labelledby="install-heading">
-        <h2 id="install-heading">Installation</h2>
+        <h2 id="install-heading">Talking in ten minutes</h2>
         <div className="two-col">
           <pre>
             <code>
@@ -315,28 +278,28 @@ export default function Home() {
               {"parlour init          "}
               <span className="c"># fetches what it needs and asks a few questions</span>
               {"\nparlour text          "}
-              <span className="c"># chat in the terminal first, no microphone needed</span>
+              <span className="c"># try it in the terminal, no microphone needed</span>
               {"\nparlour start         "}
               <span className="c"># and now out loud</span>
             </code>
           </pre>
           <p>
             You will need a Mac with Node 22 and Homebrew. <code>init</code> fetches ffmpeg, whisper.cpp and
-            the models, asks for your Home Assistant token, offers to add an Anthropic key if you would like
-            the cloud behind it, and can set Parlour to start at login. If you would rather have a window than
-            a terminal, the <Link href="/docs/desktop">menu bar app</Link> does the same things with buttons.
+            the models, asks for your Home Assistant token, offers to add an Anthropic key if you want the
+            cloud behind it, and can start Parlour at login. If you would rather have a window than a
+            terminal, the <Link href="/docs/desktop">menu bar app</Link> does the same with buttons.
           </p>
         </div>
       </section>
 
-      <section className="sheet colophon" aria-labelledby="source-heading">
-        <h2 id="source-heading">Open source</h2>
+      <section className="sheet" aria-labelledby="source-heading">
+        <h2 id="source-heading">Open source, built to be taken apart</h2>
         <p>
-          Parlour is MIT licensed, at version 0.1.0, and built to be extended. The most useful thing you could
-          add is a provider: a new voice, a different speech to text engine, a Linux service manager. The{" "}
-          <Link href="/docs/providers">provider guide</Link> walks through one from start to finish, and the{" "}
+          Parlour is MIT licensed and at version 0.1.0. The most useful thing you could add is a provider: a
+          new voice, a different speech to text engine, a Linux service manager. The{" "}
+          <Link href="/docs/providers">provider guide</Link> walks through one from start to finish, the{" "}
           <a href="https://github.com/mrprkr/parlour/blob/main/CONTRIBUTING.md">contributing guide</a> covers
-          the rest. Questions and ideas are welcome in the issues.
+          the rest, and questions are welcome in the issues.
         </p>
       </section>
     </main>

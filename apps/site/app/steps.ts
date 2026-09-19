@@ -1,48 +1,59 @@
 /**
- * The seven callouts on the plate, in the order one sentence travels through
- * the house. The numbers are the ones drawn on the section, so the key, the
- * walk and the drawing all agree on what "5" is.
+ * The seven stages a question passes through, in order. The same list draws
+ * the signal path and sets the key beside it, so the diagram and the words
+ * can never disagree about what "4" is.
  */
 export interface Step {
   n: number;
-  what: string;
+  /** The name on the diagram and in the key. */
+  label: string;
+  /** The part that does it, set under the label on the diagram. */
+  detail: string;
+  /** One sentence in the key. */
   how: string;
 }
 
 export const steps: Step[] = [
   {
     n: 1,
-    what: "“Hey Parlour”",
-    how: "openWakeWord hears it on the Mac, or on the satellite in the room. Nothing is recorded before that.",
+    label: "Wake word",
+    detail: "openWakeWord",
+    how: "“Hey Parlour”, heard on the Mac or on a satellite in the room. Nothing is recorded before that.",
   },
   {
     n: 2,
-    what: "You talk",
-    how: "Recording stops on its own after 800 ms of quiet and the audio goes to the Mac, never further.",
+    label: "Your voice",
+    detail: "800 ms of quiet",
+    how: "Recording stops when you do. The audio goes to the Mac and no further.",
   },
   {
     n: 3,
-    what: "Words",
-    how: "whisper.cpp, small.en, kept warm on the Mac so it is done in under a second.",
+    label: "Words",
+    detail: "whisper.cpp",
+    how: "small.en, kept warm, so a sentence becomes text in under a second.",
   },
   {
     n: 4,
-    what: "Thinking",
-    how: "A local model with tools: the house over MCP, timers, search, and the accounts you have connected.",
+    label: "Thinking",
+    detail: "a local model",
+    how: "A small model with tools: your house over MCP, timers, search and the accounts you have connected.",
   },
   {
     n: 5,
-    what: "A hand from the cloud",
-    how: "Only when the local model decides a question is beyond it, Claude gets the sentence. Text, never audio.",
+    label: "Claude",
+    detail: "text only",
+    how: "Asked only when the local model decides a question is beyond it, and given the sentence as text.",
   },
   {
     n: 6,
-    what: "A voice",
-    how: "Kokoro on the Mac, speaking the first sentence while the rest is still being made.",
+    label: "A voice",
+    detail: "Kokoro",
+    how: "Speaking the first sentence while the rest is still being written.",
   },
   {
     n: 7,
-    what: "Your speakers",
-    how: "In whichever room you asked from.",
+    label: "Your speakers",
+    detail: "the room you asked",
+    how: "The answer arrives out loud, where you are.",
   },
 ];

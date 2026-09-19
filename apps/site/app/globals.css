@@ -1,67 +1,44 @@
 /*
- * A reference book, open at the plate of a house. The page is the plate: a
- * white sheet, ink line work, an illustrator's washes for the rooms, and
- * numbered callouts that match the key. One colour, leaf green, is spent on
- * whichever callout is lit. Everything else on the site is the same book:
- * running heads, folios, tables with rules rather than boxes.
+ * Ink on paper, and one accent. The page is a technical document: a hairline
+ * grid, a serif for the headings, a sans for everything that is read or
+ * consulted, and a single drawing that is a schematic rather than a picture.
+ * Green marks one thing at a time, and nothing anywhere casts a shadow.
  */
 
 :root {
-  --page: #f5f5f1;
-  --plate: #fcfcfa;
-  --ink: #1c1c20;
-  --ink-2: #55555e;
-  --rule: #d6d6d0;
-  --brick: #b5402a;
-  --slate: #3d5a80;
-  --leaf: #3f7a3b;
-  --leaf-wash: #dcebd8;
-  --slate-wash: #dfe7f0;
-  --code-bg: #ecece6;
-  --selection: #cfe0f5;
-
-  --wash-kitchen: #e9efe4;
-  --wash-hall: #f1efe8;
-  --wash-sitting: #f4e6e2;
-  --wash-study: #e3eaf1;
-  --wash-landing: #efeeea;
-  --wash-bedroom: #f3ecdf;
-  --wash-loft: #ebebe9;
+  --page: #f4f3ef;
+  --plate: #fbfaf7;
+  --ink: #17171a;
+  --ink-2: #5d5d66;
+  --rule: #dedcd4;
+  --accent: #1f6350;
+  --accent-wash: #e0ebe6;
+  --code-bg: #ebe9e2;
+  --selection: #d5e5df;
 
   --serif: var(--font-serif), "Iowan Old Style", Georgia, serif;
   --sans: var(--font-sans), "Helvetica Neue", Helvetica, Arial, sans-serif;
   --caps: var(--font-caps), var(--sans);
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
 
-  --book: 76rem;
-  --measure: 62ch;
-  --doc-measure: 44rem;
+  --book: 74rem;
+  --measure: 66ch;
+  --doc-measure: 42rem;
   --rail: 12rem;
-  --gutter: clamp(1rem, 4vw, 3rem);
+  --gutter: clamp(1.25rem, 4vw, 3rem);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --page: #131211;
-    --plate: #181716;
-    --ink: #e8e7e2;
-    --ink-2: #a5a4a0;
-    --rule: #353431;
-    --brick: #9e5240;
-    --slate: #8aa8cc;
-    --leaf: #7dbb76;
-    --leaf-wash: #22392a;
-    --slate-wash: #23303c;
-    --code-bg: #222120;
-    --selection: #2f4a6b;
-
-    --wash-kitchen: #1f261f;
-    --wash-hall: #232221;
-    --wash-sitting: #2b2222;
-    --wash-study: #21262c;
-    --wash-landing: #252422;
-    --wash-bedroom: #2b2620;
-    --wash-loft: #1f1e1c;
+    --page: #111110;
+    --plate: #181715;
+    --ink: #eceae3;
+    --ink-2: #a09e97;
+    --rule: #34332e;
+    --accent: #6cc0a3;
+    --accent-wash: #16302a;
+    --code-bg: #201f1c;
+    --selection: #22403a;
   }
 }
 
@@ -72,18 +49,12 @@
 html {
   background: var(--page);
   color: var(--ink);
-  font-family: var(--serif);
-  font-size: 18px;
-  line-height: 1.5;
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   caret-color: var(--ink);
   scrollbar-color: var(--rule) transparent;
-}
-
-@media (max-width: 40rem) {
-  html {
-    font-size: 17px;
-  }
 }
 
 body {
@@ -109,7 +80,7 @@ a:hover {
 }
 
 :focus-visible {
-  outline: 2px solid var(--leaf);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
@@ -136,36 +107,37 @@ p {
 .running-head {
   max-width: var(--book);
   margin: 0 auto;
-  padding: 1.1rem 0 0.9rem;
+  padding: 1.4rem 0 1.1rem;
   border-bottom: 1px solid var(--rule);
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 1rem;
 }
 
 .wordmark {
   font-family: var(--serif);
   font-weight: 500;
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   text-decoration: none;
   letter-spacing: -0.005em;
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.5rem;
 }
 
 .mark {
-  width: 1.15em;
-  height: 1.15em;
+  width: 1.05em;
+  height: 1.05em;
   fill: none;
   stroke: currentColor;
-  stroke-width: 2.4;
+  stroke-width: 2.2;
   stroke-linejoin: round;
   stroke-linecap: round;
 }
 
 .mark-dot {
-  fill: var(--leaf);
+  fill: var(--accent);
   stroke: none;
 }
 
@@ -174,13 +146,14 @@ p {
   gap: 1.6rem;
   font-family: var(--caps);
   font-weight: 500;
-  font-size: 1rem;
-  letter-spacing: 0.06em;
+  font-size: 0.95rem;
+  letter-spacing: 0.07em;
 }
 
 .running-head nav a {
   text-decoration: none;
   color: var(--ink-2);
+  transition: color 160ms ease-out;
 }
 
 .running-head nav a:hover {
@@ -191,15 +164,14 @@ p {
 
 .folio {
   max-width: var(--book);
-  margin: 6rem auto 0;
-  padding: 1.2rem 0 3rem;
+  margin: 7rem auto 0;
+  padding: 1.3rem 0 3.5rem;
   border-top: 1px solid var(--rule);
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 0.5rem 2rem;
-  font-family: var(--sans);
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   color: var(--ink-2);
 }
 
@@ -215,33 +187,41 @@ p {
 }
 
 .book h1 {
-  font-size: clamp(2.2rem, 3.9vw, 3.2rem);
-  line-height: 1.06;
-  letter-spacing: -0.012em;
-  max-width: 26ch;
+  font-size: clamp(2.3rem, 4.6vw, 3.4rem);
+  line-height: 1.04;
+  letter-spacing: -0.018em;
+  max-width: 24ch;
+}
+
+/* The second sentence takes its own line rather than wrapping anywhere. */
+@media (min-width: 30rem) {
+  .book h1 .turn-line {
+    display: block;
+  }
 }
 
 .lede {
-  font-size: 1.22rem;
-  line-height: 1.42;
-  max-width: 50ch;
+  font-size: 1.15rem;
+  line-height: 1.5;
+  max-width: 46ch;
   margin: 1.2rem 0 0;
+  color: var(--ink-2);
   text-wrap: pretty;
 }
 
-.plate-1 {
-  padding-top: 2.8rem;
+.opening {
+  padding-top: clamp(3rem, 7vw, 5.5rem);
 }
 
 .head {
   display: grid;
-  gap: 1.2rem 3rem;
-  align-items: start;
+  gap: 1.4rem 4rem;
+  align-items: end;
 }
 
-@media (min-width: 64rem) {
+@media (min-width: 60rem) {
   .head {
-    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
   }
 
   .head .lede {
@@ -250,256 +230,11 @@ p {
 }
 
 .actions {
-  margin-top: 1.3rem;
+  margin-top: 1.5rem;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.8rem 1.4rem;
-}
-
-/* ------------------------------------------------------------- walk */
-
-.walk {
-  margin-top: 2.2rem;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 2rem 3rem;
-  align-items: start;
-}
-
-@media (min-width: 64rem) {
-  .walk {
-    grid-template-columns: minmax(0, 1fr) 21rem;
-  }
-}
-
-.plate-figure {
-  margin: 0;
-  min-width: 0;
-}
-
-/* The plate has a hairline frame, the way a plate in a book does. */
-.plate {
-  background: var(--plate);
-  border: 1px solid var(--rule);
-  padding: clamp(0.4rem, 1.5vw, 1.2rem);
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: thin;
-}
-
-.plate::-webkit-scrollbar {
-  height: 6px;
-}
-
-.plate::-webkit-scrollbar-thumb {
-  background: var(--rule);
-  border-radius: 3px;
-}
-
-.pan-cue {
-  display: none;
-  margin: 0;
-  color: var(--ink-2);
-  font-size: 0.9rem;
-}
-
-@media (max-width: 48rem) {
-  .pan-cue {
-    display: block;
-  }
-}
-
-.house {
-  display: block;
-  width: 100%;
-  height: auto;
-  font-family: var(--sans);
-}
-
-@media (max-width: 48rem) {
-  /* Fewer rooms per screen at the same line weight, rather than a smaller house. */
-  .house {
-    min-width: 46rem;
-  }
-}
-
-.caption {
-  margin-top: 0.9rem;
-  display: grid;
-  gap: 0.4rem;
-  font-family: var(--sans);
-  font-size: 0.98rem;
-  line-height: 1.45;
-}
-
-.transport {
-  display: flex;
-  gap: 0.4rem;
-  align-items: center;
-}
-
-.play,
-.stepper {
-  font: inherit;
-  font-family: var(--sans);
-  font-weight: 500;
-  color: var(--ink);
-  background: var(--plate);
-  border: 1px solid var(--ink);
-  border-radius: 2px;
-  cursor: pointer;
-  transition:
-    background-color 160ms ease-out,
-    color 160ms ease-out;
-}
-
-.play {
-  padding: 0.42rem 0.9rem;
-  white-space: nowrap;
-}
-
-.play:hover,
-.stepper:hover:enabled {
-  background: var(--code-bg);
-}
-
-.play:active,
-.stepper:active:enabled,
-.install:active {
-  transform: translateY(1px);
-}
-
-.play[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--plate);
-}
-
-.stepper {
-  padding: 0.42rem 0.7rem;
-}
-
-.stepper:disabled {
-  color: var(--ink-2);
-  border-color: var(--rule);
-  cursor: default;
-}
-
-.now {
-  margin: 0.25rem 0 0;
-  min-height: 2.9em;
-  color: var(--ink);
-}
-
-.now strong {
-  font-weight: 700;
-}
-
-/* The numbered discs, wherever they appear in text. */
-.disc-inline {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.45rem;
-  height: 1.45rem;
-  margin-right: 0.5rem;
-  border: 1.5px solid var(--ink);
-  border-radius: 50%;
-  font-family: var(--sans);
-  font-weight: 700;
-  font-size: 0.8rem;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  vertical-align: -0.3em;
-  flex: none;
-  transition:
-    background-color 200ms ease-out,
-    color 200ms ease-out,
-    border-color 200ms ease-out;
-}
-
-/* -------------------------------------------------------------- key */
-
-.key {
-  font-family: var(--sans);
-}
-
-@media (min-width: 64rem) {
-  .key {
-    position: sticky;
-    top: 1.5rem;
-  }
-}
-
-.key h2 {
-  font-family: var(--caps);
-  font-weight: 700;
-  font-size: 1rem;
-  letter-spacing: 0.08em;
-  color: var(--ink-2);
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--ink);
-}
-
-.key .transport {
-  padding: 0.8rem 0;
-  border-bottom: 1px solid var(--rule);
-}
-
-.key-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.key-list li {
-  border-bottom: 1px solid var(--rule);
-}
-
-.key-list button {
-  font: inherit;
-  color: inherit;
-  background: none;
-  border: 0;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  padding: 0.62rem 0.3rem 0.62rem 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  column-gap: 0;
-  align-items: start;
-  line-height: 1.38;
-}
-
-.key-list .disc-inline {
-  margin-top: 0.1rem;
-  margin-right: 0.7rem;
-}
-
-.key-list .what {
-  font-weight: 700;
-  font-size: 1rem;
-}
-
-.key-list button:hover .what {
-  text-decoration: underline;
-  text-decoration-color: var(--rule);
-  text-underline-offset: 0.18em;
-}
-
-.key-list .how {
-  grid-column: 2;
-  color: var(--ink-2);
-  font-size: 0.9rem;
-  margin-top: 0.1rem;
-}
-
-.now .disc-inline,
-.key-list .lit .disc-inline {
-  background: var(--leaf);
-  border-color: var(--leaf);
-  color: #fff;
+  gap: 0.8rem 1.5rem;
 }
 
 .install {
@@ -520,6 +255,10 @@ p {
   background: var(--code-bg);
 }
 
+.install:active {
+  transform: translateY(1px);
+}
+
 .install .prompt {
   font-family: var(--mono);
   color: var(--ink-2);
@@ -530,329 +269,247 @@ p {
 }
 
 .copied {
-  font-family: var(--sans);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--ink-2);
   margin-left: 0.3rem;
 }
 
 .copied:empty::before {
-  /* Reserve the width so the button does not jump when the word appears. */
+  /* Reserve the width so the control does not jump when the word appears. */
   content: "copy";
 }
 
 .docs-link {
-  font-family: var(--sans);
   font-weight: 500;
 }
 
-/* ----------------------------------------------------------- the plate */
+/* -------------------------------------------------------------- flow */
 
-.house text {
+.flow {
+  margin-top: clamp(2.5rem, 5vw, 4rem);
+}
+
+.flow-figure {
+  margin: 0;
+  min-width: 0;
+}
+
+/* The drawing sits on its own sheet, inside a hairline. */
+.plate {
+  background: var(--plate);
+  border: 1px solid var(--rule);
+  padding: clamp(0.75rem, 2vw, 1.6rem);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.plate::-webkit-scrollbar {
+  height: 6px;
+}
+
+.plate::-webkit-scrollbar-thumb {
+  background: var(--rule);
+  border-radius: 3px;
+}
+
+.pan-cue {
+  display: none;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 0.88rem;
+}
+
+@media (max-width: 52rem) {
+  .pan-cue {
+    display: block;
+  }
+}
+
+.caption {
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.caption p {
+  margin: 0;
+}
+
+/* The numbered discs, wherever they appear in text. */
+.disc-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  margin-right: 0.5rem;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  vertical-align: -0.28em;
+  flex: none;
+  transition:
+    background-color 200ms ease-out,
+    color 200ms ease-out,
+    border-color 200ms ease-out;
+}
+
+/* --------------------------------------------------------- the drawing */
+
+/* Capped so the drawing's own type sits at the size of the page's type. */
+.diagram {
+  display: block;
+  width: 100%;
+  max-width: 60rem;
+  height: auto;
+  margin-inline: auto;
   font-family: var(--sans);
 }
 
-.house .hatch {
-  stroke: var(--ink-2);
-  stroke-width: 1;
+@media (max-width: 52rem) {
+  /* Pan rather than shrink, so the line weights stay honest. */
+  .diagram {
+    min-width: 42rem;
+  }
+}
+
+/* The boundary: what runs on the one machine. */
+.diagram .boundary rect {
   fill: none;
-  opacity: 0.55;
-}
-
-.house .garden {
-  stroke: var(--leaf);
-  stroke-width: 3;
-}
-
-.house .trunk {
-  stroke: var(--ink);
-  stroke-width: 3;
-}
-
-.house .canopy {
-  fill: var(--leaf-wash);
-  stroke: var(--ink);
-  stroke-width: 2;
-}
-
-.house .wash {
-  stroke: none;
-}
-
-.house .wash.kitchen {
-  fill: var(--wash-kitchen);
-}
-.house .wash.hall {
-  fill: var(--wash-hall);
-}
-.house .wash.sitting {
-  fill: var(--wash-sitting);
-}
-.house .wash.study {
-  fill: var(--wash-study);
-}
-.house .wash.landing {
-  fill: var(--wash-landing);
-}
-.house .wash.bedroom {
-  fill: var(--wash-bedroom);
-}
-.house .wash.loft {
-  fill: var(--wash-loft);
-}
-
-.house .cut rect,
-.house .cut .stair {
-  fill: var(--ink);
-}
-
-/* The walls are what the section cut through: brick, outlined in ink. */
-.house .cut .wall {
-  fill: var(--brick);
-  stroke: var(--ink);
+  stroke: var(--rule);
   stroke-width: 1.5;
 }
 
-.house .roof {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 12;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-
-.house .line * {
-  stroke: var(--ink);
-  stroke-width: 2;
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.house .line .thick {
-  stroke-width: 3.5;
-}
-
-.house .line .fill {
-  fill: var(--plate);
-}
-
-.house .line .dot {
-  fill: var(--ink);
-  stroke: none;
-}
-
-.house .line text,
-.house .label {
-  stroke: none;
-  fill: var(--ink);
-  font-style: italic;
-  font-size: 14px;
-}
-
-.house .say {
-  font-family: var(--serif);
-  font-size: 17px;
-}
-
-.house .note {
-  font-size: 12.5px;
-  fill: var(--ink-2);
-}
-
-.house .line .mic {
-  stroke: var(--slate);
-  stroke-width: 1.6;
-}
-
-.house .line .device {
-  stroke: var(--slate);
-}
-
-.house .screen {
-  fill: var(--slate-wash);
-  stroke: none;
-  transition: fill 240ms ease-out;
-}
-
-.house .speech,
-.house .speaks {
-  stroke: var(--slate);
-}
-
-.house .rooms text {
+.diagram .place {
   font-family: var(--caps);
-  font-size: 15px;
-  letter-spacing: 0.06em;
-  fill: var(--ink-2);
-}
-
-.house .route {
-  fill: none;
-  stroke: var(--slate);
-  stroke-width: 2.6;
-  stroke-linecap: round;
-  stroke-dasharray: 0.1 7;
-  transition: stroke 240ms ease-out;
-}
-
-.house .cloud-leader {
-  stroke: var(--ink-2);
-  stroke-width: 1.5;
-  stroke-dasharray: 6 6;
-  fill: none;
-  transition: stroke 240ms ease-out;
-}
-
-.house .along {
-  font-size: 13px;
-  font-style: italic;
-  fill: var(--ink-2);
-}
-
-.house .cloud-name {
-  font-style: normal;
-  font-family: var(--caps);
-  font-size: 15px;
-  letter-spacing: 0.06em;
-}
-
-.house .cloud-body {
-  fill: var(--plate);
-  stroke: var(--ink);
-  stroke-width: 2;
-  transition: fill 240ms ease-out;
-}
-
-.house .callout .leader {
-  stroke: var(--ink);
-  stroke-width: 1.2;
-}
-
-.house .callout .disc {
-  fill: var(--plate);
-  stroke: var(--ink);
-  stroke-width: 2;
-  transition:
-    fill 200ms ease-out,
-    stroke 200ms ease-out;
-}
-
-.house .callout .num {
   font-weight: 700;
-  font-size: 15px;
-  fill: var(--ink);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  fill: var(--ink-2);
+}
+
+/* The spine, one segment per stage. */
+.diagram .seg line {
+  stroke: var(--ink-2);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  transition: stroke 220ms ease-out;
+}
+
+.diagram .seg .tip {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke 220ms ease-out;
+}
+
+/* The one line that leaves the machine: dashed, because it is occasional. */
+.diagram .branch .lead {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.3;
+  stroke-dasharray: 5 6;
+  stroke-linecap: round;
+  transition: stroke 220ms ease-out;
+}
+
+.diagram .aside {
+  font-size: 13.5px;
+  font-style: italic;
+  fill: var(--ink-2);
+}
+
+.diagram .disc {
+  fill: var(--plate);
+  stroke: var(--ink);
+  stroke-width: 1.8;
+  transition:
+    fill 220ms ease-out,
+    stroke 220ms ease-out;
+}
+
+.diagram .num {
+  font-size: 14px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+  fill: var(--ink);
+  transition: fill 220ms ease-out;
 }
 
-/* Which callout is lit. The numbers are the key's numbers. */
-.walk[data-step="1"] .c1 .disc,
-.walk[data-step="2"] .c2 .disc,
-.walk[data-step="3"] .c3 .disc,
-.walk[data-step="4"] .c4 .disc,
-.walk[data-step="5"] .c5 .disc,
-.walk[data-step="6"] .c6 .disc,
-.walk[data-step="7"] .c7 .disc {
-  fill: var(--leaf);
-  stroke: var(--leaf);
+.diagram .label {
+  font-size: 16px;
+  font-weight: 600;
+  fill: var(--ink);
 }
 
-.walk[data-step="1"] .c1 .num,
-.walk[data-step="2"] .c2 .num,
-.walk[data-step="3"] .c3 .num,
-.walk[data-step="4"] .c4 .num,
-.walk[data-step="5"] .c5 .num,
-.walk[data-step="6"] .c6 .num,
-.walk[data-step="7"] .c7 .num {
-  fill: #fff;
+.diagram .detail {
+  font-size: 13.5px;
+  fill: var(--ink-2);
 }
 
-.walk[data-step="1"] .c1 .leader,
-.walk[data-step="2"] .c2 .leader,
-.walk[data-step="3"] .c3 .leader,
-.walk[data-step="4"] .c4 .leader,
-.walk[data-step="5"] .c5 .leader,
-.walk[data-step="6"] .c6 .leader,
-.walk[data-step="7"] .c7 .leader {
-  stroke: var(--leaf);
-  stroke-width: 2;
+/* Which stage is lit. The numbers are the ones in the key. */
+.flow[data-step="1"] .s1 .disc,
+.flow[data-step="2"] .s2 .disc,
+.flow[data-step="3"] .s3 .disc,
+.flow[data-step="4"] .s4 .disc,
+.flow[data-step="5"] .s5 .disc,
+.flow[data-step="6"] .s6 .disc,
+.flow[data-step="7"] .s7 .disc {
+  fill: var(--accent);
+  stroke: var(--accent);
 }
 
-/* What each step lights on the drawing itself. */
-.walk[data-step="1"] .speech {
-  stroke: var(--leaf);
-  stroke-width: 2.6;
+.flow[data-step="1"] .s1 .num,
+.flow[data-step="2"] .s2 .num,
+.flow[data-step="3"] .s3 .num,
+.flow[data-step="4"] .s4 .num,
+.flow[data-step="5"] .s5 .num,
+.flow[data-step="6"] .s6 .num,
+.flow[data-step="7"] .s7 .num {
+  fill: var(--page);
 }
 
-.walk[data-step="2"] .route,
-.walk[data-step="7"] .route {
-  stroke: var(--leaf);
+/* The segment that carries the question into the lit stage runs with it. */
+.flow[data-step="2"] .seg.s2 line,
+.flow[data-step="3"] .seg.s3 line,
+.flow[data-step="4"] .seg.s4 line,
+.flow[data-step="6"] .seg.s6 line,
+.flow[data-step="7"] .seg.s7 line,
+.flow[data-step="2"] .seg.s2 .tip,
+.flow[data-step="3"] .seg.s3 .tip,
+.flow[data-step="4"] .seg.s4 .tip,
+.flow[data-step="6"] .seg.s6 .tip,
+.flow[data-step="7"] .seg.s7 .tip,
+.flow[data-step="5"] .branch .lead {
+  stroke: var(--accent);
 }
 
-.walk[data-step="2"] .line .vpe,
-.walk[data-step="7"] .speaker {
-  stroke: var(--leaf);
-}
-
-.walk[data-step="3"] .screen,
-.walk[data-step="4"] .screen,
-.walk[data-step="6"] .screen {
-  fill: var(--leaf-wash);
-}
-
-.walk[data-step="3"] .screen-frame,
-.walk[data-step="4"] .screen-frame,
-.walk[data-step="6"] .screen-frame {
-  stroke: var(--leaf);
-}
-
-.walk[data-step="5"] .cloud-leader {
-  stroke: var(--leaf);
-  stroke-width: 2;
-}
-
-.walk[data-step="5"] .cloud-body {
-  fill: var(--leaf-wash);
-  stroke: var(--leaf);
-}
-
-.walk[data-step="5"] .along {
-  fill: var(--leaf);
-}
-
-.walk[data-step="7"] .speaks {
-  stroke: var(--leaf);
-  stroke-width: 2.6;
+.flow[data-step="5"] .aside {
+  fill: var(--accent);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  /* The sound travels: the dots along the route move towards the Mac, and
-   * back again for the answer. The dash period is 7.1, so one period per
-   * step of the offset keeps the motion seamless. */
-  .walk[data-step="2"] .route {
-    animation: travel 1.4s linear infinite;
+  /* The only motion on the site: the question moving along the line it is on. */
+  .flow[data-step="5"] .branch .lead {
+    animation: travel 1.2s linear infinite;
   }
 
-  .walk[data-step="7"] .route {
-    animation: travel 1.4s linear infinite reverse;
-  }
-
-  .walk[data-step="5"] .cloud-leader {
-    animation: travel-dash 1.2s linear infinite;
-  }
-
-  .walk[data-step="1"] .speech,
-  .walk[data-step="7"] .speaks {
-    animation: sound 1.1s ease-out infinite;
-  }
-
-  .walk[data-step="1"] .c1 .disc,
-  .walk[data-step="2"] .c2 .disc,
-  .walk[data-step="3"] .c3 .disc,
-  .walk[data-step="4"] .c4 .disc,
-  .walk[data-step="5"] .c5 .disc,
-  .walk[data-step="6"] .c6 .disc,
-  .walk[data-step="7"] .c7 .disc {
+  .flow[data-step="1"] .s1 .disc,
+  .flow[data-step="2"] .s2 .disc,
+  .flow[data-step="3"] .s3 .disc,
+  .flow[data-step="4"] .s4 .disc,
+  .flow[data-step="5"] .s5 .disc,
+  .flow[data-step="6"] .s6 .disc,
+  .flow[data-step="7"] .s7 .disc {
     animation: settle 420ms cubic-bezier(0.2, 0.9, 0.3, 1) 1;
     transform-box: fill-box;
     transform-origin: center;
@@ -860,58 +517,187 @@ p {
 
   @keyframes travel {
     to {
-      stroke-dashoffset: -71;
-    }
-  }
-
-  @keyframes travel-dash {
-    to {
-      stroke-dashoffset: -24;
-    }
-  }
-
-  @keyframes sound {
-    0% {
-      opacity: 0.35;
-    }
-    60% {
-      opacity: 1;
-    }
-    100% {
-      opacity: 0.35;
+      stroke-dashoffset: -22;
     }
   }
 
   @keyframes settle {
     from {
-      transform: scale(1.45);
+      transform: scale(1.4);
     }
   }
 }
 
-/* ------------------------------------------------------------ plates */
+/* --------------------------------------------------------- the key */
+
+.key {
+  margin-top: clamp(2.2rem, 4vw, 3.2rem);
+}
+
+/* The name of the list and the controls that drive it share one rule. */
+.key-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem 1.5rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--ink);
+}
+
+.key h2 {
+  font-family: var(--caps);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.09em;
+  color: var(--ink-2);
+}
+
+.transport {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.play,
+.stepper {
+  font: inherit;
+  font-weight: 500;
+  font-size: 0.92rem;
+  color: var(--ink);
+  background: var(--plate);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease-out,
+    color 160ms ease-out;
+}
+
+.play {
+  padding: 0.4rem 0.9rem;
+  white-space: nowrap;
+}
+
+.play:hover,
+.stepper:hover:enabled {
+  background: var(--code-bg);
+}
+
+.play:active,
+.stepper:active:enabled {
+  transform: translateY(1px);
+}
+
+.play[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--plate);
+}
+
+.stepper {
+  padding: 0.4rem 0.7rem;
+}
+
+.stepper:disabled {
+  color: var(--ink-2);
+  border-color: var(--rule);
+  cursor: default;
+}
+
+.key-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 4rem;
+}
+
+@media (min-width: 52rem) {
+  .key-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 76rem) {
+  .key-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.key-list li {
+  border-bottom: 1px solid var(--rule);
+}
+
+.key-list button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  padding: 0.65rem 0.3rem 0.65rem 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  line-height: 1.45;
+}
+
+.key-list .disc-inline {
+  margin-top: 0.05rem;
+  margin-right: 0.7rem;
+}
+
+.key-list .what {
+  font-weight: 600;
+  font-size: 0.97rem;
+}
+
+.key-list button:hover .what {
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 0.18em;
+}
+
+.key-list .how {
+  grid-column: 2;
+  color: var(--ink-2);
+  font-size: 0.88rem;
+  margin-top: 0.1rem;
+}
+
+.key-list .lit .disc-inline {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--page);
+}
+
+/* ------------------------------------------------------------ sheets */
 
 .sheet {
-  margin-top: 4.4rem;
-  padding-top: 3rem;
+  margin-top: clamp(3.5rem, 7vw, 6rem);
+  padding-top: clamp(2rem, 3vw, 2.8rem);
   border-top: 1px solid var(--rule);
 }
 
-.sheet > h2,
-.plate-1 > h2 {
-  font-size: clamp(1.6rem, 2.6vw, 2.05rem);
-  line-height: 1.15;
-  margin-bottom: 1rem;
+.sheet > h2 {
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  max-width: 28ch;
+  margin-bottom: 1.1rem;
 }
 
 .sheet > p {
   max-width: var(--measure);
+  color: var(--ink-2);
   text-wrap: pretty;
 }
 
 .two-col {
   display: grid;
-  gap: 1rem 3.5rem;
+  gap: 0.6rem 4rem;
   align-items: start;
 }
 
@@ -923,132 +709,14 @@ p {
 
 .two-col p {
   max-width: var(--measure);
+  color: var(--ink-2);
   text-wrap: pretty;
 }
 
 @media (min-width: 56rem) {
   /* The commands need the room; the note beside them does not. */
   .installation .two-col {
-    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  }
-}
-
-.wall-figure {
-  margin: 0;
-  max-width: 24rem;
-  font-family: var(--sans);
-}
-
-.wall-figure svg {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
-.wall-figure .wall-cut {
-  fill: var(--ink);
-}
-
-.wall-figure .side {
-  font-family: var(--caps);
-  font-size: 13px;
-  letter-spacing: 0.06em;
-  fill: var(--ink-2);
-}
-
-.wall-figure .stays {
-  fill: none;
-  stroke: var(--slate);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.wall-figure .dashed {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 1.5;
-  stroke-dasharray: 5 5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.wall-figure figcaption {
-  margin-top: 0.5rem;
-  font-size: 0.92rem;
-  color: var(--ink-2);
-}
-
-/* The house in plan, on its own tipped-in sheet above the clients table. */
-.plan-figure {
-  margin: 1.6rem 0 0;
-  font-family: var(--sans);
-}
-
-.plan {
-  display: block;
-  width: 100%;
-  height: auto;
-  background: var(--plate);
-  border: 1px solid var(--rule);
-  padding: clamp(0.4rem, 1.5vw, 1rem);
-}
-
-.plan-figure figcaption {
-  margin-top: 0.5rem;
-  font-size: 0.92rem;
-  color: var(--ink-2);
-}
-
-.plan .room {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 2.5;
-}
-
-.plan .room-name {
-  font-family: var(--caps);
-  font-size: 14px;
-  letter-spacing: 0.06em;
-  fill: var(--ink-2);
-}
-
-.plan .wires line {
-  stroke: var(--slate);
-  stroke-width: 2.4;
-  stroke-linecap: round;
-  stroke-dasharray: 0.1 7;
-}
-
-.plan .device-plan use,
-.plan .hub use {
-  fill: none;
-  stroke: var(--slate);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.plan .label {
-  font-size: 13px;
-  font-style: italic;
-  fill: var(--ink);
-}
-
-.plan .hub-frame {
-  fill: var(--plate);
-  stroke: var(--ink);
-  stroke-width: 2;
-}
-
-.plan .hub-screen {
-  fill: var(--slate-wash);
-}
-
-@media (max-width: 40rem) {
-  .plan .label,
-  .plan .room-name {
-    font-size: 17px;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   }
 }
 
@@ -1061,7 +729,6 @@ p {
 .schedule {
   border-collapse: collapse;
   width: 100%;
-  font-family: var(--sans);
   font-size: 0.97rem;
   line-height: 1.4;
 }
@@ -1153,10 +820,10 @@ p {
 .notes {
   list-style: none;
   margin: 0;
-  padding: 1.2rem 0 0;
+  padding: 1.3rem 0 0;
   border-top: 1px solid var(--rule);
   display: grid;
-  gap: 0.9rem 3rem;
+  gap: 1.1rem 4rem;
 }
 
 @media (min-width: 56rem) {
@@ -1167,11 +834,13 @@ p {
 
 .notes li {
   max-width: var(--measure);
+  color: var(--ink-2);
   text-wrap: pretty;
 }
 
 .notes strong {
-  font-weight: 700;
+  font-weight: 600;
+  color: var(--ink);
 }
 
 /* The commands. */
@@ -1240,7 +909,6 @@ p {
   grid-column: 2;
   margin: 0.25rem 0 0;
   color: var(--ink-2);
-  font-family: var(--sans);
   font-size: 0.95rem;
 }
 
@@ -1274,7 +942,6 @@ p {
 }
 
 .rail {
-  font-family: var(--sans);
   font-size: 0.92rem;
 }
 
@@ -1324,8 +991,8 @@ p {
 
 /* The page you are on is the lit callout. */
 .rail .lit::before {
-  background: var(--leaf);
-  border-color: var(--leaf);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .rail-link {
@@ -1402,7 +1069,6 @@ p {
 .prose table {
   border-collapse: collapse;
   width: 100%;
-  font-family: var(--sans);
   font-size: 0.95rem;
 }
 
