@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Parlour is a local-first voice assistant for the house that runs on a Mac. One npm package
-(`packages/parlour`) holds everything; the desktop app drives its CLI; the website is a page.
+(`packages/parlour`) holds everything; the desktop app drives its CLI; the website is a Next.js page.
 `README.md` is the user-facing tour, `CONTRIBUTING.md` the conventions, and `docs/architecture.md`
 the long version of the architecture section below.
 
@@ -37,7 +37,10 @@ Desktop app (`apps/desktop`, Tauri + React + Tailwind): `pnpm -C apps/desktop ap
 with live reload; `pnpm exec nx run desktop:cargo-check` for the Rust side. It only ever shells out
 to the `parlour` CLI, so a capability the app needs must exist in the CLI first.
 
-Site (`apps/site`): deployed by Vercel with Root Directory `apps/site`. `pnpm exec nx run site:lint`.
+Site (`apps/site`, Next.js, one route): words in `app/page.tsx`, looks in `app/globals.css`, metadata,
+font and the analytics component in `app/layout.tsx`, security headers in `next.config.ts`.
+`pnpm -C apps/site dev` locally; `pnpm exec nx run-many -t typecheck lint build -p site` is what CI
+runs. Vercel builds it with the Next.js builder, Root Directory `apps/site`.
 
 ## Architecture of `packages/parlour/src`
 
