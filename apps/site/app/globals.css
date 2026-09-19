@@ -1,9 +1,13 @@
 /*
  * Ink on paper, and one accent. The page is a technical document: a hairline
  * grid, a serif for the headings, a sans for everything that is read or
- * consulted, and a single drawing that is a schematic rather than a picture.
- * Green marks one thing at a time, and nothing anywhere casts a shadow.
+ * consulted. Green marks one thing at a time, and nothing anywhere casts a
+ * shadow.
  */
+
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
 
 :root {
   --page: #f4f3ef;
@@ -41,6 +45,33 @@
   }
 }
 
+/* The docs use Fumadocs, drawn in the same ink, paper and green. */
+:root,
+.dark {
+  --color-fd-background: var(--page);
+  --color-fd-foreground: var(--ink);
+  --color-fd-muted: var(--code-bg);
+  --color-fd-muted-foreground: var(--ink-2);
+  --color-fd-popover: var(--plate);
+  --color-fd-popover-foreground: var(--ink);
+  --color-fd-card: var(--plate);
+  --color-fd-card-foreground: var(--ink);
+  --color-fd-border: var(--rule);
+  --color-fd-primary: var(--accent);
+  --color-fd-primary-foreground: var(--page);
+  --color-fd-secondary: var(--code-bg);
+  --color-fd-secondary-foreground: var(--ink);
+  --color-fd-accent: var(--accent-wash);
+  --color-fd-accent-foreground: var(--ink);
+  --color-fd-ring: var(--accent);
+}
+
+.dark #nd-sidebar {
+  --color-fd-muted: var(--code-bg);
+  --color-fd-secondary: var(--code-bg);
+  --color-fd-muted-foreground: var(--ink-2);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -58,6 +89,9 @@ html {
 
 body {
   margin: 0;
+}
+
+.site {
   padding: 0 var(--gutter);
 }
 
@@ -66,7 +100,7 @@ body {
   color: var(--ink);
 }
 
-a {
+.site a {
   color: inherit;
   text-decoration: underline;
   text-decoration-color: var(--rule);
@@ -74,7 +108,7 @@ a {
   text-underline-offset: 0.2em;
 }
 
-a:hover {
+.site a:hover {
   text-decoration-color: currentColor;
 }
 
@@ -83,21 +117,21 @@ a:hover {
   outline-offset: 3px;
 }
 
-code {
+.site code {
   font-family: var(--mono);
   font-size: 0.86em;
 }
 
-h1,
-h2,
-h3 {
+.site h1,
+.site h2,
+.site h3 {
   font-family: var(--serif);
   font-weight: 500;
   margin: 0;
   text-wrap: balance;
 }
 
-p {
+.site p {
   margin: 0 0 1rem;
 }
 
@@ -281,306 +315,44 @@ p {
   font-weight: 500;
 }
 
-/* -------------------------------------------------------------- flow */
+/* -------------------------------------------------------------- steps */
 
-/*
- * The drawing sticks while the stages pass it, and the page's own scroll is
- * the only control. `data-step` on the wrapper says which stage is at the
- * trigger line; everything lit follows from that in CSS.
- */
-.flow {
-  margin-top: clamp(2.5rem, 5vw, 4rem);
-}
-
-@media (min-width: 64rem) {
-  .flow {
-    display: grid;
-    grid-template-columns: 26rem minmax(0, 1fr);
-    gap: 0 clamp(2.5rem, 5vw, 4.5rem);
-    align-items: start;
-  }
-}
-
-.flow-figure {
-  margin: 0;
-  min-width: 0;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding-block: 0.8rem;
-  background: var(--page);
-}
-
-@media (min-width: 64rem) {
-  .flow-figure {
-    top: 17vh;
-    padding-block: 0;
-    background: none;
-  }
-}
-
-/* The drawing sits on its own sheet, inside a hairline. */
-.plate {
-  background: var(--plate);
-  border: 1px solid var(--rule);
-  padding: clamp(0.9rem, 2vw, 1.5rem);
-}
-
-.caption {
-  margin-top: 0.9rem;
-  display: grid;
-  gap: 0.4rem;
-  font-size: 0.95rem;
-  line-height: 1.5;
-  color: var(--ink-2);
-}
-
-.caption p {
-  margin: 0;
-}
-
-/* --------------------------------------------------------- the drawing */
-
-/*
- * Portrait, so it runs the way the page is read and fits the column it
- * sticks in. Capped by height rather than width, so the sheet can never grow
- * taller than the screen it is pinned to.
- */
-.diagram {
-  display: block;
-  width: 100%;
-  height: auto;
-  max-height: 58vh;
-  margin-inline: auto;
-  font-family: var(--sans);
-}
-
-/* The boundary: what runs on the one machine. */
-.diagram .boundary rect {
-  fill: none;
-  stroke: var(--rule);
-  stroke-width: 1.5;
-}
-
-.diagram .place {
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  fill: var(--ink-2);
-}
-
-/*
- * Every line takes its colour from one inherited property, so lighting a
- * stretch of the path is a single declaration on the group above it rather
- * than a selector for each stroke inside it.
- */
-.diagram .seg,
-.diagram .branch {
-  --line: var(--ink-2);
-}
-
-.diagram .seg line,
-.diagram .seg .tip,
-.diagram .branch .lead {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* The one line that leaves the machine: dashed, because it is occasional. */
-.diagram .branch .lead {
-  stroke-width: 1.3;
-  stroke-dasharray: 5 6;
-}
-
-.diagram .disc {
-  fill: var(--disc-fill, var(--plate));
-  stroke: var(--disc-stroke, var(--ink));
-  stroke-width: 1.8;
-  transform-box: fill-box;
-  transform-origin: center;
-  transform: scale(var(--disc-scale, 1));
-}
-
-.diagram .num {
-  font-size: 13px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  fill: var(--num-fill, var(--ink));
-}
-
-.diagram .label {
-  font-size: 17px;
-  font-weight: 600;
-  fill: var(--ink);
-}
-
-.diagram .detail {
-  font-size: 14px;
-  fill: var(--ink-2);
-}
-
-/*
- * The path fills as the question travels: every segment up to the current
- * stage runs in the accent, so scrolling draws the line in. Only the current
- * stage's disc is lit, so there is still one thing to look at.
- */
-.flow[data-step="2"] :is(.seg.s2),
-.flow[data-step="3"] :is(.seg.s2, .seg.s3),
-.flow[data-step="4"] :is(.seg.s2, .seg.s3, .seg.s4),
-.flow[data-step="5"] :is(.seg.s2, .seg.s3, .seg.s4, .branch),
-.flow[data-step="6"] :is(.seg.s2, .seg.s3, .seg.s4, .seg.s6),
-.flow[data-step="7"] :is(.seg.s2, .seg.s3, .seg.s4, .seg.s6, .seg.s7) {
-  --line: var(--accent);
-}
-
-.flow[data-step="1"] .node.s1,
-.flow[data-step="2"] .node.s2,
-.flow[data-step="3"] .node.s3,
-.flow[data-step="4"] .node.s4,
-.flow[data-step="5"] .node.s5,
-.flow[data-step="6"] .node.s6,
-.flow[data-step="7"] .node.s7 {
-  --disc-fill: var(--accent);
-  --disc-stroke: var(--accent);
-  --num-fill: var(--page);
-  --disc-scale: 1.12;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  /* Everything the scroll changes eases into place rather than jumping. */
-  .diagram .disc {
-    transition:
-      fill 380ms ease,
-      stroke 380ms ease,
-      transform 420ms cubic-bezier(0.2, 0.9, 0.3, 1);
-  }
-
-  .diagram .num {
-    transition: fill 380ms ease;
-  }
-
-  .diagram .seg line,
-  .diagram .seg .tip,
-  .diagram .branch .lead,
-  .diagram .aside {
-    transition:
-      stroke 450ms ease,
-      fill 450ms ease;
-  }
-
-  /* While the cloud is the current stage, the dashes run along the branch. */
-  .flow[data-step="5"] .branch .lead {
-    animation: travel 1.2s linear infinite;
-  }
-
-  @keyframes travel {
-    to {
-      stroke-dashoffset: -22;
-    }
-  }
-}
-
-/* --------------------------------------------------------- the stages */
-
-.key {
-  min-width: 0;
-}
-
-.key h2 {
-  font-weight: 600;
-  font-size: 0.78rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--ink);
-}
-
-.key-list {
+.steps {
   list-style: none;
   margin: 0;
   padding: 0;
+  counter-reset: step;
+  max-width: var(--measure);
 }
 
-.key-list li {
-  padding: 1.1rem 0;
-  border-bottom: 1px solid var(--rule);
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  align-content: center;
-}
-
-@media (min-width: 64rem) {
-  /* The stages are the scroll: each one needs room to pass the trigger line. */
-  .key-list li {
-    min-height: 22vh;
-    padding: 1.8rem 0;
-  }
-}
-
-.key-list .disc-inline {
-  margin-top: 0.05rem;
-  margin-right: 0.7rem;
-}
-
-.key-list .what {
-  font-weight: 600;
-  font-size: 0.97rem;
-}
-
-.key-list .how {
-  grid-column: 2;
+.steps li {
+  counter-increment: step;
+  position: relative;
+  padding: 0.9rem 0 0.9rem 2.2rem;
+  border-top: 1px solid var(--rule);
   color: var(--ink-2);
-  font-size: 0.88rem;
-  margin-top: 0.1rem;
+  text-wrap: pretty;
 }
 
-/* The numbered discs, wherever they appear in text. */
-.disc-inline {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.4rem;
-  height: 1.4rem;
-  margin-right: 0.5rem;
-  border: 1.5px solid var(--ink);
-  border-radius: 50%;
-  font-weight: 700;
-  font-size: 0.75rem;
+.steps li:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: 0.85rem;
+  font-family: var(--serif);
+  font-size: 1.25rem;
+  line-height: 1.2;
+  color: var(--ink-2);
   font-variant-numeric: tabular-nums;
-  line-height: 1;
-  vertical-align: -0.28em;
-  flex: none;
 }
 
-.key-list .lit .disc-inline {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--page);
-}
-
-/*
- * Before the section is reached every stage reads normally; once it is, the
- * stage at the trigger line comes forward and the rest step back.
- */
-.flow:not([data-step="0"]) .key-list li:not(.lit) {
-  opacity: 0.45;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .key-list li,
-  .disc-inline {
-    transition:
-      opacity 400ms ease,
-      background-color 300ms ease,
-      border-color 300ms ease,
-      color 300ms ease;
-  }
+.steps strong {
+  font-weight: 600;
+  color: var(--ink);
 }
 
 /* ------------------------------------------------------------ sheets */
@@ -678,10 +450,6 @@ p {
   white-space: nowrap;
 }
 
-.schedule .row .disc-inline {
-  vertical-align: -0.25em;
-}
-
 .schedule td:last-child,
 .schedule th:last-child {
   padding-right: 0;
@@ -728,7 +496,7 @@ p {
   }
 }
 
-/* The notes: what is deliberately not on the drawing. */
+/* The notes: the limits, stated as plainly as the features. */
 .notes {
   list-style: none;
   margin: 0;
@@ -771,278 +539,6 @@ p {
 }
 
 .installation .c {
-  color: var(--ink-2);
-}
-
-/* ------------------------------------------------------- docs index */
-
-.contents {
-  list-style: none;
-  margin: 2.4rem 0 0;
-  padding: 0;
-}
-
-.contents li {
-  display: grid;
-  grid-template-columns: 2.6rem minmax(0, 1fr);
-  padding: 1rem 0;
-  border-top: 1px solid var(--rule);
-}
-
-.contents li:last-child {
-  border-bottom: 1px solid var(--rule);
-}
-
-.contents .folio-num {
-  font-family: var(--serif);
-  font-size: 1.35rem;
-  line-height: 1.2;
-  color: var(--ink-2);
-  font-variant-numeric: tabular-nums;
-}
-
-.doc-link {
-  font-family: var(--serif);
-  font-size: 1.35rem;
-  line-height: 1.2;
-  text-decoration: none;
-}
-
-.doc-link:hover {
-  text-decoration: underline;
-}
-
-.contents .summary {
-  grid-column: 2;
-  margin: 0.25rem 0 0;
-  color: var(--ink-2);
-  font-size: 0.95rem;
-}
-
-/* --------------------------------------------------------- doc page */
-
-/*
- * A doc is one column of prose with the list of pages beside it. The list
- * sits above the text on a narrow screen and to the left on a wide one.
- */
-.doc {
-  max-width: var(--doc-measure);
-  margin: 0 auto;
-  padding-top: 3rem;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 2.5rem 3rem;
-}
-
-@media (min-width: 64rem) {
-  .doc {
-    max-width: calc(var(--rail) + 3rem + var(--doc-measure));
-    grid-template-columns: var(--rail) minmax(0, var(--doc-measure));
-  }
-
-  .doc .rail {
-    grid-row: 1 / span 2;
-    position: sticky;
-    top: 2rem;
-    align-self: start;
-  }
-}
-
-.rail {
-  font-size: 0.92rem;
-}
-
-.rail-home {
-  font-weight: 600;
-  font-size: 0.78rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: var(--ink-2);
-}
-
-.rail-home:hover {
-  color: var(--ink);
-}
-
-.rail ol {
-  list-style: none;
-  margin: 0.6rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem 1.2rem;
-}
-
-@media (min-width: 64rem) {
-  .rail ol {
-    display: block;
-  }
-}
-
-.rail li {
-  position: relative;
-  padding-left: 1.1rem;
-  line-height: 1.7;
-}
-
-.rail li::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.68rem;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  border: 1.5px solid var(--ink-2);
-}
-
-/* The page you are on is the lit callout. */
-.rail .lit::before {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.rail-link {
-  text-decoration: none;
-  color: var(--ink-2);
-}
-
-.rail-link:hover,
-.rail .lit .rail-link {
-  color: var(--ink);
-}
-
-/* ------------------------------------------------------------- prose */
-
-.prose h1 {
-  font-size: clamp(2rem, 4.5vw, 2.7rem);
-  line-height: 1.1;
-  letter-spacing: -0.01em;
-  margin-bottom: 1.6rem;
-}
-
-.prose .lede {
-  max-width: none;
-  margin: 0 0 1rem;
-}
-
-.prose h2 {
-  font-size: 1.55rem;
-  line-height: 1.2;
-  margin: 3rem 0 0.8rem;
-}
-
-.prose h3 {
-  font-size: 1.2rem;
-  line-height: 1.3;
-  margin: 2.2rem 0 0.6rem;
-}
-
-.prose p,
-.prose ul,
-.prose ol {
-  margin: 0 0 1rem;
-  text-wrap: pretty;
-}
-
-.prose ul,
-.prose ol {
-  padding-left: 1.4rem;
-}
-
-.prose li {
-  margin-bottom: 0.4rem;
-}
-
-.prose pre {
-  background: var(--code-bg);
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  padding: 1rem 1.1rem;
-  overflow-x: auto;
-  margin: 0 0 1.2rem;
-  line-height: 1.6;
-}
-
-.prose pre code {
-  font-size: 0.86rem;
-}
-
-.prose :not(pre) > code {
-  background: var(--code-bg);
-  border-radius: 2px;
-  padding: 0.08em 0.3em;
-}
-
-.prose .table-scroll {
-  margin: 0 0 1.2rem;
-}
-
-.prose table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 0.95rem;
-}
-
-.prose th,
-.prose td {
-  text-align: left;
-  vertical-align: top;
-  padding: 0.55rem 1rem 0.55rem 0;
-  border-bottom: 1px solid var(--rule);
-}
-
-.prose th {
-  font-weight: 600;
-  font-size: 0.74rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-2);
-  border-bottom-color: var(--ink);
-}
-
-.prose td:last-child,
-.prose th:last-child {
-  padding-right: 0;
-}
-
-.prose hr {
-  border: 0;
-  border-top: 1px solid var(--rule);
-  margin: 2.5rem 0;
-}
-
-/* Previous and next, at the foot of every doc. */
-.turn {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  padding-top: 1.6rem;
-  border-top: 1px solid var(--rule);
-}
-
-.turn-link {
-  display: flex;
-  flex-direction: column;
-  font-family: var(--serif);
-  font-size: 1.15rem;
-  text-decoration: none;
-}
-
-.turn-link:hover {
-  text-decoration: underline;
-}
-
-.turn-link:last-child {
-  text-align: right;
-}
-
-.turn .label {
-  font-weight: 600;
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--ink-2);
 }
 

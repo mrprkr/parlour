@@ -1,3 +1,8 @@
+---
+title: Architecture
+description: The ports, the provider registry, the session state machine, and why each part was chosen.
+---
+
 How Parlour is put together, for anyone who wants to change it. One npm
 package, `parlour`, holds a pure core, the built-in providers behind its
 ports, the integrations, the network server and the CLI. The desktop app in `apps/desktop` drives the CLI and knows nothing else.

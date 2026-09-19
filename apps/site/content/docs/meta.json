@@ -1,0 +1,13 @@
+{
+  "title": "Docs",
+  "pages": [
+    "index",
+    "architecture",
+    "providers",
+    "clients",
+    "home-assistant",
+    "desktop",
+    "tuning",
+    "wake-word"
+  ]
+}
