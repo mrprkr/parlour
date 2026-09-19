@@ -1,7 +1,8 @@
 import { accessSync, constants, realpathSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { loadConfig } from "../core/config.ts";
-import type { ServiceState } from "../core/ports.ts";
+import type { Paths } from "../core/paths.ts";
+import type { ServiceSpec, ServiceState } from "../core/ports.ts";
 import { leftoverServices, serviceSpecs } from "../core/services.ts";
 import { pickServiceManager } from "../providers/service/index.ts";
 import { type Command, parseCli, subcommand } from "./args.ts";
@@ -10,12 +11,13 @@ import { table } from "./output.ts";
 const USAGE = [
   "parlour service install            start at login, and come back after a crash",
   "parlour service uninstall          stop, and forget",
+  "parlour service stop               stop now, and start again at login",
   "parlour service restart",
   "parlour service status",
   "parlour service logs [--lines N]   the last N lines (40) of each log",
 ];
 
-const SUBCOMMANDS = ["install", "uninstall", "restart", "status", "logs"] as const;
+const SUBCOMMANDS = ["install", "uninstall", "stop", "restart", "status", "logs"] as const;
 
 /**
  * The `parlour` that is running now, as the command for the service to run
@@ -48,7 +50,20 @@ export function describeState(state: ServiceState): string {
   return "not installed";
 }
 
-function print(states: ServiceState[]): void {
+/**
+ * Everything this config would install, plus whatever an older one left
+ * behind. `parlour stop` and `parlour restart` want both: a whisper job from
+ * back when this box was a server is still a process holding a port.
+ */
+export async function everyService(
+  paths: Paths,
+): Promise<{ specs: ServiceSpec[]; all: Pick<ServiceSpec, "label" | "what" | "logPath">[] }> {
+  const { config } = loadConfig(paths);
+  const specs = await serviceSpecs(config, paths, parlourBin());
+  return { specs, all: [...specs, ...leftoverServices(specs, paths)] };
+}
+
+export function print(states: ServiceState[]): void {
   process.stdout.write(`${table(states.map((state) => [state.label, state.what, describeState(state)]))}\n`);
 }
 
@@ -71,6 +86,9 @@ export const command: Command = {
     switch (sub) {
       case "install":
         print(await manager.install(specs));
+        return;
+      case "stop":
+        print(await manager.stop([...specs, ...leftovers]));
         return;
       case "uninstall": {
         const removed = await manager.uninstall([...specs, ...leftovers].map((spec) => spec.label));

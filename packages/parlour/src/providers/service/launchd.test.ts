@@ -90,6 +90,21 @@ test("install, status and uninstall go through the launchctl they were given", a
     assert.equal(status?.installed, false, "no plist for whisper");
     assert.equal(status?.running, false, "the stub knows no such job");
 
+    // Stopping boots the job out and leaves the plist, so launchd starts it
+    // again at the next login. That is the difference between "stop it" and
+    // "get rid of it", and uninstall is the other one.
+    const outs = () => calls().filter((call) => call.startsWith("bootout gui/")).length;
+    const before = outs();
+    const [stopped] = await manager.stop([local]);
+    assert.equal(outs(), before + 1, `booted out through the stub: ${calls().join("; ")}`);
+    assert.ok(existsSync(join(dir, "LaunchAgents", "io.parlour.agent.plist")), "the plist is still there");
+    assert.equal(stopped?.installed, true);
+
+    // Nothing to stop is not an error, and nothing is asked of launchctl.
+    const quiet = outs();
+    await manager.stop([{ ...local, label: "io.parlour.whisper" }]);
+    assert.equal(outs(), quiet, "no job, nothing booted out");
+
     assert.deepEqual(await manager.uninstall(["io.parlour.agent"]), ["io.parlour.agent"]);
     assert.equal(existsSync(join(dir, "LaunchAgents", "io.parlour.agent.plist")), false);
     assert.ok(

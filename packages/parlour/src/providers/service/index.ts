@@ -24,5 +24,5 @@ export function pickServiceManager(
   const refuse = async (): Promise<never> => {
     throw new Error(UNSUPPORTED);
   };
-  return { install: refuse, uninstall: refuse, restart: refuse, status: refuse, tail: refuse };
+  return { install: refuse, uninstall: refuse, stop: refuse, restart: refuse, status: refuse, tail: refuse };
 }

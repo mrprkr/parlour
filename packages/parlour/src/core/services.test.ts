@@ -29,6 +29,16 @@ function withWhisperModel(name = "ggml-small.en.bin"): string {
   return join(dir, name);
 }
 
+function withLocalModel(name = "Qwen2.5-7B-Instruct-Q4_K_M.gguf"): string {
+  const dir = join(paths.modelsDir, "llm");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, name), "");
+  return join(dir, name);
+}
+
+/** A server that has asked Parlour to run the model itself. */
+const managed = { llm: { local: { managed: true, model: "qwen2.5-7b-instruct" } } };
+
 test("the agent spec runs parlour start with its home and a spelled out PATH", async () => {
   const specs = await serviceSpecs(parseConfig({}), paths, ["/opt/homebrew/bin/parlour"], {
     which: whichOf({ node: "/opt/homebrew/bin/node", ffmpeg: "/usr/local/bin/ffmpeg" }),
@@ -128,23 +138,69 @@ test("a satellite gets no whisper and says what it is", async () => {
   assert.equal(specs[0]!.what, "the satellite");
 });
 
-test("a satellite's leftovers are the whisper LaunchAgent it was given as a server", async () => {
+test("a satellite's leftovers are what it was given as a server", async () => {
   const specs = await serviceSpecs(parseConfig({ role: "satellite" }), paths, ["/x/parlour"], {
     which: whichOf({}),
   });
   const leftovers = leftoverServices(specs, paths);
   assert.deepEqual(
     leftovers.map((spec) => spec.label),
-    ["io.parlour.whisper"],
+    ["io.parlour.whisper", "io.parlour.llm"],
   );
   assert.equal(leftovers[0]!.what, "whisper, left over");
   assert.equal(leftovers[0]!.logPath, join(paths.logsDir, "whisper.log"));
+  assert.equal(leftovers[1]!.logPath, join(paths.logsDir, "llm.log"));
 });
 
 test("nothing is left over when the config would install everything", async () => {
   withWhisperModel();
-  const specs = await serviceSpecs(parseConfig({}), paths, ["/x/parlour"], {
-    which: whichOf({ "whisper-server": "/usr/local/bin/whisper-server" }),
+  withLocalModel();
+  const specs = await serviceSpecs(parseConfig(managed), paths, ["/x/parlour"], {
+    which: whichOf({
+      "whisper-server": "/usr/local/bin/whisper-server",
+      "llama-server": "/opt/homebrew/bin/llama-server",
+    }),
   });
   assert.deepEqual(leftoverServices(specs, paths), []);
+});
+
+test("the local model spec serves the fetched GGUF under the id config names", async () => {
+  const file = withLocalModel();
+  const specs = await serviceSpecs(parseConfig(managed), paths, ["/x/parlour"], {
+    which: whichOf({ "llama-server": "/opt/homebrew/bin/llama-server" }),
+  });
+  const llm = specs.find((spec) => spec.label === "io.parlour.llm");
+  assert.ok(llm, `a spec for the local model: ${specs.map((spec) => spec.label).join(", ")}`);
+  const arg = (flag: string) => llm.program[llm.program.indexOf(flag) + 1];
+  assert.equal(llm.program[0], "/opt/homebrew/bin/llama-server");
+  assert.equal(arg("--model"), file);
+  assert.equal(arg("--alias"), "qwen2.5-7b-instruct");
+  assert.equal(arg("--port"), "8920");
+  // Without the chat template the model never emits a tool call, which is the
+  // whole job: a house that talks and cannot turn a light off.
+  assert.ok(llm.program.includes("--jinja"), "the chat template is on");
+  assert.equal(llm.logPath, join(paths.logsDir, "llm.log"));
+});
+
+test("no local model spec without the binary, the file, or the managed switch", async () => {
+  const binary = whichOf({ "llama-server": "/opt/homebrew/bin/llama-server" });
+  const has = (specs: { label: string }[]) => specs.some((spec) => spec.label === "io.parlour.llm");
+  assert.equal(has(await serviceSpecs(parseConfig(managed), paths, ["/x/p"], { which: binary })), false);
+  withLocalModel();
+  assert.equal(has(await serviceSpecs(parseConfig(managed), paths, ["/x/p"], { which: whichOf({}) })), false);
+  // Somebody else's server: config points at it, and starting a second one
+  // would take a port and a gigabyte of memory nobody asked for.
+  assert.equal(has(await serviceSpecs(parseConfig({}), paths, ["/x/p"], { which: binary })), false);
+});
+
+test("the local model server follows the port the config gives it", async () => {
+  withLocalModel();
+  const config = parseConfig({
+    llm: { local: { managed: true, model: "qwen2.5-7b-instruct", baseUrl: "http://127.0.0.1:9123/v1" } },
+  });
+  const specs = await serviceSpecs(config, paths, ["/x/p"], {
+    which: whichOf({ "llama-server": "/opt/homebrew/bin/llama-server" }),
+  });
+  const llm = specs.find((spec) => spec.label === "io.parlour.llm")!;
+  assert.equal(llm.program[llm.program.indexOf("--port") + 1], "9123");
 });

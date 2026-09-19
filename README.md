@@ -41,27 +41,49 @@ parlour text          # have a conversation in the terminal, no microphone neede
 parlour start         # the real thing, unless init already set it to run at login
 ```
 
-`init` walks you through it: your Home Assistant address and token, an
-Anthropic key if you would like the cloud behind it, and a few preferences
-like the wake word and the voice. It writes `~/.config/parlour/config.json`
-and `secrets.env`, offers to run Parlour at login, and finishes by running
-`parlour doctor` so you know everything is in place. Changed your mind about
-something? Run `init` again.
+`init` walks you through it with arrow keys and a handful of questions: what
+this machine is, which local model to run, your Home Assistant, an Anthropic
+key if you would like the cloud behind it, and preferences like the wake word
+and the voice. It writes `~/.config/parlour/config.json` and `secrets.env`,
+offers to run Parlour at login, and finishes by running `parlour doctor` so
+you know everything is in place. Changed your mind about something? Run
+`init` again: every answer defaults to what is already set.
 
-For the local model, [LM Studio](https://lmstudio.ai) is the easy option, and
-anything that speaks the OpenAI chat completions API works too. `init` offers
-to install LM Studio; you load a model and switch its server on.
+**The local model comes with it.** `init` looks at how much memory the Mac
+has, suggests the largest model it can hold comfortably, downloads it, and
+keeps [llama.cpp](https://github.com/ggml-org/llama.cpp) serving it at login
+alongside whisper. Nothing to install by hand and nothing to remember to
+start. `parlour models suggest` shows the catalogue and which one it would
+pick.
+
+If you would rather run the model yourself, say so and point
+`llm.local.baseUrl` at whatever you have: [LM Studio](https://lmstudio.ai)
+(`init` still offers to install it), Ollama, or a box in the cupboard.
+Anything that speaks the OpenAI chat completions API will do.
+
+**Home Assistant** gets its own part of `init`: it looks for your Home
+Assistant on the network, tells you exactly where to make a long lived token,
+checks the token as you paste it, and checks the MCP Server integration is
+switched on. Each of those fails in the same silent way, so each one is
+checked as it is answered rather than all three landing in `parlour doctor`
+half an hour later. Say no and the house is left out entirely.
+
+**The cloud is optional.** Leave the Anthropic key empty and Parlour runs
+local only: the local model keeps every tool, answers everything itself, and
+not a word leaves the house.
 
 ## The commands
 
 ```text
 parlour init [--yes] [--no-deps] [--no-service] [--porcelain]   dependencies, models, config, secrets, service or app
 parlour start [--events]                         the server or the satellite, per config.role
+parlour stop                                     stop it, until the next login
+parlour restart                                  after editing config.json or a secret
 parlour text                                     everything but the microphone
 parlour doctor [--json]                          which of the moving parts is down
-parlour service install|uninstall|restart|status|logs
+parlour service install|uninstall|stop|restart|status|logs
 parlour connectors add <name> <url>|list|remove <name>
-parlour models fetch
+parlour models fetch [--llm auto]|suggest
 parlour config path|show|write|edit
 parlour secrets status|set <NAME>
 ```

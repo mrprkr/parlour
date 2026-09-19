@@ -17,6 +17,8 @@ import { type Command, parseGlobals, splitCommand, UsageError } from "./args.ts"
 const COMMANDS: Record<string, () => Promise<{ command: Command }>> = {
   init: () => import("./init.ts"),
   start: () => import("./start.ts"),
+  stop: () => import("./stop.ts"),
+  restart: () => import("./restart.ts"),
   text: () => import("./text.ts"),
   doctor: () => import("./doctor.ts"),
   service: () => import("./service.ts"),
@@ -29,9 +31,11 @@ const COMMANDS: Record<string, () => Promise<{ command: Command }>> = {
 const SUMMARIES: Record<keyof typeof COMMANDS, string> = {
   init: "set this machine up: dependencies, models, config, secrets, service or app",
   start: "run the server or the satellite, per config.role",
+  stop: "stop the agent and everything it keeps warm",
+  restart: "stop and start it, after a change to config or a secret",
   text: "talk to it in the terminal, without the microphone",
   doctor: "check every moving part and name the broken one",
-  service: "install, uninstall, restart, status, logs",
+  service: "install, uninstall, stop, restart, status, logs",
   connectors: "sign in to remote MCP servers: add, list, remove",
   models: "fetch the wake word and whisper models",
   config: "path, show, write, edit",
