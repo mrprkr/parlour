@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function DocsIndex() {
   return (
-    <main className="docs-index">
+    <main className="book docs-index">
       <h1>Docs</h1>
       <p className="lede">
         The short version is on the <Link href="/">front page</Link>. These are the long ones: how Parlour is
@@ -18,9 +18,12 @@ export default function DocsIndex() {
         The <a href="https://github.com/mrprkr/parlour#readme">README</a> has the commands and the ten minute
         setup.
       </p>
-      <ol className="docs-list">
-        {docPages.map((page) => (
+      <ol className="contents">
+        {docPages.map((page, index) => (
           <li key={page.slug}>
+            <span className="folio-num" aria-hidden="true">
+              {index + 1}
+            </span>
             <Link className="doc-link" href={`/docs/${page.slug}`}>
               {page.title}
             </Link>
