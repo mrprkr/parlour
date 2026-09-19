@@ -4,6 +4,12 @@
   "title": "Design System: Parlour",
   "extensions": {
     "colorMeta": {
+      "page": {
+        "role": "neutral",
+        "displayName": "Page",
+        "canonical": "oklch(96.7% 0.004 106.5)",
+        "tonalRamp": ["#0b0b0a", "#242423", "#40403e", "#5e5e5c", "#80807e", "#a5a5a3", "#cacac9", "#eeeeec"]
+      },
       "plate": {
         "role": "neutral",
         "displayName": "Plate",
@@ -82,13 +88,22 @@
         "displayName": "Display",
         "purpose": "The plate title on the front page; the docs h1 is a lighter cut of the same role."
       },
-      "headline": { "displayName": "Headline", "purpose": "Sheet titles on the front page." },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Sheet titles on the front page."
+      },
       "title": {
         "displayName": "Title",
         "purpose": "Wordmark, contents entries, previous and next, schedule row heads."
       },
-      "lede": { "displayName": "Lede", "purpose": "The paragraph under a plate title, capped at 50ch." },
-      "body": { "displayName": "Body", "purpose": "All prose; 62ch on the front page, 44rem in the docs." },
+      "lede": {
+        "displayName": "Lede",
+        "purpose": "The paragraph under a plate title, capped at 50ch."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "All prose; 62ch on the front page, 44rem in the docs."
+      },
       "key": {
         "displayName": "Key",
         "purpose": "The key column, captions, tables, notes and the docs rail."
@@ -97,7 +112,10 @@
         "displayName": "Label",
         "purpose": "True small caps for running heads, column heads, room names and captions."
       },
-      "mono": { "displayName": "Mono", "purpose": "Commands and config keys only, inside code." }
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Commands and config keys only, inside code."
+      }
     },
     "shadows": [],
     "motion": [
@@ -138,13 +156,21 @@
       }
     ],
     "breakpoints": [
-      { "name": "phone", "value": "40rem", "purpose": "Base size drops to 17px; tables stack." },
+      {
+        "name": "phone",
+        "value": "40rem",
+        "purpose": "Base size drops to 17px; tables stack."
+      },
       {
         "name": "plate-pans",
         "value": "48rem",
         "purpose": "The plate takes a 46rem minimum width and pans sideways."
       },
-      { "name": "two-col", "value": "56rem", "purpose": "Two-column sheets split." },
+      {
+        "name": "two-col",
+        "value": "56rem",
+        "purpose": "Two-column sheets split."
+      },
       {
         "name": "book",
         "value": "64rem",
@@ -152,16 +178,36 @@
       }
     ],
     "lineWeights": [
-      { "name": "roof", "value": "12", "purpose": "The roof, the nearest line." },
-      { "name": "thick", "value": "3.5", "purpose": "Nearer edges." },
-      { "name": "line", "value": "2", "purpose": "Ordinary line work, round caps and joins." },
+      {
+        "name": "roof",
+        "value": "12",
+        "purpose": "The roof, the nearest line."
+      },
+      {
+        "name": "thick",
+        "value": "3.5",
+        "purpose": "Nearer edges."
+      },
+      {
+        "name": "line",
+        "value": "2",
+        "purpose": "Ordinary line work, round caps and joins."
+      },
       {
         "name": "wall-outline",
         "value": "1.5",
         "purpose": "Ink outline on the brick walls; the cloud leader; the mic."
       },
-      { "name": "leader", "value": "1.2", "purpose": "Callout leaders at rest; 2 when lit." },
-      { "name": "hatch", "value": "1", "purpose": "Ground hatching, ink 2 at 55% opacity." }
+      {
+        "name": "leader",
+        "value": "1.2",
+        "purpose": "Callout leaders at rest; 2 when lit."
+      },
+      {
+        "name": "hatch",
+        "value": "1",
+        "purpose": "Ground hatching, ink 2 at 55% opacity."
+      }
     ]
   },
   "components": [
@@ -171,7 +217,7 @@
       "refersTo": "install-control",
       "description": "The one action on the front page: copies npm install -g parlour and says so for 1.8s.",
       "html": "<button class=\"ds-install\" type=\"button\" aria-label=\"Copy the install command\"><span class=\"ds-install-prompt\" aria-hidden=\"true\">$</span><code>npm install -g parlour</code><span class=\"ds-install-copied\"></span></button>",
-      "css": ".ds-install { font: inherit; font-family: var(--serif, Georgia, serif); font-size: 18px; color: var(--ink, #1c1c20); background: var(--plate, #fcfcfa); border: 1px solid var(--ink, #1c1c20); border-radius: 2px; padding: 0.6rem 0.9rem; cursor: pointer; display: inline-flex; align-items: baseline; gap: 0.6rem; transition: background-color 160ms ease-out; } .ds-install:hover { background: var(--code-bg, #f1f1ec); } .ds-install:focus-visible { outline: 2px solid var(--leaf, #3f7a3b); outline-offset: 3px; } .ds-install code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.95rem; } .ds-install-prompt { font-family: ui-monospace, 'SF Mono', Menlo, monospace; color: var(--ink-2, #55555e); } .ds-install-copied { font-family: var(--sans, 'Helvetica Neue', Arial, sans-serif); font-size: 0.85rem; color: var(--ink-2, #55555e); margin-left: 0.3rem; } .ds-install-copied:empty::before { content: 'copy'; }"
+      "css": ".ds-install { font: inherit; font-family: var(--serif, Georgia, serif); font-size: 18px; color: var(--ink, #1c1c20); background: var(--plate, #fcfcfa); border: 1px solid var(--ink, #1c1c20); border-radius: 2px; padding: 0.6rem 0.9rem; cursor: pointer; display: inline-flex; align-items: baseline; gap: 0.6rem; transition: background-color 160ms ease-out; } .ds-install:hover { background: var(--code-bg, #ecece6); } .ds-install:focus-visible { outline: 2px solid var(--leaf, #3f7a3b); outline-offset: 3px; } .ds-install code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.95rem; } .ds-install-prompt { font-family: ui-monospace, 'SF Mono', Menlo, monospace; color: var(--ink-2, #55555e); } .ds-install-copied { font-family: var(--sans, 'Helvetica Neue', Arial, sans-serif); font-size: 0.85rem; color: var(--ink-2, #55555e); margin-left: 0.3rem; } .ds-install-copied:empty::before { content: 'copy'; }"
     },
     {
       "name": "Transport",
@@ -179,14 +225,14 @@
       "refersTo": "transport-play",
       "description": "Play, back and next at the head of the key; play inverts to ink while pressed.",
       "html": "<div class=\"ds-transport\"><button class=\"ds-play\" type=\"button\" aria-pressed=\"false\">Follow one sentence</button><button class=\"ds-stepper\" type=\"button\" disabled>Back</button><button class=\"ds-stepper\" type=\"button\">Next</button></div>",
-      "css": ".ds-transport { display: flex; gap: 0.4rem; align-items: center; padding: 0.8rem 0; border-bottom: 1px solid var(--rule, #d6d6d0); } .ds-play, .ds-stepper { font: inherit; font-family: var(--sans, 'Helvetica Neue', Arial, sans-serif); font-size: 18px; font-weight: 500; color: var(--ink, #1c1c20); background: var(--plate, #fcfcfa); border: 1px solid var(--ink, #1c1c20); border-radius: 2px; cursor: pointer; transition: background-color 160ms ease-out, color 160ms ease-out; } .ds-play { padding: 0.42rem 0.9rem; white-space: nowrap; } .ds-play:hover, .ds-stepper:hover:enabled { background: var(--code-bg, #f1f1ec); } .ds-play[aria-pressed='true'] { background: var(--ink, #1c1c20); color: var(--plate, #fcfcfa); } .ds-stepper { padding: 0.42rem 0.7rem; } .ds-stepper:disabled { color: var(--ink-2, #55555e); border-color: var(--rule, #d6d6d0); cursor: default; } .ds-play:focus-visible, .ds-stepper:focus-visible { outline: 2px solid var(--leaf, #3f7a3b); outline-offset: 3px; }"
+      "css": ".ds-transport { display: flex; gap: 0.4rem; align-items: center; padding: 0.8rem 0; border-bottom: 1px solid var(--rule, #d6d6d0); } .ds-play, .ds-stepper { font: inherit; font-family: var(--sans, 'Helvetica Neue', Arial, sans-serif); font-size: 18px; font-weight: 500; color: var(--ink, #1c1c20); background: var(--plate, #fcfcfa); border: 1px solid var(--ink, #1c1c20); border-radius: 2px; cursor: pointer; transition: background-color 160ms ease-out, color 160ms ease-out; } .ds-play { padding: 0.42rem 0.9rem; white-space: nowrap; } .ds-play:hover, .ds-stepper:hover:enabled { background: var(--code-bg, #ecece6); } .ds-play[aria-pressed='true'] { background: var(--ink, #1c1c20); color: var(--plate, #fcfcfa); } .ds-stepper { padding: 0.42rem 0.7rem; } .ds-stepper:disabled { color: var(--ink-2, #55555e); border-color: var(--rule, #d6d6d0); cursor: default; } .ds-play:focus-visible, .ds-stepper:focus-visible { outline: 2px solid var(--leaf, #3f7a3b); outline-offset: 3px; }"
     },
     {
       "name": "Key entry",
       "kind": "nav",
       "refersTo": "key-entry",
       "description": "A ruled row in the key: a numbered disc, a bold what and a quieter how. The lit entry's disc fills leaf.",
-      "html": "<ol class=\"ds-key\"><li><button type=\"button\" aria-pressed=\"false\"><span class=\"ds-disc\">1</span><span class=\"ds-what\">“Hey Parlour”</span><span class=\"ds-how\">openWakeWord hears it on the Mac, or on the satellite in the room.</span></button></li><li class=\"ds-lit\"><button type=\"button\" aria-pressed=\"true\"><span class=\"ds-disc\">2</span><span class=\"ds-what\">You talk</span><span class=\"ds-how\">Recording stops on its own after 800 ms of quiet.</span></button></li></ol>",
+      "html": "<ol class=\"ds-key\"><li><button type=\"button\" aria-pressed=\"false\"><span class=\"ds-disc\">1</span><span class=\"ds-what\">\u201cHey Parlour\u201d</span><span class=\"ds-how\">openWakeWord hears it on the Mac, or on the satellite in the room.</span></button></li><li class=\"ds-lit\"><button type=\"button\" aria-pressed=\"true\"><span class=\"ds-disc\">2</span><span class=\"ds-what\">You talk</span><span class=\"ds-how\">Recording stops on its own after 800 ms of quiet.</span></button></li></ol>",
       "css": ".ds-key { list-style: none; margin: 0; padding: 0; font-family: var(--sans, 'Helvetica Neue', Arial, sans-serif); font-size: 18px; color: var(--ink, #1c1c20); } .ds-key li { border-bottom: 1px solid var(--rule, #d6d6d0); } .ds-key button { font: inherit; color: inherit; background: none; border: 0; width: 100%; text-align: left; cursor: pointer; padding: 0.62rem 0.3rem 0.62rem 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; line-height: 1.38; } .ds-key button:focus-visible { outline: 2px solid var(--leaf, #3f7a3b); outline-offset: 3px; } .ds-disc { display: inline-flex; align-items: center; justify-content: center; width: 1.45rem; height: 1.45rem; margin: 0.1rem 0.7rem 0 0; border: 1.5px solid var(--ink, #1c1c20); border-radius: 50%; font-weight: 700; font-size: 0.8rem; font-variant-numeric: tabular-nums; line-height: 1; flex: none; transition: background-color 200ms ease-out, color 200ms ease-out, border-color 200ms ease-out; } .ds-what { font-weight: 700; font-size: 1rem; } .ds-key button:hover .ds-what { text-decoration: underline; text-decoration-color: var(--rule, #d6d6d0); text-underline-offset: 0.18em; } .ds-how { grid-column: 2; color: var(--ink-2, #55555e); font-size: 0.9rem; margin-top: 0.1rem; } .ds-lit .ds-disc { background: var(--leaf, #3f7a3b); border-color: var(--leaf, #3f7a3b); color: #fff; }"
     },
     {
@@ -219,7 +265,7 @@
       "refersTo": "code-block",
       "description": "Commands on code bg inside a rule border; comments in ink 2.",
       "html": "<pre class=\"ds-code\"><code>npm install -g parlour\nparlour init          <span class=\"ds-c\"># fetches what it needs and asks a few questions</span>\nparlour start         <span class=\"ds-c\"># and now out loud</span></code></pre>",
-      "css": ".ds-code { background: var(--code-bg, #f1f1ec); color: var(--ink, #1c1c20); border: 1px solid var(--rule, #d6d6d0); border-radius: 2px; padding: 1rem 1.1rem; overflow-x: auto; margin: 0; line-height: 1.65; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.9rem; } .ds-c { color: var(--ink-2, #55555e); }"
+      "css": ".ds-code { background: var(--code-bg, #ecece6); color: var(--ink, #1c1c20); border: 1px solid var(--rule, #d6d6d0); border-radius: 2px; padding: 1rem 1.1rem; overflow-x: auto; margin: 0; line-height: 1.65; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.9rem; } .ds-c { color: var(--ink-2, #55555e); }"
     },
     {
       "name": "Docs rail",
@@ -256,7 +302,7 @@
         "section": "colors"
       },
       {
-        "name": "The Poché Rule",
+        "name": "The Poch\u00e9 Rule",
         "body": "Brick is what the section cut through and nothing else. Floors, roof and stair are solid ink; walls are brick with an ink outline.",
         "section": "colors"
       },

@@ -2,6 +2,7 @@
 name: Parlour
 description: A reference book open at the plate of a house, with Parlour drawn where it lives.
 colors:
+  page: "#f5f5f1"
   plate: "#fcfcfa"
   ink: "#1c1c20"
   ink-2: "#55555e"
@@ -11,7 +12,7 @@ colors:
   leaf: "#3f7a3b"
   leaf-wash: "#dcebd8"
   slate-wash: "#dfe7f0"
-  code-bg: "#f1f1ec"
+  code-bg: "#ecece6"
   selection: "#cfe0f5"
   wash-kitchen: "#e9efe4"
   wash-hall: "#f1efe8"
@@ -21,6 +22,7 @@ colors:
   wash-bedroom: "#f3ecdf"
   wash-loft: "#ebebe9"
   night-plate: "#181716"
+  night-page: "#131211"
   night-ink: "#e8e7e2"
   night-ink-2: "#a5a4a0"
   night-rule: "#353431"
@@ -183,11 +185,12 @@ A white plate, near-black ink, one grey, one rule, and three illustrator's washe
 - **Brick** (`{colors.brick}`): the poché of the cut walls, outlined in ink at 1.5 units. Nothing else is brick.
 
 ### Neutral
-- **Plate** (`{colors.plate}`): the page and every surface on it. Controls sit on plate, not on a tint. Also the fill of every drawn object that sits in front of a wash, so the drawing reads as ink on paper.
+- **Page** (`{colors.page}`): the ground of every page, a step below plate white, so the sheets tipped into it read as sheets.
+- **Plate** (`{colors.plate}`): the tipped-in sheets: the section and the plan behind their hairline frames, and every control (install, play, steppers). Also the fill of every drawn object that sits in front of a wash, so the drawing reads as ink on paper.
 - **Ink** (`{colors.ink}`): all text, all line work, the floor slabs and stair in the section, the roof, the key's heading rule and the heavy rule under a table's column heads, and the pressed state of the play control.
 - **Ink 2** (`{colors.ink-2}`): the second voice. Running-head links at rest, key descriptions, captions, folios, column heads, room names, notes in the drawing, comments in code, ground hatching (at 55% opacity), disabled steppers.
 - **Rule** (`{colors.rule}`): every hairline: running head, folio, key rows, table rows, notes, contents, the plate frame, code block borders, link underlines at rest, scrollbar thumbs.
-- **Code bg** (`{colors.code-bg}`): code blocks and inline code in the docs, and the hover fill of every bordered control.
+- **Code bg** (`{colors.code-bg}`): code blocks and inline code in the docs, and the hover fill of every bordered control; a step below page so a block still reads on it.
 - **Room washes** (`{colors.wash-kitchen}` to `{colors.wash-loft}`): seven flat tints, one per room, with no stroke. Kitchen leans green, study leans slate, sitting room leans brick, bedroom leans straw; the hall, landing and loft are near-neutral. They are drawing colours only.
 
 ### The night plate
@@ -230,7 +233,7 @@ Under `prefers-color-scheme: dark` every token above is redefined on `:root`, no
 
 ## Layout
 
-The page is a book: one column `{spacing.book}` wide, centred, with a side gutter of `{spacing.gutter}`. The running head sits at the top of every page with a rule beneath it, the folio at the foot with a rule above it and `{spacing.folio}` of air before it.
+The page is a book: one column `{spacing.book}` wide, centred, with a side gutter of `{spacing.gutter}`. The running head sits at the top of every page with a rule beneath it, the folio at the foot with a rule above it and `{spacing.folio}` of air before it. Each sheet below the plate opens with a rule of its own (4.4rem above, 3rem beneath), the way a book divides its pages.
 
 The front page opens with the head as a two-column grid at 64rem and above (`1.35fr` title to `1fr` lede and actions), stacking below. The walk beneath it is a grid of the plate and a 21rem key column at 64rem and above; the key is sticky (`top: 1.5rem`) and holds the transport at its head. Below 48rem the plate keeps a 46rem minimum width and pans sideways inside its frame (a cue line appears above the caption), so the line weights never thin. Sheets further down are separated by `{spacing.sheet}` of top padding, not rules, and their body sits at `{spacing.measure}`. Two-column sheets split evenly at 56rem and above; the installation sheet gives the commands `1.5fr`.
 
@@ -257,7 +260,7 @@ Square by default. Text, tables, notes and the plate frame have no radius. Contr
 
 ### Buttons
 Every control is a hairline box on the plate with an ink border, or a ruled row with no box at all.
-- **Shape:** near-square (`{rounded.control}`), 1px solid ink.
+- **Shape:** near-square (`{rounded.control}`), 1px solid ink. Pressed: the control moves down 1px, nothing else.
 - **Install control** (`install-control`): the `$` prompt in ink 2 mono, the command in mono, and a reserved "copy" word in 0.85rem sans that becomes "copied" for 1.8s. Hover fills code bg over 160ms.
 - **Play** (`transport-play`): sans 500, `0.42rem 0.9rem`, labelled "Follow one sentence", "Pause" or "Again". When pressed it inverts to ink on plate.
 - **Steppers** (`transport-stepper`): the words "Back" and "Next" in sans 500, `0.42rem 0.7rem`; no icon. Disabled: ink 2 text, rule border.
@@ -273,7 +276,7 @@ Prose links are ink with a 1px underline in rule colour offset 0.2em; hover dark
 - **Lit** (`callout-disc-lit`): fill and stroke leaf, numeral white, leader leaf at 2 units. Only one is lit at a time. With motion allowed the plate's disc settles from 1.45 scale over 420ms.
 
 ### Tables (the schedule)
-Ruled the way a schedule in a book is ruled. Sans at 0.97rem; a small-caps caption above in ink 2; small-caps column heads on an ink rule; serif row heads at 1.05rem; rule-colour hairlines between rows; an ink rule closing the body. Cells pad `0.7rem 1.4rem 0.7rem 0` with no right padding on the last column. On a phone rows stack and each cell prints its `data-label` in small caps.
+Ruled the way a schedule in a book is ruled. Row heads in the schedule of parts carry the plate's callout disc when the slot has one (1, 3, 4, 5, 6), so the table and the drawing are one system. Sans at 0.97rem; a small-caps caption above in ink 2; small-caps column heads on an ink rule; serif row heads at 1.05rem; rule-colour hairlines between rows; an ink rule closing the body. Cells pad `0.7rem 1.4rem 0.7rem 0` with no right padding on the last column. On a phone rows stack and each cell prints its `data-label` in small caps.
 
 ### Notes and contents
 Lists with no bullets. The notes sit under one rule as a two-column grid at 56rem and above (`0.9rem 3rem` gaps), one column below, each entry capped at `{spacing.measure}`; no rules between entries. The docs contents keeps ruled rows (`{spacing.row}` vertical, a hairline above, a hairline closing the last) with a 2.6rem column of serif folio numbers in ink 2.
@@ -282,10 +285,13 @@ Lists with no bullets. The notes sit under one rule as a two-column grid at 56re
 Code bg with a rule border and 2px corners, `1rem 1.1rem` padding, mono at 0.86rem to 0.9rem, comments in ink 2. Inline code in the docs takes the same fill with a `0.08em 0.3em` pad.
 
 ### Navigation
-- **Running head:** wordmark in serif 500 at 1.35rem; navigation in small caps 500 at 1rem, 0.06em tracking, ink 2 to ink on hover; a rule beneath. No mobile variant; there are two links.
+- **Running head:** the mark (the house in section at 1.15em, stroked in current colour with its leaf dot) then the wordmark in serif 500 at 1.35rem; navigation in small caps 500 at 1rem, 0.06em tracking, ink 2 to ink on hover; a rule beneath. No mobile variant; there are two links.
 - **Folio:** sans 0.95rem in ink 2 under a rule: the licence and the three links, nothing else. The version is stated once, in the Open source prose.
 - **Docs rail:** small-caps home link, then the pages as a list with a 7px ring before each; the current page's ring fills leaf and its text turns ink.
 - **Turn:** previous and next at the foot of a doc, serif 1.15rem under a small-caps label, right-aligned on the right.
+
+### The plan (second figure)
+The same six rooms in plan at `viewBox 0 0 860 220`, on its own tipped-in sheet above the clients table: rooms as 2.5-unit ink rectangles with small-caps names, a slate microphone in each client room with an italic label beneath, and a dotted slate wire (the route's `0.1 7` dash) from every microphone to the Mac in the study. The Mac is the hub: a frame and slate-wash screen, its own microphone beside it. Nothing in it is lit; it explains topology, not sequence.
 
 ### The plate (signature)
 An SVG house in section at `viewBox 0 0 960 640`, drawn once and lit by `data-step` on the wrapper. Layers in order: washes (flat, no stroke), the cut (ink slabs, ink stair, brick walls with ink outline), the ink roof at 12 units, the line group at 2 units with round caps, labels, callouts. Devices and microphones are slate; the Mac's screen is slate wash and turns leaf wash when its step is lit. The sound route is a dotted slate line that runs leaf and animates towards the Mac on step 2 and back on step 7; the cloud sits above the roof on a dashed ink 2 leader that runs leaf on step 5. The wall figure ("Fig. 2") reuses the same conventions at `364 x 150`: an ink cut, slate arcs, a dashed line for the sentence, small-caps side labels. Every figure carries a serif "Fig." caption in sans below it.

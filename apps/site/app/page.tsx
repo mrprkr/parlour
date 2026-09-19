@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { House } from "./house";
 import { InstallButton } from "./install-button";
+import { Plan } from "./plan";
 import { Walk } from "./walk";
 
 export default function Home() {
@@ -75,6 +76,13 @@ export default function Home() {
           special privileges. All of them need <code>PARLOUR_TOKEN</code>; without it the server listens on
           loopback only and does not announce itself.
         </p>
+        <figure className="plan-figure" aria-labelledby="plan-caption">
+          <Plan />
+          <figcaption id="plan-caption">
+            Fig. 3. The same house in plan. Every microphone is a client of the one Mac; none of them is
+            special.
+          </figcaption>
+        </figure>
         <div className="table-scroll">
           <table className="schedule">
             <caption>Table 1. The clients, and who listens for the wake word</caption>
@@ -181,6 +189,7 @@ export default function Home() {
             <tbody>
               <tr>
                 <th scope="row" className="row">
+                  <span className="disc-inline">1</span>
                   Wake word
                 </th>
                 <td data-label="Built in">openWakeWord, in process</td>
@@ -190,6 +199,7 @@ export default function Home() {
               </tr>
               <tr>
                 <th scope="row" className="row">
+                  <span className="disc-inline">3</span>
                   Speech to text
                 </th>
                 <td data-label="Built in">whisper.cpp, small.en, kept warm</td>
@@ -199,6 +209,7 @@ export default function Home() {
               </tr>
               <tr>
                 <th scope="row" className="row">
+                  <span className="disc-inline">4</span>
                   The local model
                 </th>
                 <td data-label="Built in">
@@ -210,6 +221,7 @@ export default function Home() {
               </tr>
               <tr>
                 <th scope="row" className="row">
+                  <span className="disc-inline">5</span>
                   The cloud model
                 </th>
                 <td data-label="Built in">Claude, with web search, no house tools</td>
@@ -219,6 +231,7 @@ export default function Home() {
               </tr>
               <tr>
                 <th scope="row" className="row">
+                  <span className="disc-inline">6</span>
                   Text to speech
                 </th>
                 <td data-label="Built in">Kokoro, in process; macOS say as the fallback</td>

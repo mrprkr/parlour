@@ -95,6 +95,12 @@ export function House() {
         <polygon className="wash loft" points="130,186 480,66 830,186" />
       </g>
 
+      {/* The chimney, before the cut so the roof line sits over its base. */}
+      <g className="line">
+        <rect className="fill" x="690" y="96" width="26" height="56" />
+        <rect className="fill" x="696" y="86" width="14" height="10" />
+      </g>
+
       {/* The cut: slabs, stairs and roof in ink; the walls in brick, the way a section shows what it cut through. */}
       <g className="cut">
         <rect x="124" y="566" width="712" height="14" />

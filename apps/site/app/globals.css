@@ -7,6 +7,7 @@
  */
 
 :root {
+  --page: #f5f5f1;
   --plate: #fcfcfa;
   --ink: #1c1c20;
   --ink-2: #55555e;
@@ -16,7 +17,7 @@
   --leaf: #3f7a3b;
   --leaf-wash: #dcebd8;
   --slate-wash: #dfe7f0;
-  --code-bg: #f1f1ec;
+  --code-bg: #ecece6;
   --selection: #cfe0f5;
 
   --wash-kitchen: #e9efe4;
@@ -41,6 +42,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    --page: #131211;
     --plate: #181716;
     --ink: #e8e7e2;
     --ink-2: #a5a4a0;
@@ -68,7 +70,7 @@
 }
 
 html {
-  background: var(--plate);
+  background: var(--page);
   color: var(--ink);
   font-family: var(--serif);
   font-size: 18px;
@@ -147,6 +149,24 @@ p {
   font-size: 1.35rem;
   text-decoration: none;
   letter-spacing: -0.005em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.mark {
+  width: 1.15em;
+  height: 1.15em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.mark-dot {
+  fill: var(--leaf);
+  stroke: none;
 }
 
 .running-head nav {
@@ -260,6 +280,7 @@ p {
 
 /* The plate has a hairline frame, the way a plate in a book does. */
 .plate {
+  background: var(--plate);
   border: 1px solid var(--rule);
   padding: clamp(0.4rem, 1.5vw, 1.2rem);
   overflow-x: auto;
@@ -341,6 +362,12 @@ p {
 .play:hover,
 .stepper:hover:enabled {
   background: var(--code-bg);
+}
+
+.play:active,
+.stepper:active:enabled,
+.install:active {
+  transform: translateY(1px);
 }
 
 .play[aria-pressed="true"] {
@@ -865,7 +892,9 @@ p {
 /* ------------------------------------------------------------ plates */
 
 .sheet {
-  padding: 4.8rem 0 0;
+  margin-top: 4.4rem;
+  padding-top: 3rem;
+  border-top: 1px solid var(--rule);
 }
 
 .sheet > h2,
@@ -950,6 +979,79 @@ p {
   color: var(--ink-2);
 }
 
+/* The house in plan, on its own tipped-in sheet above the clients table. */
+.plan-figure {
+  margin: 1.6rem 0 0;
+  font-family: var(--sans);
+}
+
+.plan {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--plate);
+  border: 1px solid var(--rule);
+  padding: clamp(0.4rem, 1.5vw, 1rem);
+}
+
+.plan-figure figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.92rem;
+  color: var(--ink-2);
+}
+
+.plan .room {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+
+.plan .room-name {
+  font-family: var(--caps);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  fill: var(--ink-2);
+}
+
+.plan .wires line {
+  stroke: var(--slate);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-dasharray: 0.1 7;
+}
+
+.plan .device-plan use,
+.plan .hub use {
+  fill: none;
+  stroke: var(--slate);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.plan .label {
+  font-size: 13px;
+  font-style: italic;
+  fill: var(--ink);
+}
+
+.plan .hub-frame {
+  fill: var(--plate);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.plan .hub-screen {
+  fill: var(--slate-wash);
+}
+
+@media (max-width: 40rem) {
+  .plan .label,
+  .plan .room-name {
+    font-size: 17px;
+  }
+}
+
 /* Tables, ruled the way a schedule in a book is ruled. */
 .table-scroll {
   overflow-x: auto;
@@ -996,6 +1098,10 @@ p {
   font-weight: 500;
   font-size: 1.05rem;
   white-space: nowrap;
+}
+
+.schedule .row .disc-inline {
+  vertical-align: -0.25em;
 }
 
 .schedule td:last-child,
