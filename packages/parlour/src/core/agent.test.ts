@@ -424,3 +424,67 @@ test("context.config is the whole config", async () => {
   assert.equal(seen, config);
   await agent.close();
 });
+
+test("skills in the directory become one tool and two lines of prompt, not a body in the context", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "parlour-agent-skills-"));
+  writeFileSync(
+    join(dir, "bedtime.md"),
+    "---\nname: bedtime\ndescription: What goodnight means\n---\nPorch light on.\n",
+  );
+
+  const agent = await buildAgent(fakeConfig({ skills: { dir } }), {}, paths, { audio: false });
+  assert.ok(agent.registry.specs().some((tool) => tool.name === "read_skill"));
+
+  await agent.router.ask("goodnight");
+  const system = made.models[0]?.calls[0]?.messages[0]?.content ?? "";
+  assert.match(system, /- bedtime: What goodnight means/);
+  assert.ok(!system.includes("Porch light on."), "the body is fetched, not carried");
+  assert.equal(await agent.registry.run("read_skill", { name: "bedtime" }), "Porch light on.");
+
+  const check = (await agent.doctor()).find((c) => c.name === "skills");
+  assert.equal(check?.status, "ok");
+  assert.match(check?.detail ?? "", /1 in /);
+  await agent.close();
+});
+
+test("skills off means no tool, and the doctor stops reporting on them", async () => {
+  const agent = await buildAgent(fakeConfig({ skills: { enabled: false } }), {}, paths, { audio: false });
+  assert.ok(!agent.registry.specs().some((tool) => tool.name === "read_skill"));
+  assert.ok(!(await agent.doctor()).some((check) => check.name === "skills"));
+  await agent.close();
+});
+
+test("a plugin's provider, integration and skills are all there by the time the agent is built", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "parlour-agent-plugin-"));
+  const file = join(dir, "plugin.js");
+  writeFileSync(
+    file,
+    `export default {
+      name: "car",
+      providers: [{
+        kind: "integration", name: "car", description: "",
+        create: () => ({
+          name: "car",
+          tools: async () => [{
+            name: "charge_the_car", description: "", inputSchema: { type: "object" },
+            run: async () => "charging",
+          }],
+        }),
+      }],
+      skills: [{ name: "charging", description: "When to charge", body: "Plug it in.", source: "car" }],
+      integrations: { car: {} },
+    };\n`,
+  );
+
+  const agent = await buildAgent(fakeConfig({ plugins: [file] }), {}, paths, { audio: false });
+  const names = agent.registry.specs().map((tool) => tool.name);
+  // The integration the plugin asked for was built, alongside the one config named.
+  assert.ok(names.includes("charge_the_car"));
+  assert.ok(names.includes("fake_tool"));
+  assert.equal(await agent.registry.run("read_skill", { name: "charging" }), "Plug it in.");
+  assert.deepEqual(
+    (await agent.doctor()).filter((check) => check.name === "plugins"),
+    [{ name: "plugins", status: "ok", detail: "car" }],
+  );
+  await agent.close();
+});

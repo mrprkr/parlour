@@ -3,6 +3,7 @@ import type { Config } from "./config.ts";
 import { emit } from "./events.ts";
 import { logger } from "./logger.ts";
 import type { Paths } from "./paths.ts";
+import { loadPlugins, mergeIntegrations, pluginChecks } from "./plugins.ts";
 import type {
   AudioSink,
   AudioSource,
@@ -27,6 +28,7 @@ import { ToolRegistry } from "./registry.ts";
 import { Router } from "./router.ts";
 import { searchTool } from "./search.ts";
 import type { Secrets } from "./secrets.ts";
+import { loadSkills, skillChecks, skillPromptContext, skillTools, withSkills } from "./skills.ts";
 import { FallbackTextToSpeech, Speaker } from "./speaker.ts";
 import { Timers } from "./timers.ts";
 
@@ -90,6 +92,13 @@ export async function buildAgent(
   const resolve = <T>(kind: ProviderKind, name: string, slice: unknown) =>
     resolveProvider<T>(kind, name, slice, context);
 
+  // Plugins first: a provider one brings has to be registered before the
+  // slot naming it is filled, and the integrations it suggests have to be
+  // merged before they are built.
+  const plugins = await loadPlugins(config.plugins, { paths, emit, config });
+  for (const clash of plugins.clashes)
+    log.warn(`${clash} was already registered, so a plugin's copy is unused`);
+
   const source = await resolve<AudioSource>("audioSource", config.audio.source, config.audio);
   const sink = await resolve<AudioSink>("audioSink", config.audio.sink, config.audio);
   const wake = await resolve<WakeWordEngine>("wake", config.wake.provider, config.wake);
@@ -120,12 +129,22 @@ export async function buildAgent(
   if (search.problem) log.warn(`no web search: ${search.problem}`);
 
   const integrations: Integration[] = [];
-  for (const [name, slice] of Object.entries(config.integrations)) {
+  for (const [name, slice] of Object.entries(mergeIntegrations(config.integrations, plugins.plugins))) {
     integrations.push(await resolve<Integration>("integration", name, slice));
   }
 
+  // The house's own skills first, so a rule written here replaces one a
+  // plugin shipped under the same name without touching the plugin.
+  const skillsDir = config.skills.dir || paths.skillsDir;
+  const skills = config.skills.enabled
+    ? withSkills(loadSkills([skillsDir, ...plugins.skillDirs]), plugins.skills)
+    : { skills: [], problems: [] };
+  for (const problem of skills.problems) log.warn(`${problem.source}: ${problem.detail}`);
+  if (skills.skills.length) log.info(`${skills.skills.length} skills ready`);
+
   const registry = new ToolRegistry();
   for (const integration of integrations) registry.add(...(await integration.tools()));
+  registry.add(...skillTools(skills.skills));
   if (search.value) registry.add(searchTool(search.value, config.search.maxResults));
   // A timer going off while nobody is listening is still worth hearing, so a
   // failed announcement is logged rather than left as an unhandled rejection.
@@ -141,7 +160,10 @@ export async function buildAgent(
     registry,
     maxToolRounds: config.llm.maxToolRounds,
     onLocalFailure: config.llm.cloud.onLocalFailure,
-    promptContext: () => integrations.flatMap((integration) => integration.promptContext?.() ?? []),
+    promptContext: () => [
+      ...integrations.flatMap((integration) => integration.promptContext?.() ?? []),
+      ...skillPromptContext(skills.skills),
+    ],
   });
 
   if (audio) {
@@ -200,6 +222,8 @@ export async function buildAgent(
         });
       }
       for (const integration of integrations) checks.push(...(await checksOf(integration)));
+      checks.push(...pluginChecks(plugins));
+      if (config.skills.enabled) checks.push(...skillChecks(skillsDir, skills));
       return checks;
     },
 

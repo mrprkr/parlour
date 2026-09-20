@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { childEnvironment, McpServer, mcpIntegration } from "./index.ts";
+import { childEnvironment, McpServer, McpTools, mcpIntegration } from "./index.ts";
 
 test("the definition is an integration called mcp with no servers by default", () => {
   assert.equal(mcpIntegration.kind, "integration");
@@ -35,4 +35,23 @@ test("a stdio server gets the one variable its tokenEnv names, and its own env w
   });
   // A tokenEnv that is not set is left out rather than passed as "undefined".
   assert.deepEqual(childEnvironment({}, "MISSING", parent), { PATH: "/usr/bin" });
+});
+
+test("the doctor names each configured server, and whether it answered", async () => {
+  const servers = {
+    dead: { transport: "stdio" as const, command: "/nonexistent/parlour-test", args: [], env: {} },
+  };
+  const mcp = new McpTools();
+
+  // Before anything has connected: configured, not yet reached.
+  assert.deepEqual(mcp.checks(servers), [
+    { name: "mcp dead", status: "warn", detail: "/nonexistent/parlour-test, not connected" },
+  ]);
+
+  // A server that will not start is a failure the doctor can name, and no
+  // tools rather than an exception out of the integration.
+  assert.deepEqual(await mcp.connect(servers), []);
+  const [check] = mcp.checks(servers);
+  assert.equal(check?.status, "fail");
+  assert.match(check?.detail ?? "", /^\/nonexistent\/parlour-test: /);
 });
