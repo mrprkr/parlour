@@ -1,82 +1,56 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 
 /*
- * The palette the vanilla stylesheet used, moved into shadcn's token names so
- * the components inherit it. Warm off-white paper, near-black ink and the
- * green the status dot has always been.
+ * The window has no palette of its own. tokens.css is generated from
+ * packages/design and is the same file the site and the phone page load; all
+ * this layer does is give shadcn's component tokens the shared names to point
+ * at, so a Button is the house's green without knowing what the house is.
  */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.976 0.003 106.4);
-  --foreground: oklch(0.216 0.008 264.5);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.216 0.008 264.5);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.216 0.008 264.5);
-  --primary: oklch(0.487 0.088 165.2);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.945 0.004 106.4);
-  --secondary-foreground: oklch(0.216 0.008 264.5);
-  --muted: oklch(0.945 0.004 106.4);
-  --muted-foreground: oklch(0.516 0.011 264.5);
-  --accent: oklch(0.945 0.004 106.4);
-  --accent-foreground: oklch(0.216 0.008 264.5);
-  --destructive: oklch(0.508 0.183 27.5);
-  --border: oklch(0.902 0.003 106.4);
-  --input: oklch(0.902 0.003 106.4);
-  --ring: oklch(0.487 0.088 165.2);
-  --warn: oklch(0.575 0.104 62.3);
-  --chart-1: oklch(0.487 0.088 165.2);
-  --chart-2: oklch(0.575 0.104 62.3);
-  --chart-3: oklch(0.508 0.183 27.5);
-  --chart-4: oklch(0.516 0.011 264.5);
-  --chart-5: oklch(0.216 0.008 264.5);
-  --sidebar: oklch(0.976 0.003 106.4);
-  --sidebar-foreground: oklch(0.216 0.008 264.5);
-  --sidebar-primary: oklch(0.487 0.088 165.2);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.945 0.004 106.4);
-  --sidebar-accent-foreground: oklch(0.216 0.008 264.5);
-  --sidebar-border: oklch(0.902 0.003 106.4);
-  --sidebar-ring: oklch(0.487 0.088 165.2);
-}
+  --radius: var(--corner-lg);
 
-.dark {
-  --background: oklch(0.191 0.008 264.5);
-  --foreground: oklch(0.921 0.004 264.5);
-  --card: oklch(0.232 0.009 264.5);
-  --card-foreground: oklch(0.921 0.004 264.5);
-  --popover: oklch(0.232 0.009 264.5);
-  --popover-foreground: oklch(0.921 0.004 264.5);
-  --primary: oklch(0.845 0.108 172.4);
-  --primary-foreground: oklch(0.214 0.032 172.4);
-  --secondary: oklch(0.279 0.011 264.5);
-  --secondary-foreground: oklch(0.921 0.004 264.5);
-  --muted: oklch(0.279 0.011 264.5);
-  --muted-foreground: oklch(0.671 0.014 264.5);
-  --accent: oklch(0.279 0.011 264.5);
-  --accent-foreground: oklch(0.921 0.004 264.5);
-  --destructive: oklch(0.704 0.117 22.2);
-  --border: oklch(0.279 0.011 264.5);
-  --input: oklch(0.279 0.011 264.5);
-  --ring: oklch(0.845 0.108 172.4);
-  --warn: oklch(0.812 0.084 74.6);
-  --chart-1: oklch(0.845 0.108 172.4);
-  --chart-2: oklch(0.812 0.084 74.6);
-  --chart-3: oklch(0.704 0.117 22.2);
-  --chart-4: oklch(0.671 0.014 264.5);
-  --chart-5: oklch(0.921 0.004 264.5);
-  --sidebar: oklch(0.191 0.008 264.5);
-  --sidebar-foreground: oklch(0.921 0.004 264.5);
-  --sidebar-primary: oklch(0.845 0.108 172.4);
-  --sidebar-primary-foreground: oklch(0.214 0.032 172.4);
-  --sidebar-accent: oklch(0.279 0.011 264.5);
-  --sidebar-accent-foreground: oklch(0.921 0.004 264.5);
-  --sidebar-border: oklch(0.279 0.011 264.5);
-  --sidebar-ring: oklch(0.845 0.108 172.4);
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+
+  /* The house is alive, so the primary action is the same green as the dot. */
+  --primary: var(--hearth);
+  --primary-foreground: var(--hearth-ink);
+
+  --secondary: var(--inset);
+  --secondary-foreground: var(--ink);
+  --muted: var(--inset);
+  --muted-foreground: var(--bracken);
+  --accent: var(--inset);
+  --accent-foreground: var(--ink);
+
+  --destructive: var(--alarm);
+  --border: var(--rule);
+  --input: var(--rule);
+  --ring: var(--hearth);
+
+  /*
+   * A warning is written as often as it is drawn (the doctor's rows, the
+   * onboarding checks), so this is the lamp darkened until it carries text.
+   * The thinking dot uses --state-thinking, which is the lamp itself.
+   */
+  --warn: var(--lamp-text);
+
+  --sidebar: var(--paper);
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--hearth);
+  --sidebar-primary-foreground: var(--hearth-ink);
+  --sidebar-accent: var(--inset);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: var(--rule);
+  --sidebar-ring: var(--hearth);
 }
 
 @theme inline {
@@ -111,8 +85,9 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: var(--face-sans);
+  --font-mono: var(--face-mono);
+  --font-serif: var(--face-serif);
 }
 
 @layer base {
@@ -126,6 +101,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* One step under the shared ramp: a menu bar window is not a web page. */
     font-size: 14px;
   }
 }

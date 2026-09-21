@@ -2,36 +2,27 @@
  * One lit thing on a quiet page. On the front page the loop is the hero and
  * the lamp on the wake word is the only colour; in the docs the lamp marks
  * the page you are on. Everything else is ink on a limewashed wall.
+ *
+ * The palette, the type ramp and the state vocabulary are generated from
+ * packages/design and shared with the menu bar app, the phone page and the
+ * iOS app. Nothing below declares a colour of its own.
  */
 
+@import "./tokens.css";
+
 :root {
-  --paper: #eef0ea;
-  --ink: #14312b;
-  --bracken: #5f6f5e;
-  --rule: #cfd5cb;
-  --lamp: #e9b84a;
-  --lamp-glow: rgba(233, 184, 74, 0.35);
-  --code: #e3e7de;
+  /* The site is the one surface with a face of its own, loaded by layout.tsx. */
+  --serif: var(--font-young-serif), var(--face-serif);
+  --sans: var(--face-sans);
+  --mono: var(--face-mono);
 
-  --serif: var(--font-young-serif), "Iowan Old Style", Georgia, serif;
-  --sans: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  /* The names this stylesheet has always used, over the shared tokens. */
+  --code: var(--inset);
+  --measure: var(--measure-prose);
+  --doc-measure: var(--measure-doc);
 
-  --measure: 40rem;
-  --doc-measure: 44rem;
   --rail: 12rem;
   --gutter: clamp(1rem, 5vw, 3rem);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #0f1f1b;
-    --ink: #e7e9e2;
-    --bracken: #9aa89a;
-    --rule: #2b3f39;
-    --lamp-glow: rgba(233, 184, 74, 0.22);
-    --code: #17302a;
-  }
 }
 
 * {
@@ -43,7 +34,7 @@ html {
   color: var(--ink);
   font-family: var(--sans);
   font-size: 17px;
-  line-height: 1.55;
+  line-height: var(--line-normal);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -182,7 +173,7 @@ section p {
   color: inherit;
   background: var(--code);
   border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: var(--corner-md);
   padding: 0.6rem 0.9rem;
   cursor: pointer;
   display: inline-flex;
@@ -317,7 +308,7 @@ section p {
 .start pre {
   background: var(--code);
   border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: var(--corner-md);
   padding: 1rem 1.1rem;
   overflow-x: auto;
   margin: 0 0 1.1rem;
@@ -511,7 +502,7 @@ section p {
 .prose pre {
   background: var(--code);
   border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: var(--corner-md);
   padding: 1rem 1.1rem;
   overflow-x: auto;
   margin: 0 0 1.2rem;

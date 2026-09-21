@@ -1,0 +1,68 @@
+Parlour has four interfaces now: the site you are reading, the menu bar app,
+the phone page the CLI serves, and the iOS app. They are written in three
+languages and built by three toolchains, and none of them is allowed to
+declare a colour.
+
+`packages/design` holds one file of tokens and a handful of emitters that
+write it into every surface. The generated files are checked in, so a checkout
+builds without running the emitter first, and a test fails when one of them has
+drifted, so `pnpm check` catches a token change that was not emitted.
+
+```sh
+pnpm exec nx run design:emit      # after editing packages/design/src/tokens.ts
+pnpm exec nx run design:test      # contrast, and whether anything is stale
+```
+
+| Generated file | Read by |
+| --- | --- |
+| `apps/site/app/tokens.css` | This site |
+| `apps/desktop/src/tokens.css` | The menu bar app, under shadcn's token names |
+| `packages/parlour/src/server/web/tokens.css` | The phone page |
+| `apps/ios/Parlour/DesignSystem/Tokens.swift` | The iOS app |
+
+## Ink on a limewashed wall, with one lit thing
+
+Paper, ink, bracken and a hairline rule carry the whole interface. Two colours
+are allowed to mean something, and nothing else is allowed to be colourful,
+which is what makes those two legible at a glance from across a room.
+
+| Token | What it means |
+| --- | --- |
+| `paper`, `surface` | The wall, and a panel lifted off it by a shade rather than a shadow |
+| `ink`, `bracken` | What is said, and what is said quietly |
+| `rule`, `inset` | A hairline, and anything recessed into the wall |
+| `hearth` | The house is alive: running, listening, speaking, the primary action |
+| `lamp` | The one lit thing: the wake word, the page you are on, thinking, a warning |
+| `alarm` | Something failed and a person has to do something about it |
+
+Amber on a pale wall cannot carry text, so `lamp` is only ever a dot or a halo
+and `lampText` is the darkened value that holds words. Every token that carries
+text clears 4.5:1 against the paper it sits on in both schemes, and there is a
+test that says so.
+
+## The states are part of the design system
+
+Every surface renders the same five states, so they live with the colours
+rather than in each app. Each one has a colour, a cadence and a word.
+
+| State | Drawn as | One breath |
+| --- | --- | --- |
+| `stopped` | An outline in bracken | still |
+| `idle` | A steady hearth mark | still |
+| `listening` | A lit hearth mark | 1100 ms |
+| `thinking` | A lit lamp mark | 700 ms |
+| `speaking` | A lit hearth mark | 500 ms |
+
+The cadence quickens as the turn approaches its answer, which is how you can
+read what the house is doing without reading the words. The menu bar dot, the
+phone page's talk button and the iOS state mark all breathe in step because
+they read the same numbers out of the same file, and the iOS mark stops
+breathing entirely under Reduce Motion, where the colour carries it alone.
+
+## Changing something
+
+Edit `packages/design/src/tokens.ts`, run the emitter, and commit the
+generated files with the change. A new surface gets a `Target` in
+`src/emit.ts`; a surface that needs a shape none of the emitters produce gets
+another emitter next to `css.ts` and `swift.ts`, rather than a hand-maintained
+copy of the values.
