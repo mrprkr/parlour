@@ -16,6 +16,8 @@ export interface Paths {
   configFile: string;
   secretsFile: string;
   connectorsFile: string;
+  /** Markdown skill files, one per file or one per directory with a SKILL.md. */
+  skillsDir: string;
   cacheDir: string;
   modelsDir: string;
   logsDir: string;
@@ -43,6 +45,7 @@ export function resolvePaths(
     configFile: env.PARLOUR_CONFIG || join(home, "config.json"),
     secretsFile: join(home, "secrets.env"),
     connectorsFile: join(home, "connectors.json"),
+    skillsDir: join(home, "skills"),
     cacheDir,
     modelsDir: join(cacheDir, "models"),
     logsDir,

@@ -1,48 +1,40 @@
 /*
+/*
  * Ink on paper, and one accent. The page is a technical document: a hairline
  * grid, a serif for the headings, a sans for everything that is read or
  * consulted. Green marks one thing at a time, and nothing anywhere casts a
  * shadow.
+ *
+ * The palette, the type ramp and the state vocabulary are generated from
+ * packages/design and shared with the menu bar app, the phone page and the
+ * iOS app. Nothing below declares a colour of its own.
  */
 
 @import "tailwindcss";
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
+@import "./tokens.css";
 
 :root {
-  --page: #f4f3ef;
-  --plate: #fbfaf7;
-  --ink: #17171a;
-  --ink-2: #5d5d66;
-  --rule: #dedcd4;
-  --accent: #1f6350;
-  --accent-wash: #e0ebe6;
-  --code-bg: #ebe9e2;
-  --selection: #d5e5df;
+  /* The names this stylesheet uses, over the shared tokens. Dark mode comes with them. */
+  --page: var(--paper);
+  --plate: var(--surface);
+  --ink-2: var(--bracken);
+  --accent: var(--hearth);
+  --accent-wash: var(--inset);
+  --code-bg: var(--inset);
+  --selection: color-mix(in srgb, var(--hearth) 22%, var(--paper));
 
-  --serif: var(--font-serif), "Iowan Old Style", Georgia, serif;
-  --sans: var(--font-sans), ui-sans-serif, "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  /* The site is the one surface with faces of its own, loaded by layout.tsx. */
+  --serif: var(--font-serif), var(--face-serif);
+  --sans: var(--font-sans), var(--face-sans);
+  --mono: var(--face-mono);
 
   --book: 74rem;
   --measure: 66ch;
-  --doc-measure: 42rem;
+  --doc-measure: var(--measure-doc);
   --rail: 12rem;
   --gutter: clamp(1.25rem, 4vw, 3rem);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --page: #111110;
-    --plate: #181715;
-    --ink: #eceae3;
-    --ink-2: #a09e97;
-    --rule: #34332e;
-    --accent: #6cc0a3;
-    --accent-wash: #16302a;
-    --code-bg: #201f1c;
-    --selection: #22403a;
-  }
 }
 
 /* The docs use Fumadocs, drawn in the same ink, paper and green. */
@@ -81,7 +73,7 @@ html {
   color: var(--ink);
   font-family: var(--sans);
   font-size: 17px;
-  line-height: 1.6;
+  line-height: var(--line-normal);
   -webkit-font-smoothing: antialiased;
   caret-color: var(--ink);
   scrollbar-color: var(--rule) transparent;

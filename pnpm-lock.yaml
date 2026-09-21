@@ -122,6 +122,15 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  packages/design:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.1
+        version: 26.6.1
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
   packages/parlour:
     dependencies:
       '@anthropic-ai/sdk':

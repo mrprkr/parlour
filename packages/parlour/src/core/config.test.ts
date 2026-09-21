@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { loadConfig, parseConfig, writeConfig } from "./config.ts";
+import { loadConfig, parseConfig, updateConfig, writeConfig } from "./config.ts";
 import { resolvePaths } from "./paths.ts";
 
 const home = mkdtempSync(join(tmpdir(), "parlour-config-"));
@@ -25,6 +25,13 @@ test("an empty object is a complete config", () => {
   assert.equal(c.audio.source, "ffmpeg");
   assert.equal(c.audio.sink, "afplay");
   assert.deepEqual(Object.keys(c.integrations), ["home-assistant", "connectors"]);
+});
+
+test("skills are on with no plugins, which is a house that has written nothing yet", () => {
+  const config = parseConfig({});
+  assert.deepEqual(config.skills, { enabled: true, dir: "" });
+  assert.deepEqual(config.plugins, []);
+  assert.equal(parseConfig({ skills: { dir: "/house/rules" } }).skills.dir, "/house/rules");
 });
 
 test("locale must be a tag ICU can parse, so a bad one fails here and not mid-turn", () => {
@@ -110,4 +117,29 @@ test("the shipped example config parses", () => {
   assert.equal(c.search.provider, "searxng");
   assert.equal((c.search as { url?: string }).url, "http://searxng.local:8080");
   assert.ok("home-assistant" in c.integrations);
+});
+
+test("updateConfig changes one key and leaves the rest of the file as it was written", () => {
+  const dir = mkdtempSync(join(home, "update-"));
+  const paths = pathsIn(dir);
+  writeFileSync(paths.configFile, '{\n  "name": "Test"\n}\n');
+
+  updateConfig(paths, (raw) => {
+    raw.plugins = ["parlour-plugin-car"];
+  });
+  const written = JSON.parse(readFileSync(paths.configFile, "utf8"));
+  assert.deepEqual(written, { name: "Test", plugins: ["parlour-plugin-car"] });
+  // No default is frozen into the file by passing through the schema.
+  assert.ok(!("tts" in written));
+
+  // A change the schema refuses leaves the file alone.
+  assert.throws(() =>
+    updateConfig(paths, (raw) => {
+      raw.role = "bogus";
+    }),
+  );
+  assert.deepEqual(JSON.parse(readFileSync(paths.configFile, "utf8")), {
+    name: "Test",
+    plugins: ["parlour-plugin-car"],
+  });
 });

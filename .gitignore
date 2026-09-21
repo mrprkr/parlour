@@ -31,6 +31,13 @@ apps/site/.source/
 # Claude Code's own worktrees; settings.json next to it is shared and checked in.
 .claude/worktrees/
 
+# This is one pnpm workspace with one lockfile at the root. Running `pnpm
+# install` from inside a package writes a second one next to its package.json,
+# which then goes stale and, on Vercel, competes with the root one for what
+# gets installed. Ignored so a stray install does not end up in a commit.
+apps/*/pnpm-lock.yaml
+packages/*/pnpm-lock.yaml
+
 # Written by `vercel link`; the project is identified by its git connection.
 .vercel/
 .env*.local

@@ -3,7 +3,7 @@
   "short_name": "Parlour",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#16181d",
-  "theme_color": "#16181d",
+  "background_color": "#0f1f1b",
+  "theme_color": "#0f1f1b",
   "description": "Push to talk to the house"
 }

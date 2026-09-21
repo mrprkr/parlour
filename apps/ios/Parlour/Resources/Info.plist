@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en_GB</string>
+	<key>CFBundleDisplayName</key>
+	<string>Parlour</string>
+	<key>UILaunchScreen</key>
+	<dict/>
+
+	<!--
+		The four things the app asks for, and why. Every string says what the
+		permission buys the person, because a prompt with no reason in it is a
+		prompt people say no to.
+	-->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Parlour records what you say while you hold the talk button and sends it to your own server at home to be answered.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Parlour can turn what you say into text on this device, so a request never has to leave the house.</string>
+	<key>NSHomeKitUsageDescription</key>
+	<string>Parlour shows the rooms and accessories in your home so you can see and switch them without leaving the app.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Parlour looks for your Parlour server on the local network so you do not have to type its address, and everything you say is answered there rather than in the cloud.</string>
+
+	<!-- What the browser in ServerDiscovery is allowed to look for. -->
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_parlour._tcp</string>
+	</array>
+
+	<!--
+		The server on the house network is plain HTTP on a private address, so
+		the transport exception is scoped to exactly that: local networking, and
+		nothing arbitrary on the open internet.
+	-->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- Playing the server's reply, and recording while the screen is off. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+</dict>
+</plist>

@@ -60,6 +60,8 @@ at, which is the global install by default. To have it run this checkout, set
 | A CLI command | `packages/parlour/src/cli/<name>.ts` exporting a `Command`, listed in `cli/main.ts`. |
 | The app | `apps/desktop`. It drives the CLI, so if the CLI cannot do it yet, add that first. |
 | The website | `apps/site`. A Next.js app with one route; words in `app/page.tsx`, looks in `app/globals.css`. |
+| The iOS app | `apps/ios`. A client of the server's routes, so if the server cannot do it yet, add that first. Generate the Xcode project with `nx run ios:generate`. |
+| A colour, a size or a state | `packages/design/src/tokens.ts`, then `nx run design:emit`. Nothing else in the repository declares a colour; the `tokens.css` and `Tokens.swift` files are generated and checked in. |
 
 ## How we write it
 
@@ -115,3 +117,10 @@ Tauri signs and notarises `Parlour.app` itself; `scripts/notarise.sh` does
 the dmg, which Tauri signs but leaves without a ticket, and then asks
 Gatekeeper about both. Run it by hand against a build of your own if you ever
 need to check the signing outside a release.
+
+The preflight only sees whether each secret is set, not whether it is right,
+so run the release workflow by hand (Actions, Release, Run workflow) after
+setting or rotating any of them. A manual run builds, signs and notarises the
+app and stops: nothing goes to npm and no release is created, which makes it
+a rehearsal you can spend freely rather than a version number you cannot get
+back.

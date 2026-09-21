@@ -1,0 +1,59 @@
+# The Xcode project is generated rather than checked in, because a .pbxproj is
+# not a thing a person can review. Run `pnpm exec nx run ios:generate` (or
+# `xcodegen generate` in this directory) and open Parlour.xcodeproj.
+name: Parlour
+options:
+  bundleIdPrefix: app.heyparlour
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEVELOPMENT_TEAM: ${PARLOUR_DEVELOPMENT_TEAM}
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  Parlour:
+    type: application
+    platform: iOS
+    sources:
+      - path: Parlour
+        excludes:
+          - "Resources/Info.plist"
+          - "Resources/Parlour.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.heyparlour.Parlour
+        INFOPLIST_FILE: Parlour/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Parlour/Resources/Parlour.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  ParlourTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - ParlourTests
+    dependencies:
+      - target: Parlour
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.heyparlour.Parlour.tests
+
+schemes:
+  Parlour:
+    build:
+      targets:
+        Parlour: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - ParlourTests
