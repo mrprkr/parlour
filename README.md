@@ -83,6 +83,9 @@ parlour text                                     everything but the microphone
 parlour doctor [--json]                          which of the moving parts is down
 parlour service install|uninstall|stop|restart|status|logs
 parlour connectors add <name> <url>|list|remove <name>
+parlour mcp add <name> --url <url>|-- <command>...|list|remove <name>
+parlour skills list|show <name>|new <name>|path
+parlour plugins add <package>|list|remove <package>
 parlour models fetch [--llm auto]|suggest
 parlour config path|show|write|edit
 parlour secrets status|set <NAME>
@@ -93,6 +96,35 @@ add` signs your household in to a remote MCP server (a calendar, say) and
 keeps the tokens in your Keychain. The `connectors` integration that loads
 them is on by default, and if a hand-written config leaves it out,
 `parlour doctor` will let you know.
+
+## House rules, other people's tools
+
+The house knows how to call a tool. It does not know that goodnight means
+the porch light stays on and the rest go off. That is a skill: a markdown
+file in `~/.config/parlour/skills` with a name, a sentence saying when it
+applies, and the rule itself.
+
+```md
+---
+name: bedtime
+description: What goodnight means in this house
+---
+
+Turn off the kitchen, hall and lounge lights, leave the porch light on,
+and set the thermostat to 17. Say "goodnight" and nothing else.
+```
+
+Only the name and the sentence sit in the prompt; the model fetches the
+body when it decides the rule applies, so a house can have thirty rules
+without every answer getting slower. `parlour skills new bedtime` writes
+the file and `parlour skills list` shows what the model can see.
+
+Anything that speaks MCP is a source of tools, added with
+`parlour mcp add <name> --url <url>` or, for a server this machine starts,
+`parlour mcp add <name> -- npx -y @someone/notes-mcp`. A plugin is one npm
+package bringing providers, skills and MCP servers together:
+`parlour plugins add parlour-plugin-car`. All three are in
+[Skills, MCP and plugins](https://heyparlour.app/docs/skills).
 
 ## One server, any number of rooms
 
@@ -123,6 +155,7 @@ in `apps/site/content/docs` in this repository.
 | --- | --- |
 | [Architecture](https://heyparlour.app/docs/architecture) | The ports, the provider registry, the session state machine, and why the pieces are the pieces. |
 | [Writing a provider](https://heyparlour.app/docs/providers) | Writing a provider or an integration as an npm package, with a worked example. |
+| [Skills, MCP and plugins](https://heyparlour.app/docs/skills) | House rules as markdown, somebody else's tools over MCP, and one package that brings both. |
 | [Clients](https://heyparlour.app/docs/clients) | Satellites, the phone page, custom hardware, `/ask`, and Bonjour. |
 | [Home Assistant](https://heyparlour.app/docs/home-assistant) | The MCP Server integration, the OpenAI Conversation integration, muting, and moving over from the old config. |
 | [The menu bar app](https://heyparlour.app/docs/desktop) | What the app does, how it drives the CLI, and running it against a checkout. |

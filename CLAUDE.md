@@ -71,6 +71,11 @@ generated `tokens.css` or `Tokens.swift`: change the tokens and run `pnpm exec n
   by `provider` name; the rest of the slice passes through untouched to the provider's own Zod
   schema. An unregistered name is `await import`ed as an npm package, which is the whole extension
   mechanism. `secrets` and `service` are chosen by platform, not config.
+- `core/plugins.ts` loads the packages in `config.plugins` before anything is resolved: a plugin
+  brings providers, skills and integration config at once, and its `integrations` block is merged
+  under the one in config. `core/skills.ts` reads markdown skills from `~/.config/parlour/skills`
+  and the plugins' own directories; only the names and descriptions go in the prompt, the bodies
+  come back through the `read_skill` tool.
 - `core/agent.ts` `buildAgent(config, secrets, paths)` resolves every provider, wires the fallback
   voice (`Speaker` = TTS + sink + sentence splitting, `FallbackTextToSpeech` defaults to
   `macos-say`), builds the tool registry (integrations + search + timers) and the `Router`. The

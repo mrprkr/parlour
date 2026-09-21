@@ -23,6 +23,9 @@ const COMMANDS: Record<string, () => Promise<{ command: Command }>> = {
   doctor: () => import("./doctor.ts"),
   service: () => import("./service.ts"),
   connectors: () => import("./connectors.ts"),
+  mcp: () => import("./mcp.ts"),
+  skills: () => import("./skills.ts"),
+  plugins: () => import("./plugins.ts"),
   config: () => import("./config.ts"),
   secrets: () => import("./secrets.ts"),
   models: () => import("./models.ts"),
@@ -37,6 +40,9 @@ const SUMMARIES: Record<keyof typeof COMMANDS, string> = {
   doctor: "check every moving part and name the broken one",
   service: "install, uninstall, stop, restart, status, logs",
   connectors: "sign in to remote MCP servers: add, list, remove",
+  mcp: "MCP servers this house talks to: add, list, remove",
+  skills: "house rules the model reads: list, show, new, path",
+  plugins: "packages that bring providers, skills and integrations: add, list, remove",
   models: "fetch the wake word and whisper models",
   config: "path, show, write, edit",
   secrets: "status, set",
@@ -55,7 +61,7 @@ function help(): string {
     "  --version        print the version",
     "  --help           this, or a command's own with parlour <command> --help",
     "",
-    "PARLOUR_HOME moves the config directory (config.json, secrets.env, connectors.json).",
+    "PARLOUR_HOME moves the config directory (config.json, secrets.env, connectors.json, skills/).",
   ].join("\n");
 }
 

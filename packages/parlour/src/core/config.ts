@@ -112,6 +112,28 @@ export const ConfigSchema = z.object({
   integrations: z.record(z.string(), z.unknown()).default(() => ({ "home-assistant": {}, connectors: {} })),
 
   /**
+   * House rules as markdown, read by the model when one of them applies.
+   * The directory is `skills/` under the config directory unless this names
+   * another, so a household that keeps its rules in a git repository can
+   * point at the checkout rather than copy files in.
+   */
+  skills: z
+    .object({
+      enabled: z.boolean().default(true),
+      /** Empty means `skills/` beside config.json. */
+      dir: z.string().default(""),
+    })
+    .prefault({}),
+
+  /**
+   * Packages that bring providers, skills and integration config together.
+   * Each is an npm package name, or an absolute path to a checkout. They are
+   * loaded before anything is resolved, so a provider a plugin brings can be
+   * named anywhere in this file.
+   */
+  plugins: z.array(z.string()).default([]),
+
+  /**
    * The agent as a service on the house network, so that this machine's
    * microphone is one client among several rather than the only way in.
    */
@@ -185,6 +207,21 @@ export function loadConfig(paths: Paths): { config: Config; raw: Record<string, 
     throw new Error(`${paths.configFile} must contain a JSON object`);
   }
   return { config: parseConfig(raw), raw: raw as Record<string, unknown>, exists: true };
+}
+
+/**
+ * Read, change, write, for the commands that edit one key of the file on a
+ * person's behalf (`parlour mcp add`, `parlour plugins add`). The document
+ * written is the one on disk with the change applied, not the parsed config,
+ * so nothing freezes a default into the file; it is validated before and
+ * after, so a file that would not parse is reported rather than overwritten.
+ */
+export function updateConfig(paths: Paths, change: (raw: Record<string, unknown>) => void): Config {
+  const { raw } = loadConfig(paths);
+  change(raw);
+  const config = parseConfig(raw);
+  writeConfig(paths, raw);
+  return config;
 }
 
 export function writeConfig(paths: Paths, config: Record<string, unknown>): void {

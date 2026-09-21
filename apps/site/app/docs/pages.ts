@@ -22,6 +22,11 @@ export const docPages: DocPage[] = [
     summary: "A provider or an integration as an npm package, with a worked example.",
   },
   {
+    slug: "skills",
+    title: "Skills, MCP and plugins",
+    summary: "House rules as markdown, somebody else's tools over MCP, and one package that brings both.",
+  },
+  {
     slug: "clients",
     title: "Clients",
     summary: "Satellites, the phone page, custom hardware, the ask endpoint, and Bonjour.",

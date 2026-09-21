@@ -5,7 +5,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { z } from "zod";
 import { logger } from "../../core/logger.ts";
-import type { Integration } from "../../core/ports.ts";
+import type { Check, Integration } from "../../core/ports.ts";
 import { defineProvider, registerProvider } from "../../core/providers.ts";
 import { defineTool, type Tool } from "../../core/registry.ts";
 import type { JsonSchema } from "../../core/types.ts";
@@ -49,18 +49,43 @@ export const McpOptions = z.object({ servers: z.record(z.string(), McpServer).de
  */
 export class McpTools {
   readonly #clients: Client[] = [];
+  /** How each server went, so the doctor can name the one that is down. */
+  readonly #outcomes = new Map<string, { ok: boolean; detail: string }>();
 
   async connect(servers: Record<string, McpServerConfig>): Promise<Tool[]> {
     const tools: Tool[] = [];
     for (const [name, server] of Object.entries(servers)) {
       try {
-        tools.push(...(await this.connectServer(name, transportFor(server))));
+        const found = await this.connectServer(name, transportFor(server));
+        this.#outcomes.set(name, { ok: true, detail: `${found.length} tools` });
+        tools.push(...found);
       } catch (error) {
         // One dead server must not take the house's voice down with it.
-        log.error(`${name} unavailable:`, error instanceof Error ? error.message : error);
+        const detail = error instanceof Error ? error.message : String(error);
+        this.#outcomes.set(name, { ok: false, detail });
+        log.error(`${name} unavailable:`, detail);
       }
     }
     return tools;
+  }
+
+  /**
+   * One line per configured server. `connect` has already run by the time
+   * the doctor asks, so this reports what happened rather than dialling
+   * every server a second time.
+   */
+  checks(servers: Record<string, McpServerConfig>): Check[] {
+    return Object.entries(servers).map(([name, server]) => {
+      const where = server.transport === "stdio" ? server.command : server.url;
+      const outcome = this.#outcomes.get(name);
+      if (!outcome)
+        return { name: `mcp ${name}`, status: "warn" as const, detail: `${where}, not connected` };
+      return {
+        name: `mcp ${name}`,
+        status: outcome.ok ? ("ok" as const) : ("fail" as const),
+        detail: `${where}: ${outcome.detail}`,
+      };
+    });
   }
 
   /**
@@ -162,6 +187,9 @@ export function createMcpIntegration(options: z.input<typeof McpOptions>): Integ
   return {
     name: "mcp",
     tools: () => mcp.connect(servers),
+    async doctor() {
+      return mcp.checks(servers);
+    },
     close: () => mcp.close(),
   };
 }
