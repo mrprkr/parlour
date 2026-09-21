@@ -68,9 +68,13 @@ runs. Vercel builds it with the Next.js builder, Root Directory `apps/site`.
   speaking. It does not know where frames come from; every client (local mic, satellite, phone
   page, `/listen` socket) gets its own session keyed by client id. Clients that already know
   utterance boundaries call `utterance(frames)` instead of `push(frame)`.
-- `core/router.ts` is local first: the local model gets the tools plus `ask_the_clever_one`, which
-  escalates to the cloud model (Claude, server-side web search, no house tools). `core/loop.ts`
-  runs tool rounds up to `llm.maxToolRounds`.
+- `core/router.ts` runs one pipeline for every client: `core/queue.ts` (a lane per client, fair
+  across lanes, bounded, newest wins) -> `core/triage.ts` (repair the transcript, resolve
+  pronouns, split into tasks) -> `core/tasks.ts` (the list, run in order, replies joined into one)
+  -> `core/dispatch.ts`, which is local first: the local model gets the tools plus
+  `ask_the_clever_one`, which escalates to the cloud model (Claude, server-side web search, no
+  house tools). `core/loop.ts` runs tool rounds up to `llm.maxToolRounds`, every tool in a round
+  at once. The `pipeline` config block holds the knobs.
 - `integrations/` (`home-assistant`, `mcp`, `connectors`) are named sources of tools, prompt lines
   and a mute `gate()`.
 - `server/` is the HTTP + WebSocket server (`/v1` OpenAI-compatible, `/listen` raw PCM, `/ask`,

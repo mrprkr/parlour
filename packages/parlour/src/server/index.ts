@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { type WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import type { Agent } from "../core/agent.ts";
-import { decodeToWav, FRAME_MS, FRAME_SAMPLES, wavToFrames } from "../core/audio.ts";
+import { decodeToWav, FRAME_MS, FRAME_SAMPLES, FrameCutter, wavToFrames } from "../core/audio.ts";
 import type { Config } from "../core/config.ts";
 import { logger } from "../core/logger.ts";
 import { VoiceSession, type VoiceState } from "../core/session.ts";
@@ -19,6 +19,10 @@ const MAX_BODY = 8 * 1024 * 1024;
 const MAX_SOCKET_MESSAGE = 256 * 1024;
 /** The socket's control messages are a few dozen bytes. */
 const MAX_SOCKET_TEXT = 4 * 1024;
+/** A client id is a log line and a map key, not an essay. */
+const MAX_CLIENT_ID = 64;
+/** A room name goes into the system prompt, so it is a room and not a paragraph. */
+const MAX_ROOM = 40;
 
 /** The routes that reach the agent, and so need the token. Everything else is the page. */
 const API_ROUTES = new Set(["POST /ask", "POST /voice", "GET /v1/models", "POST /v1/chat/completions"]);
@@ -100,13 +104,16 @@ export async function startServer(deps: ServerDeps): Promise<RunningServer | nul
   });
 
   const sockets = new WebSocketServer({ noServer: true, maxPayload: MAX_SOCKET_MESSAGE });
+  // The ids in use right now, so two satellites that call themselves the same
+  // thing at the same time get a conversation and a queue lane each.
+  const live = new Set<string>();
   server.on("upgrade", (request, socket, head) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (url.pathname !== "/listen" || !local(request, token) || !authorised(request, url, token)) {
       socket.destroy();
       return;
     }
-    sockets.handleUpgrade(request, socket, head, (ws) => listen(ws, url, deps));
+    sockets.handleUpgrade(request, socket, head, (ws) => listen(ws, url, deps, live));
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -179,7 +186,9 @@ async function handle(
   }
 
   if (route === "GET /health") {
-    send(response, 200, { ok: true, ...deps.agent.status() });
+    // What is in flight as well as what is configured: a satellite that is
+    // waiting longer than it should can be told from one that is not.
+    send(response, 200, { ok: true, ...deps.agent.status(), ...deps.agent.router.load() });
     return;
   }
 
@@ -217,8 +226,8 @@ async function ask(request: IncomingMessage, response: ServerResponse, deps: Ser
   const body = await json(request, AskBody);
 
   const answer = await deps.agent.router.ask(body.text, {
-    session: body.client ?? "api",
-    room: body.room,
+    session: clientId(body.client ?? null, "api"),
+    room: roomName(body.room ?? null),
   });
   send(response, 200, { reply: answer.text, via: answer.via });
 }
@@ -238,8 +247,8 @@ async function voice(
   if (!audio.length) return send(response, 400, { error: "no audio" });
 
   const wav = await decodeToWav(audio, deps.config.audio.sampleRate);
-  const client = url.searchParams.get("client") ?? "phone";
-  const room = url.searchParams.get("room") ?? undefined;
+  const client = clientId(url.searchParams.get("client"), "phone");
+  const room = roomName(url.searchParams.get("room"));
 
   let heard = "";
   let reply = "";
@@ -338,14 +347,14 @@ async function completions(
  * and a network stack. In push mode the client says when the utterance starts
  * and stops, for hardware with a button or its own wake word.
  */
-function listen(socket: WebSocket, url: URL, deps: ServerDeps): void {
-  const client = url.searchParams.get("client") ?? `socket-${Date.now()}`;
-  const room = url.searchParams.get("room") ?? undefined;
+function listen(socket: WebSocket, url: URL, deps: ServerDeps, live: Set<string>): void {
+  const client = clientId(url.searchParams.get("client"), `socket-${Date.now()}`, live);
+  const room = roomName(url.searchParams.get("room"));
   const mode = url.searchParams.get("mode") === "push" ? "push" : "wake";
 
   let speaking = false;
   let pending: Int16Array[] | null = null;
-  let tail: Buffer = Buffer.alloc(0);
+  const cutter = new FrameCutter();
 
   const tell = (message: Record<string, unknown>) => {
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
@@ -400,13 +409,7 @@ function listen(socket: WebSocket, url: URL, deps: ServerDeps): void {
 
     // Frames arrive at whatever size the client's buffer happens to be, so
     // re-cut them to the 80 ms the wake word insists on.
-    tail = tail.length ? Buffer.concat([tail, data]) : data;
-    const bytes = FRAME_SAMPLES * 2;
-    while (tail.length >= bytes) {
-      const slice = tail.subarray(0, bytes);
-      tail = tail.subarray(bytes);
-      const frame = new Int16Array(FRAME_SAMPLES);
-      for (let i = 0; i < FRAME_SAMPLES; i++) frame[i] = slice.readInt16LE(i * 2);
+    for (const frame of cutter.push(data)) {
       if (pending) {
         pending.push(frame);
         if (pending.length >= maxFrames) finish();
@@ -416,7 +419,10 @@ function listen(socket: WebSocket, url: URL, deps: ServerDeps): void {
     }
   });
 
-  socket.on("close", () => log.info(`${client} disconnected`));
+  socket.on("close", () => {
+    live.delete(client);
+    log.info(`${client} disconnected`);
+  });
   socket.on("error", (error) => log.warn(`${client}:`, error.message));
 }
 
@@ -437,6 +443,33 @@ function pipeline(deps: ServerDeps, client: string) {
     id: client,
     gate: () => agent.gate(),
   };
+}
+
+/**
+ * A client id is a conversation, a wake word detector and a place in the
+ * queue, so it decides what a client can see and how much of the house it can
+ * hold up. It comes off the network, so it is cut down to something short and
+ * printable first, and two clients claiming one name at the same time are
+ * given one each: a satellite that reconnects should pick its conversation
+ * back up, but the kitchen and a guest's phone both called "parlour" should
+ * not be sharing one.
+ */
+function clientId(raw: string | null, fallback: string, taken?: Set<string>): string {
+  const base =
+    (raw ?? "")
+      .replace(/[^\w.:-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, MAX_CLIENT_ID) || fallback;
+  if (!taken) return base;
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = `${base}~${n}`;
+  taken.add(id);
+  return id;
+}
+
+/** The room goes straight into the system prompt, so it is one line of it and no more. */
+function roomName(raw: string | null | undefined): string | undefined {
+  return (raw ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_ROOM) || undefined;
 }
 
 function authorised(request: IncomingMessage, url: URL, token: string | undefined): boolean {

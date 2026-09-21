@@ -16,7 +16,9 @@ You can read the short version at
 "Hey Jarvis"        openWakeWord, in process, always local
   -> record         energy endpointing, stops on 800 ms of silence
   -> speech to text whisper.cpp, small.en, kept warm on this machine
-  -> the model      a local model with tools, over the OpenAI API
+  -> the queue      one lane per room, so two satellites never wait on each other
+  -> triage         the words repaired, and the request split into a list of tasks
+  -> the model      a local model with tools, over the OpenAI API, one task at a time
        -> tools     Home Assistant over MCP, plus timers, search and connectors
        -> escalate  Claude, when the local model says it is out of its depth
   -> text to speech Kokoro, in process

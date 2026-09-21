@@ -108,6 +108,40 @@ is `macos-say`).
 - A hosted OpenAI-compatible endpoint works as the local model too: add
   `"apiKeyEnv": "SOME_NAME"` naming a variable in `secrets.env`.
 
+## The pipeline
+
+```json
+{
+  "pipeline": {
+    "concurrency": 2,
+    "queueDepth": 2,
+    "triage": "auto",
+    "maxTasks": 4,
+    "timeoutMs": 45000
+  }
+}
+```
+
+- **`concurrency`** is how many requests are answered at once across the
+  whole house. One request per client either way, so this is how many rooms
+  can be answered at once rather than how hard one room can push. Two suits
+  one machine with one local model; raise it if the model is hosted
+  elsewhere and can take it, and the queue will still keep each room in turn.
+- **`queueDepth`** is how many requests may wait in one client's lane. Past
+  it, that client's oldest waiting request is dropped and nothing is said
+  for it: somebody who asks twice wants the second answer.
+- **`triage`** is when a request is repaired and split before it is acted
+  on. `auto` reads anything compound, long or ambiguous and lets a plain
+  instruction through at once. `always` costs a local round trip on every
+  request and is worth it in a noisy room or with a small speech model;
+  `never` sends the words to the action agent exactly as they were heard.
+- **`maxTasks`** caps how many things one request may become. Four is "turn
+  the kitchen and hall lights off, set a timer and tell me the forecast".
+- **`timeoutMs`** is the ceiling on one whole request. It is checked between
+  tool rounds and between tasks rather than mid-request, so nothing already
+  with a model is abandoned; what it stops is a request still going long
+  after the person has left the room.
+
 ## Search
 
 ```json

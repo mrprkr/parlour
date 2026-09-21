@@ -142,6 +142,11 @@ export async function buildAgent(
     maxToolRounds: config.llm.maxToolRounds,
     onLocalFailure: config.llm.cloud.onLocalFailure,
     promptContext: () => integrations.flatMap((integration) => integration.promptContext?.() ?? []),
+    triage: config.pipeline.triage,
+    maxTasks: config.pipeline.maxTasks,
+    concurrency: config.pipeline.concurrency,
+    queueDepth: config.pipeline.queueDepth,
+    timeoutMs: config.pipeline.timeoutMs,
   });
 
   if (audio) {

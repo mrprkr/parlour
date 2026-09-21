@@ -94,6 +94,36 @@ export const ConfigSchema = z.object({
     })
     .prefault({}),
 
+  /**
+   * How a request gets from a client to an answer: the queue in front of the
+   * models, the triage stage that reads it first, and the ceiling on how long
+   * one request may take. The defaults suit one machine answering a handful
+   * of satellites; a bigger box can afford more of everything.
+   */
+  pipeline: z
+    .object({
+      /**
+       * How many requests run at once across every client. One request per
+       * client either way, so this is how many rooms can be answered at once
+       * rather than how hard one room can push.
+       */
+      concurrency: z.number().int().positive().default(2),
+      /** How many requests may wait in one client's lane before the oldest is dropped. */
+      queueDepth: z.number().int().positive().default(2),
+      /**
+       * When a request is read, corrected and split before it is acted on.
+       * "auto" does it for anything compound, long or ambiguous and lets a
+       * plain instruction through at once; "always" buys accuracy with a
+       * round trip on every request; "never" sells it.
+       */
+      triage: z.enum(["auto", "always", "never"]).default("auto"),
+      /** How many tasks one request may become. */
+      maxTasks: z.number().int().positive().max(10).default(4),
+      /** How long one request may take before what is left of it is abandoned, in ms. */
+      timeoutMs: z.number().int().positive().default(45000),
+    })
+    .prefault({}),
+
   search: ProviderSlice.extend({
     /** "none" leaves the local model without a search tool. */
     provider: z.string().default("searxng"),

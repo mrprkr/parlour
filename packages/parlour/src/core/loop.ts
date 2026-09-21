@@ -16,6 +16,9 @@ export const NO_CLOUD =
   "There is no other model to hand this to. Answer it yourself: use the tools you have if they help, " +
   "and otherwise say what you know in one or two sentences.";
 
+/** What is said when the request ran past its deadline part way through. */
+export const OUT_OF_TIME = "That took longer than it should have. Ask me again in a moment.";
+
 export interface TurnResult {
   text: string;
   /** Set when the model asked to hand the question over. */
@@ -36,10 +39,24 @@ export async function runTurn(opts: {
   maxRounds: number;
   /** Escalation is only offered to the local model. */
   allowEscalation: boolean;
+  /**
+   * When to stop asking for another round, as a timestamp. Checked between
+   * rounds rather than during one: the port takes no signal, so a request
+   * already with a model runs to its end either way, and abandoning it here
+   * would only lose the answer we are waiting for.
+   */
+  deadline?: number;
+  now?: () => number;
 }): Promise<TurnResult> {
   const messages = [...opts.messages];
+  const now = opts.now ?? Date.now;
 
   for (let round = 0; round < opts.maxRounds; round++) {
+    if (round > 0 && opts.deadline !== undefined && now() > opts.deadline) {
+      log.warn("out of time part way through the tool rounds");
+      return { text: OUT_OF_TIME, messages };
+    }
+
     const completion = await opts.model.complete(messages, opts.tools);
     messages.push({
       role: "assistant",
@@ -49,34 +66,45 @@ export async function runTurn(opts: {
 
     if (!completion.toolCalls.length) return { text: completion.text, messages };
 
-    for (const call of completion.toolCalls) {
-      if (call.name === ESCALATE_TOOL) {
-        if (opts.allowEscalation) {
-          const question = String(call.args.question ?? "");
-          log.info("escalating:", question);
-          // Drop the escalation call itself: the cloud model gets the question,
-          // not the local model's decision to give up.
-          return { text: completion.text, escalateTo: question, messages: opts.messages };
-        }
-        // No cloud model, and the model asked for one anyway: small models
-        // trained on this pattern reach for it even when it is not in their
-        // tool list. Answered as a tool result rather than left to the
-        // registry's "no tool called that", so the next round is told what to
-        // do instead of only what went wrong.
-        log.debug("escalation asked for with no cloud model");
-        messages.push({
-          role: "tool",
-          toolCallId: call.id,
-          name: call.name,
-          content: NO_CLOUD,
-        });
-        continue;
-      }
-
-      log.debug("tool", call.name, call.args);
-      const result = await opts.registry.run(call.name, call.args);
-      messages.push({ role: "tool", toolCallId: call.id, name: call.name, content: result });
+    const escalation = opts.allowEscalation
+      ? completion.toolCalls.find((call) => call.name === ESCALATE_TOOL)
+      : undefined;
+    if (escalation) {
+      const question = String(escalation.args.question ?? "");
+      log.info("escalating:", question);
+      // Drop the escalation call itself: the cloud model gets the question,
+      // not the local model's decision to give up.
+      return { text: completion.text, escalateTo: question, messages: opts.messages };
     }
+
+    // The model asked for every tool in this round before it saw any of the
+    // answers, so nothing in the round depends on anything else in it.
+    // Running them together costs the slowest rather than the sum, which is
+    // the difference between two lights and one, and the results are still
+    // appended in the order they were asked for.
+    const results = await Promise.all(
+      completion.toolCalls.map((call) => {
+        if (call.name === ESCALATE_TOOL) {
+          // No cloud model, and the model asked for one anyway: small models
+          // trained on this pattern reach for it even when it is not in their
+          // tool list. Answered as a tool result rather than left to the
+          // registry's "no tool called that", so the next round is told what
+          // to do instead of only what went wrong.
+          log.debug("escalation asked for with no cloud model");
+          return Promise.resolve(NO_CLOUD);
+        }
+        log.debug("tool", call.name, call.args);
+        return opts.registry.run(call.name, call.args);
+      }),
+    );
+    completion.toolCalls.forEach((call, index) => {
+      messages.push({
+        role: "tool",
+        toolCallId: call.id,
+        name: call.name,
+        content: results[index] as string,
+      });
+    });
   }
 
   log.warn("hit the tool round limit");
