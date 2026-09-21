@@ -1,0 +1,180 @@
+The house knows how to call tools. What it does not know is that goodnight
+means the porch light stays on and the rest go off, or that the car should
+only charge after eleven. Those are house rules: they change every time
+someone rearranges a room, and writing one should not mean writing a
+provider.
+
+There are three ways in, in the order you will want them. A **skill** is a
+markdown file. An **MCP server** is somebody else's tools. A **plugin** is
+one package that brings several of these at once.
+
+## Skills
+
+A skill is a markdown file in `~/.config/parlour/skills`:
+
+```md
+---
+name: bedtime
+description: What goodnight means in this house
+---
+
+Turn off the kitchen, hall and lounge lights, leave the porch light on,
+and set the thermostat to 17. Say "goodnight" and nothing else.
+```
+
+```sh
+parlour skills new bedtime          # writes the file, with the frontmatter filled in
+parlour skills list                 # the rules, and what each one is for
+parlour skills show bedtime         # the body, as the model reads it
+parlour skills path                 # where they live
+parlour restart                     # the agent reads them at startup
+```
+
+Only the name and the description go in the system prompt. The body is
+fetched with the `read_skill` tool when the model decides the rule applies,
+which is the whole point: a local model with a small context cannot carry
+every house rule on every turn, and most turns are "turn the kitchen light
+off". Write the description as the trigger ("what goodnight means"), not as
+a title.
+
+The frontmatter is optional. Without it the filename is the name and the
+first line is the description, so a rule that is one paragraph can be one
+paragraph. A skill that comes with files of its own can be a directory
+instead, with the rule in `SKILL.md`:
+
+```text
+~/.config/parlour/skills/
+  bedtime.md
+  shopping/
+    SKILL.md
+    list.txt
+```
+
+The body is read out loud in the end, so write it the way you would tell a
+house sitter: which tools to call, in what order, and how short the spoken
+reply should be. `parlour doctor` counts the skills it found, names any file
+it could not read, and warns about a body long enough to slow every answer
+that touches it.
+
+`"skills": { "dir": "/house/rules" }` in `config.json` points at another
+directory, which is how a household keeping its rules in a git repository
+avoids copying files in. `"skills": { "enabled": false }` turns the whole
+thing off, tool and all.
+
+## MCP servers
+
+Anything that speaks [MCP](https://modelcontextprotocol.io) is a source of
+tools, and every tool it advertises becomes one the house can call:
+
+```sh
+parlour mcp add weather --url https://weather.example/mcp
+parlour mcp add notes --token-env NOTES_TOKEN -- npx -y @someone/notes-mcp
+parlour mcp list
+parlour mcp remove weather
+```
+
+The first form is a server on the network, the second one this machine
+starts and talks to over stdin. Either way the entry lands under
+`integrations.mcp.servers` in `config.json`, and you can write it there by
+hand instead:
+
+```json
+{
+  "integrations": {
+    "mcp": {
+      "servers": {
+        "notes": {
+          "transport": "stdio",
+          "command": "npx",
+          "args": ["-y", "@someone/notes-mcp"],
+          "tokenEnv": "NOTES_TOKEN"
+        }
+      }
+    }
+  }
+}
+```
+
+A stdio server is a process this machine starts, so it gets `PATH`, `HOME`,
+`LANG` and `TMPDIR`, the one variable `tokenEnv` names, and its own `env`
+block. It does not inherit the rest of the environment: every secret in
+`secrets.env` is in there, and a server that wants the calendar has no
+business reading the Anthropic key. Put the token in `secrets.env` with
+`parlour secrets set NOTES_TOKEN` and name it with `tokenEnv`, rather than
+writing it into `config.json`.
+
+A server that will not start is reported by `parlour doctor` and leaves the
+rest of the house working: a dead weather server must not stop the lights
+going off. A remote server that wants you to sign in with a browser is a
+connector rather than an MCP entry, and `parlour connectors add <name>
+<url>` does the OAuth and keeps the tokens in the Keychain.
+
+## Plugins
+
+Everything above can be done a piece at a time, and for one piece that is
+the simpler route. A plugin is for when the pieces only make sense together:
+a package for a car, say, that is a provider, two skills that know what its
+tools are called, and the MCP server both of them talk to.
+
+```sh
+npm install -g parlour-plugin-car   # where parlour can resolve it
+parlour plugins add parlour-plugin-car
+parlour plugins list
+parlour restart
+```
+
+`parlour plugins add` loads the package before it writes the name into
+config, so a name that is not installed is caught there rather than at the
+next start with the microphone live. An absolute path works too, which is
+how you try one from a checkout.
+
+A plugin is an npm package whose default export is a `Plugin`:
+
+```ts
+import { definePlugin } from "parlour";
+import { join } from "node:path";
+import { carVoice, carTools } from "./providers.ts";
+
+export default definePlugin({
+  name: "car",
+  description: "The car: charging, climate and where it is",
+
+  /** Registered before any slot is filled, so config can name them. */
+  providers: [carVoice, carTools],
+
+  /** A directory of markdown skill files, shipped with the package. */
+  skillsDir: join(import.meta.dirname, "skills"),
+
+  /** Or skills written in code, the same shape as a file. */
+  skills: [
+    { name: "charging", description: "When to charge", body: "Only after 23:00.", source: "car" },
+  ],
+
+  /** Config for the integrations it needs, merged under the house's own. */
+  integrations: {
+    "car-tools": {},
+    mcp: { servers: { car: { transport: "stdio", command: "car-mcp" } } },
+  },
+
+  /** Anything it wants to do once, before the agent is built. */
+  async setup(context) {
+    context.log.info(`using ${context.paths.home}`);
+  },
+});
+```
+
+Plugins are loaded first, before any provider is resolved, which is what
+makes `providers` useful: by the time a slot in `config.json` names
+`car-voice`, it is registered. The `integrations` block is merged
+*underneath* what the house wrote, key by key, so a plugin can bring an MCP
+server and you can still change or remove it in `config.json`. A skill of
+the same name as one in your own directory loses, for the same reason.
+
+A plugin that cannot be loaded is fatal rather than skipped: a house that
+starts without the plugin holding its skills looks exactly like a house
+whose model has stopped listening. The one exception is a provider that
+clashes with a name already registered, where the registered one wins and
+`parlour doctor` says so.
+
+`parlour plugins list` shows what each one brings without setting any of
+them up, so asking what is installed never starts a connection.

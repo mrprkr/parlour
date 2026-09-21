@@ -1,0 +1,253 @@
+//
+//  SettingsView.swift
+//  Which server, which room, which token, and an honest account of the four
+//  permissions the app asks for. A voice assistant that will not say what it
+//  is allowed to do is not one anybody should install.
+//
+
+import AVFoundation
+import SwiftUI
+
+struct SettingsView: View {
+  @Environment(AppSettings.self) private var settings
+  @Environment(ServerDiscovery.self) private var discovery
+  @Environment(LocalIntelligence.self) private var intelligence
+
+  @State private var health: Health?
+  @State private var probe: String?
+  @State private var checking = false
+  @State private var microphone = Recorder.permission
+
+  var body: some View {
+    Wall {
+      ScrollView {
+        VStack(alignment: .leading, spacing: Space.xxl) {
+          Heading("Settings", detail: "One server, one token, one room.")
+
+          server
+          found
+          onDevice
+          permissions
+        }
+        .padding(.horizontal, Space.xl)
+        .padding(.vertical, Space.lg)
+      }
+    }
+    .task { microphone = Recorder.permission }
+  }
+
+  // MARK: - The server
+
+  private var server: some View {
+    @Bindable var settings = settings
+    return Panel {
+      VStack(alignment: .leading, spacing: Space.md) {
+        field("Address", placeholder: "found with Bonjour", text: $settings.serverURL)
+          .textInputAutocapitalization(.never)
+          .autocorrectionDisabled()
+          .keyboardType(.URL)
+        field("Room", placeholder: "kitchen", text: $settings.room)
+          .textInputAutocapitalization(.never)
+          .autocorrectionDisabled()
+
+        VStack(alignment: .leading, spacing: Space.xs) {
+          Text("PARLOUR_TOKEN")
+            .font(Ramp.micro)
+            .foregroundStyle(Palette.bracken)
+          SecureField("from parlour secrets", text: $settings.token)
+            .font(Ramp.mono(ParlourTokens.Text.body))
+            .textFieldStyle(.plain)
+          Rule()
+          Text("Kept in the keychain on this phone, never in a backup.")
+            .font(Ramp.micro)
+            .foregroundStyle(Palette.bracken)
+        }
+
+        HStack(spacing: Space.lg) {
+          Button("Check") { Task { await check() } }
+            .font(Ramp.small)
+            .disabled(checking)
+          if let health {
+            Text("\(health.tools) tools, \(health.cloud ? "cloud behind it" : "local only")")
+              .font(Ramp.small)
+              .foregroundStyle(Palette.hearth)
+          } else if let probe {
+            Text(probe)
+              .font(Ramp.small)
+              .foregroundStyle(Palette.alarm)
+          }
+        }
+      }
+    }
+  }
+
+  private var found: some View {
+    VStack(alignment: .leading, spacing: Space.sm) {
+      Text("ON THIS NETWORK")
+        .font(Ramp.micro)
+        .tracking(0.6)
+        .foregroundStyle(Palette.bracken)
+      Rule()
+      if let failure = discovery.failure {
+        Text(failure)
+          .font(Ramp.small)
+          .foregroundStyle(Palette.alarm)
+          .padding(.vertical, Space.sm)
+      } else if discovery.found.isEmpty {
+        Text(discovery.browsing ? "Looking for a server." : "Not looking yet.")
+          .font(Ramp.small)
+          .foregroundStyle(Palette.bracken)
+          .padding(.vertical, Space.sm)
+      }
+      ForEach(discovery.found) { server in
+        Button {
+          settings.serverURL = server.url.absoluteString
+        } label: {
+          HStack {
+            VStack(alignment: .leading, spacing: 2) {
+              Text(server.name)
+                .font(Ramp.body)
+                .foregroundStyle(Palette.ink)
+              Text(server.url.absoluteString)
+                .font(Ramp.mono(ParlourTokens.Text.micro))
+                .foregroundStyle(Palette.bracken)
+            }
+            Spacer()
+            Text("use")
+              .font(Ramp.small)
+              .foregroundStyle(Palette.hearth)
+          }
+          .padding(.vertical, Space.sm)
+        }
+        .buttonStyle(.plain)
+        Rule()
+      }
+    }
+  }
+
+  // MARK: - The model on the phone
+
+  private var onDevice: some View {
+    @Bindable var settings = settings
+    return Panel {
+      VStack(alignment: .leading, spacing: Space.sm) {
+        Toggle(isOn: $settings.preferOnDevice) {
+          Text("Answer on this phone when the house is unreachable")
+            .font(Ramp.body)
+            .foregroundStyle(Palette.ink)
+        }
+        .disabled(!intelligence.state.usable)
+        Text(intelligence.state.explanation)
+          .font(Ramp.micro)
+          .foregroundStyle(intelligence.state.usable ? Palette.bracken : Palette.lampText)
+        Text(
+          "The phone has no tools. It can answer a question, but it cannot switch "
+            + "anything on, read a sensor or look anything up."
+        )
+        .font(Ramp.micro)
+        .foregroundStyle(Palette.bracken)
+      }
+    }
+    .task { intelligence.refresh() }
+  }
+
+  // MARK: - What the app is allowed to do
+
+  private var permissions: some View {
+    VStack(alignment: .leading, spacing: Space.sm) {
+      Text("PERMISSIONS")
+        .font(Ramp.micro)
+        .tracking(0.6)
+        .foregroundStyle(Palette.bracken)
+      Rule()
+      permission(
+        "Microphone",
+        why: "Recording while you hold the button.",
+        granted: microphone == .granted,
+        ask: { microphone = (await Recorder.requestPermission()) ? .granted : .denied }
+      )
+      permission(
+        "Local network",
+        why: "Finding your server, and talking to it.",
+        granted: discovery.browsing && discovery.failure == nil,
+        ask: { discovery.start() }
+      )
+      permission(
+        "HomeKit",
+        why: "Showing the rooms and accessories in the House tab.",
+        granted: nil,
+        ask: nil
+      )
+      permission(
+        "Speech recognition",
+        why: "Making out what you said when the server cannot.",
+        granted: nil,
+        ask: { _ = await OnDeviceSpeech.authorise() }
+      )
+    }
+  }
+
+  private func permission(
+    _ name: String,
+    why: String,
+    granted: Bool?,
+    ask: (() async -> Void)?
+  ) -> some View {
+    HStack(alignment: .top, spacing: Space.md) {
+      StateMark(state: granted == true ? .idle : .stopped)
+        .padding(.top, 5)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(name)
+          .font(Ramp.body)
+          .foregroundStyle(Palette.ink)
+        Text(why)
+          .font(Ramp.micro)
+          .foregroundStyle(Palette.bracken)
+      }
+      Spacer()
+      if granted != true, let ask {
+        Button("Ask") { Task { await ask() } }
+          .font(Ramp.small)
+      }
+    }
+    .padding(.vertical, Space.sm)
+    .overlay(alignment: .bottom) { Rule() }
+  }
+
+  private func check() async {
+    checking = true
+    defer { checking = false }
+    health = nil
+    probe = nil
+    guard let base = settings.endpoint(found: discovery.found.first?.url) else {
+      probe = ClientError.noServer.localizedDescription
+      return
+    }
+    do {
+      health = try await ParlourClient(base: base, token: settings.token).health()
+    } catch {
+      probe = error.localizedDescription
+    }
+  }
+
+  private func field(_ label: String, placeholder: String, text: Binding<String>) -> some View {
+    VStack(alignment: .leading, spacing: Space.xs) {
+      Text(label.uppercased())
+        .font(Ramp.micro)
+        .tracking(0.6)
+        .foregroundStyle(Palette.bracken)
+      TextField(placeholder, text: text)
+        .font(Ramp.body)
+        .foregroundStyle(Palette.ink)
+        .textFieldStyle(.plain)
+      Rule()
+    }
+  }
+}
+
+#Preview {
+  SettingsView()
+    .environment(AppSettings())
+    .environment(ServerDiscovery())
+    .environment(LocalIntelligence())
+}

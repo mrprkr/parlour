@@ -22,6 +22,11 @@ export const docPages: DocPage[] = [
     summary: "A provider or an integration as an npm package, with a worked example.",
   },
   {
+    slug: "skills",
+    title: "Skills, MCP and plugins",
+    summary: "House rules as markdown, somebody else's tools over MCP, and one package that brings both.",
+  },
+  {
     slug: "clients",
     title: "Clients",
     summary: "Satellites, the phone page, custom hardware, the ask endpoint, and Bonjour.",
@@ -36,6 +41,16 @@ export const docPages: DocPage[] = [
     slug: "desktop",
     title: "The menu bar app",
     summary: "What the app does, how it drives the CLI, and running it against a checkout.",
+  },
+  {
+    slug: "ios",
+    title: "The iOS app",
+    summary: "A client in your pocket: HomeKit, the local network, and a model on the phone.",
+  },
+  {
+    slug: "design",
+    title: "The design system",
+    summary: "One palette, one type ramp and one state vocabulary, emitted into all four interfaces.",
   },
   {
     slug: "tuning",

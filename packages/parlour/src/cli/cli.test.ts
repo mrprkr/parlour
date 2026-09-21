@@ -144,6 +144,9 @@ test("--help lists the commands and an unknown command fails with one line", asy
     "doctor",
     "service",
     "connectors",
+    "mcp",
+    "skills",
+    "plugins",
     "config",
     "secrets",
     "models",
@@ -715,4 +718,121 @@ test("connectors list is empty to begin with", async () => {
   const run = await parlour(["connectors", "list", "--json"]);
   assert.equal(run.code, 0, run.stderr);
   assert.deepEqual(JSON.parse(run.stdout), []);
+});
+
+test("mcp add writes a server into config without turning the house's own integrations off", async () => {
+  const added = await parlour(["mcp", "add", "weather", "--url", "https://weather.test/mcp"]);
+  assert.equal(added.code, 0, added.stderr);
+  const config = JSON.parse(readFileSync(join(home, "config", "config.json"), "utf8"));
+  assert.deepEqual(config.integrations.mcp.servers.weather, {
+    transport: "http",
+    url: "https://weather.test/mcp",
+  });
+  // The block replaces the default rather than adding to it, so the first
+  // write has to carry the integrations that were on before it.
+  assert.deepEqual(Object.keys(config.integrations).sort(), ["connectors", "home-assistant", "mcp"]);
+
+  const local = await parlour([
+    "mcp",
+    "add",
+    "notes",
+    "--token-env",
+    "NOTES_TOKEN",
+    "--",
+    "npx",
+    "-y",
+    "notes",
+  ]);
+  assert.equal(local.code, 0, local.stderr);
+  const withLocal = JSON.parse(readFileSync(join(home, "config", "config.json"), "utf8"));
+  assert.deepEqual(withLocal.integrations.mcp.servers.notes, {
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "notes"],
+    env: {},
+    tokenEnv: "NOTES_TOKEN",
+  });
+
+  const listed = await parlour(["mcp", "list", "--json"]);
+  assert.deepEqual(
+    (JSON.parse(listed.stdout) as { name: string }[]).map((server) => server.name),
+    ["weather", "notes"],
+  );
+
+  const again = await parlour(["mcp", "add", "weather", "--url", "https://other.test/mcp"]);
+  assert.equal(again.code, 1);
+  assert.match(again.stderr, /already an MCP server called weather/);
+
+  const removed = await parlour(["mcp", "remove", "weather"]);
+  assert.equal(removed.code, 0, removed.stderr);
+  const left = JSON.parse(readFileSync(join(home, "config", "config.json"), "utf8"));
+  assert.deepEqual(Object.keys(left.integrations.mcp.servers), ["notes"]);
+  assert.equal((await parlour(["mcp", "remove", "weather"])).code, 1);
+});
+
+test("mcp add refuses a server that is neither a url nor a command", async () => {
+  const neither = await parlour(["mcp", "add", "half"]);
+  assert.equal(neither.code, 1);
+  assert.match(neither.stderr, /parlour mcp add/);
+
+  const both = await parlour(["mcp", "add", "half", "--url", "https://a.test", "--", "npx"]);
+  assert.equal(both.code, 1);
+  assert.match(both.stderr, /either --url or a command/);
+
+  const bad = await parlour(["mcp", "add", "half", "--url", "not-a-url"]);
+  assert.equal(bad.code, 1);
+  assert.equal(existsSync(join(home, "config", "config.json")), false, "nothing was written");
+});
+
+test("skills new writes a file the list and the show can read back", async () => {
+  const made = await parlour(["skills", "new", "bedtime", "--description", "What goodnight means"]);
+  assert.equal(made.code, 0, made.stderr);
+  const file = made.stdout.trim();
+  assert.equal(file, join(home, "config", "skills", "bedtime.md"));
+  assert.equal((await parlour(["skills", "path"])).stdout.trim(), join(home, "config", "skills"));
+
+  writeFileSync(file, "---\nname: bedtime\ndescription: What goodnight means\n---\nPorch light on.\n");
+  const listed = await parlour(["skills", "list", "--json"]);
+  assert.deepEqual((JSON.parse(listed.stdout) as { skills: { name: string }[] }).skills, [
+    { name: "bedtime", description: "What goodnight means", source: file },
+  ]);
+
+  const shown = await parlour(["skills", "show", "bedtime"]);
+  assert.equal(shown.stdout.trim(), "Porch light on.");
+  assert.equal((await parlour(["skills", "show", "nothing"])).code, 1);
+  assert.equal((await parlour(["skills", "new", "bedtime"])).code, 1, "an existing file is not overwritten");
+});
+
+test("plugins add loads the package before it writes the name into config", async () => {
+  const file = join(home, "car-plugin.js");
+  writeFileSync(
+    file,
+    'export default { name: "car", description: "The car", skills: [], integrations: { mcp: {} } };\n',
+  );
+
+  const added = await parlour(["plugins", "add", file]);
+  assert.equal(added.code, 0, added.stderr);
+  assert.match(added.stdout, /Added car/);
+  assert.deepEqual(JSON.parse(readFileSync(join(home, "config", "config.json"), "utf8")).plugins, [file]);
+
+  const listed = await parlour(["plugins", "list", "--json"]);
+  assert.deepEqual((JSON.parse(listed.stdout) as { name: string; integrations: string[] }[])[0], {
+    specifier: file,
+    name: "car",
+    description: "The car",
+    providers: [],
+    skills: 0,
+    skillsDir: "",
+    integrations: ["mcp"],
+  });
+
+  // A package that is not installed is caught here, not at the next start.
+  const missing = await parlour(["plugins", "add", "parlour-plugin-that-is-not-installed"]);
+  assert.equal(missing.code, 1);
+  assert.match(missing.stderr, /is not installed/);
+  assert.deepEqual(JSON.parse(readFileSync(join(home, "config", "config.json"), "utf8")).plugins, [file]);
+
+  const removed = await parlour(["plugins", "remove", file]);
+  assert.equal(removed.code, 0, removed.stderr);
+  assert.deepEqual(JSON.parse(readFileSync(join(home, "config", "config.json"), "utf8")).plugins, []);
 });

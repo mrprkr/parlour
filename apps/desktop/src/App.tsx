@@ -31,16 +31,17 @@ const TABS: { value: TabName; label: string }[] = [
 ];
 
 /**
- * The dot, per state. Idle is a steady green, and the three working states
- * pulse faster the closer the agent is to speaking, which is how the vanilla
- * stylesheet told them apart at a glance.
+ * The dot, per state. The colour and the cadence come from the shared state
+ * vocabulary in packages/design, so the dot here, the lamp on the site, the
+ * phone page and the iOS app all breathe in step: idle is a steady green and
+ * the three working states pulse faster the closer the agent is to speaking.
  */
 const DOT: Record<string, string> = {
-  idle: "bg-primary",
-  listening: "bg-primary animate-pulse [animation-duration:1.1s]",
-  thinking: "bg-warn animate-pulse [animation-duration:0.7s]",
-  speaking: "bg-primary animate-pulse [animation-duration:0.5s]",
-  stopped: "border border-muted-foreground bg-border",
+  idle: "bg-[var(--state-idle)]",
+  listening: "animate-pulse bg-[var(--state-listening)] [animation-duration:var(--state-listening-pulse)]",
+  thinking: "animate-pulse bg-[var(--state-thinking)] [animation-duration:var(--state-thinking-pulse)]",
+  speaking: "animate-pulse bg-[var(--state-speaking)] [animation-duration:var(--state-speaking-pulse)]",
+  stopped: "border border-[var(--state-stopped)] bg-border",
 };
 
 /** What the window shows before the first status arrives. */
