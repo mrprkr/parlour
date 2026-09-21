@@ -60,6 +60,8 @@ at, which is the global install by default. To have it run this checkout, set
 | A CLI command | `packages/parlour/src/cli/<name>.ts` exporting a `Command`, listed in `cli/main.ts`. |
 | The app | `apps/desktop`. It drives the CLI, so if the CLI cannot do it yet, add that first. |
 | The website | `apps/site`. A Next.js app with one route; words in `app/page.tsx`, looks in `app/globals.css`. |
+| The iOS app | `apps/ios`. A client of the server's routes, so if the server cannot do it yet, add that first. Generate the Xcode project with `nx run ios:generate`. |
+| A colour, a size or a state | `packages/design/src/tokens.ts`, then `nx run design:emit`. Nothing else in the repository declares a colour; the `tokens.css` and `Tokens.swift` files are generated and checked in. |
 
 ## How we write it
 

@@ -87,13 +87,28 @@ would be a welcome contribution.
 
 ## Assembly
 
-`buildAgent(config, secrets, paths)` in `core/agent.ts` resolves every
-provider, wires up the fallback voice, builds the tool registry (every
-integration's tools, the search tool unless `search.provider` is `"none"`,
-and the timers), builds the `Router`, and hands back an `Agent`. The
+`buildAgent(config, secrets, paths)` in `core/agent.ts` loads the plugins,
+resolves every provider, wires up the fallback voice, builds the tool
+registry (every integration's tools, the search tool unless
+`search.provider` is `"none"`, the timers, and `read_skill` when the house
+has skills), builds the `Router`, and hands back an `Agent`. The
 microphone loop, the text REPL, the doctor and the network server all take
 one of these rather than building their own, which is why a timer set from
 a phone still sounds in the room and every client shares one tool list.
+
+Plugins come first, before any provider is resolved: a plugin
+(`core/plugins.ts`) is one package that can bring providers, skills and
+integration config at once, and a provider it registers has to exist by the
+time a slot in config names it. Its `integrations` block is merged
+underneath the one in `config.json`, key by key, so what the person wrote
+wins.
+
+Skills (`core/skills.ts`) are markdown files under `~/.config/parlour/skills`
+and in whatever directories the plugins add. Only each skill's name and
+description go in the system prompt; the body is fetched with the
+`read_skill` tool when the model decides the rule applies, because a local
+model with a small context cannot carry every house rule on every turn.
+[Skills, MCP and plugins](/docs/skills) is the guide.
 
 The cloud model and web search are the two slots the house can run without.
 A provider that cannot start (nearly always a missing key) is reported by

@@ -3,9 +3,11 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Parlour is a local-first voice assistant for the house that runs on a Mac. One npm package
-(`packages/parlour`) holds everything; the desktop app drives its CLI; the website is a Next.js app with
-the docs in it. `README.md` is the user-facing tour, `CONTRIBUTING.md` the conventions, and
-`apps/site/content/docs/architecture.mdx` the long version of the architecture section below.
+(`packages/parlour`) holds everything; the desktop app drives its CLI; the iOS app and the phone page
+are clients of its server; the website is a Next.js app with the docs in it. `packages/design` holds
+the tokens all four interfaces are drawn from. `README.md` is the user-facing tour, `CONTRIBUTING.md`
+the conventions, and `apps/site/content/docs/architecture.mdx` the long version of the architecture
+section below.
 
 ## Commands
 
@@ -46,6 +48,16 @@ metadata, font and the analytics component in `app/layout.tsx`, security headers
 `pnpm -C apps/site dev` locally; `pnpm exec nx run-many -t typecheck lint build -p site` is what CI
 runs. Vercel builds it with the Next.js builder, Root Directory `apps/site`.
 
+iOS app (`apps/ios`, SwiftUI): a client of the server's `/health`, `/voice` and `/ask`, with HomeKit,
+Bonjour discovery and Apple's on-device model. The Xcode project is generated from `project.yml`, so
+`brew install xcodegen` then `pnpm exec nx run ios:app`. There is no iOS job in CI; build it by hand
+with `nx run ios:xcodebuild` and `nx run ios:xcodetest`. `apps/ios/README.md` has the detail.
+
+Design system (`packages/design`): `src/tokens.ts` is the one palette, type ramp and session-state
+vocabulary, and `src/emit.ts` writes it into the site, the app, the phone page and iOS. Never edit a
+generated `tokens.css` or `Tokens.swift`: change the tokens and run `pnpm exec nx run design:emit`.
+`design:test` fails when a generated file has drifted, so `pnpm check` catches a missed emit.
+
 ## Architecture of `packages/parlour/src`
 
 - `core/` is pure and imports nothing from `providers/`, except `core/builtins.ts`, whose only job
@@ -59,6 +71,11 @@ runs. Vercel builds it with the Next.js builder, Root Directory `apps/site`.
   by `provider` name; the rest of the slice passes through untouched to the provider's own Zod
   schema. An unregistered name is `await import`ed as an npm package, which is the whole extension
   mechanism. `secrets` and `service` are chosen by platform, not config.
+- `core/plugins.ts` loads the packages in `config.plugins` before anything is resolved: a plugin
+  brings providers, skills and integration config at once, and its `integrations` block is merged
+  under the one in config. `core/skills.ts` reads markdown skills from `~/.config/parlour/skills`
+  and the plugins' own directories; only the names and descriptions go in the prompt, the bodies
+  come back through the `read_skill` tool.
 - `core/agent.ts` `buildAgent(config, secrets, paths)` resolves every provider, wires the fallback
   voice (`Speaker` = TTS + sink + sentence splitting, `FallbackTextToSpeech` defaults to
   `macos-say`), builds the tool registry (integrations + search + timers) and the `Router`. The
