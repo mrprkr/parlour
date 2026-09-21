@@ -38,6 +38,16 @@ export const docPages: DocPage[] = [
     summary: "What the app does, how it drives the CLI, and running it against a checkout.",
   },
   {
+    slug: "ios",
+    title: "The iOS app",
+    summary: "A client in your pocket: HomeKit, the local network, and a model on the phone.",
+  },
+  {
+    slug: "design",
+    title: "The design system",
+    summary: "One palette, one type ramp and one state vocabulary, emitted into all four interfaces.",
+  },
+  {
     slug: "tuning",
     title: "Tuning",
     summary: "Which setting to turn when it keeps waking up for the television.",
