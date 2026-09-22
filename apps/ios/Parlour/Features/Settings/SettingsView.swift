@@ -6,6 +6,7 @@
 //
 
 import AVFoundation
+import Speech
 import SwiftUI
 
 struct SettingsView: View {
@@ -17,6 +18,7 @@ struct SettingsView: View {
   @State private var probe: String?
   @State private var checking = false
   @State private var microphone = Recorder.permission
+  @State private var speech = SFSpeechRecognizer.authorizationStatus()
 
   var body: some View {
     Wall {
@@ -33,7 +35,10 @@ struct SettingsView: View {
         .padding(.vertical, Space.lg)
       }
     }
-    .task { microphone = Recorder.permission }
+    .task {
+      microphone = Recorder.permission
+      speech = SFSpeechRecognizer.authorizationStatus()
+    }
   }
 
   // MARK: - The server
@@ -181,8 +186,8 @@ struct SettingsView: View {
       permission(
         "Speech recognition",
         why: "Making out what you said when the server cannot.",
-        granted: nil,
-        ask: { _ = await OnDeviceSpeech.authorise() }
+        granted: speech == .authorized,
+        ask: { speech = (await OnDeviceSpeech.authorise()) ? .authorized : .denied }
       )
     }
   }
