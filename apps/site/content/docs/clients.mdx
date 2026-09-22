@@ -37,14 +37,16 @@ parlour service restart
 
 Without a token, the server listens only on loopback, answers only the machine
 it runs on, and does not advertise itself. An open voice assistant can turn on the
-heating and read your shopping list, so closed is the safe default. Even the browser on that same machine counts as somewhere else. A
-request addressed to any name other than `localhost`, or sent by a page not
-served from `localhost`, is refused. `parlour doctor` tells you which state
-you are in.
+heating and read your shopping list, so closed is the safe default. A
+browser on that same machine is held to it too: a request addressed to
+anything but a loopback name (`localhost`, `127.0.0.1`, `::1`), or sent by a
+page that was not served from one, is refused. `parlour doctor` tells you
+which state you are in.
 
 Clients send the token as `Authorization: Bearer <token>`, or as `?token=` on
-the URL for the socket and the phone page. `/health` needs no token and
-reports `{ "ok": true, "tools": 14, "cloud": true }`.
+the URL, which is how the socket takes it. `/health` needs no token and
+reports what is configured and what is in flight:
+`{ "ok": true, "tools": 14, "cloud": true, "running": 0, "waiting": 0 }`.
 
 ## A satellite
 
@@ -71,7 +73,8 @@ between attempts, doubling up to `satellite.retryMs`.
 - **`serverUrl` empty** means "find it with Bonjour, once". `parlour init`
   looks while you watch. A satellite that starts with the key empty keeps
   looking until a server lets it in. Either way, the address it finds is
-  written here, and the satellite talks only to that server from then on. This is deliberate. Anything on the network can advertise
+  written here, and the satellite talks only to that server from then on.
+  This is deliberate. Anything on the network can advertise
   `_parlour._tcp`, and the satellite hands its token to whatever it connects
   to, so the first server it trusts is the only one it trusts. If your server
   really moves, clear the key. If the pinned server is down and something else
@@ -109,9 +112,13 @@ parlour pair
 It draws a QR code in the terminal. In the app, open Settings and tap Scan
 pairing code, or point the Camera at it; either way the app takes the address
 and the token together and checks the server there and then. The desktop app
-shows the same code under On the network. The code carries the token, so show
-it only to phones you mean to let in. If the phone cannot reach the Mac by its
-name, give the address it can: `parlour pair --host 192.168.1.20`.
+shows the same code under On the network, behind Pair a phone. The code
+carries the token, so show it only to phones you mean to let in. It uses the
+Mac's `.local` name; if the phone cannot reach the Mac by that name, give it an
+address it can: `parlour pair --host 192.168.1.20`.
+
+`parlour pair` runs on the server only, and refuses until `PARLOUR_TOKEN` is
+set, because without one a phone could not get in anyway.
 
 ## A phone
 
@@ -124,9 +131,11 @@ Safari only grants microphone access over HTTPS or on localhost. On iOS, put
 a reverse proxy with a certificate, or Tailscale, in front of the server.
 
 Under the hood, the page posts one recording to
-`POST /voice?client=phone&room=kitchen` and gets back
-`{ heard, reply, via, audio }`, where `audio` is a base64 WAV of the reply.
-Anything that can record and post can use the same route.
+`POST /voice?client=<id>&room=kitchen` and gets back
+`{ heard, reply, via, audio }`, where `audio` is a base64 WAV of the reply, or
+`null` when nothing was heard. Each phone makes up its own `client` id, so each
+keeps its own conversation; leave it out and the client is `phone`. Anything
+that can record and post can use the same route.
 
 ## Custom hardware
 
@@ -151,10 +160,15 @@ events and one binary WAV per answer.
 - **Push mode** (`&mode=push`). Your device marks the start and end of a
   request with `{"type":"start"}` and `{"type":"end"}`, or sends
   `{"type":"cancel"}` to throw it away. Use it for a button, or for hardware
-  that does its own wake word.
+  that does its own wake word. A request that never ends is answered once it
+  reaches `audio.maxUtteranceMs`.
 
 Send `{"type":"spoke"}` when playback finishes, and the server starts
 listening again straight away instead of waiting out its own estimate.
+
+`client` names the conversation, so a device that reconnects picks up where it
+left off. Two devices connected under the same name at once are told apart
+(`hallway~2`) rather than made to share one.
 
 ## Automations and scripts
 
@@ -175,7 +189,8 @@ Otherwise, every caller shares the `api` session.
 ## Bonjour
 
 The server advertises `_parlour._tcp` with a TXT record of `role=server`,
-`token=required` or `token=none`, and `api=/v1`. The name is
+`version=1`, `token=required` and `api=/v1`. A server without a token does
+not advertise at all. The name is
 `discovery.name`, or `"<config.name> on <hostname>"` when that is empty. Set
 `discovery.enabled: false` to turn it off. Every satellite then needs
 `serverUrl` filled in.

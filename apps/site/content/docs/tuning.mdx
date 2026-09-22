@@ -5,8 +5,13 @@ description: Adjust wake sensitivity, timing, voice and models, and fix what fee
 
 Everything on this page is a key in `~/.config/parlour/config.json`.
 `parlour config edit` opens the file. `parlour config show` prints what is in
-force, with the defaults filled in. `parlour service restart` (or a restart
-from the app) picks up your changes.
+force, with the defaults filled in. `parlour restart` (or a restart from the
+app) picks up your changes.
+
+For the wake word, the voice, the microphone and the local model, running
+`parlour init` again is often quicker. Every question starts at what is set
+now, Escape goes back one question, and a review at the end lets you change
+any part before anything is downloaded or written.
 
 ## When something is not quite right
 
@@ -17,10 +22,10 @@ from the app) picks up your changes.
 | It cuts you off mid-sentence | Raise `audio.silenceMs`, or lower `audio.silenceThreshold`. |
 | It waits too long before answering | Lower `audio.silenceMs` to about 600. |
 | It gives up before you start talking | You have 2.5 s after the wake word to begin. Try saying the wake word and the request in one breath. |
-| It answers slowly | Try a smaller local model, or a smaller whisper model: `parlour models fetch --whisper ggml-base.en.bin`, then `parlour service install` to rewrite the whisper service. It loads the first model file in `~/Library/Caches/parlour/models/whisper/`, and `base` sorts before `small`. |
-| It asks the cloud too often, or not often enough | The prompt decides this, not a threshold. See `packages/parlour/src/core/prompt.ts`. |
+| It answers slowly | Try a smaller local model (`parlour models suggest` lists them), or a smaller whisper model: `parlour models fetch --whisper ggml-base.en.bin`, then `parlour service install` to rewrite the whisper service. It loads the first model file in `~/Library/Caches/parlour/models/whisper/`, and `base` sorts before `small`. |
+| It asks the cloud too often, or not often enough | By default the local model decides, guided by its prompt (`packages/parlour/src/core/prompt.ts`). For a threshold you can tune, add the [decision model](#decision-model-optional). |
 | It says nothing at all | Run `parlour doctor`, or press Check in the app. It names the part that is down. |
-| It talks over itself | `audio.bargeIn` is off by default, because with one box in one room the microphone hears the speaker. |
+| You cannot interrupt it | `audio.bargeIn` lets the wake word cut a reply short. It is off by default, because with one box in one room the microphone hears the speaker. |
 | It fires twice on one wake word | Raise `wake.refractoryMs`. |
 | The voice is not the one you wanted | Set `tts.voice` and `tts.speed`. Kokoro downloads itself the first time Parlour starts after an install, so that first start is slow and the fallback voice may speak until it is ready. |
 | It can see the lights but not the blinds | Expose the blinds. Home Assistant only publishes what is exposed under Settings > Voice assistants > Expose. |
@@ -68,9 +73,12 @@ own word, see [Your own wake word](/docs/wake-word).
 { "tts": { "provider": "kokoro", "voice": "bf_emma", "speed": 1.0, "fallback": "macos-say" } }
 ```
 
-Kokoro's British voices are `bf_emma`, `bf_isabella`, `bm_george` and
-`bm_lewis`. If you name a voice Kokoro does not have, the reply falls through
-to the fallback and the log lists every voice Kokoro knows.
+`parlour init` offers four British voices: `bf_emma` (the default),
+`bf_isabella`, `bm_george` and `bm_lewis`. Kokoro has more, among them
+`bf_alice`, `bf_lily`, `bm_daniel` and `bm_fable`, and American voices whose
+ids start `af_` and `am_`, such as `af_heart`. If you name a voice Kokoro does
+not have, the reply falls through to the fallback and the log lists every
+voice Kokoro knows.
 
 `fallback` names the voice used when the first one fails (`null` turns the
 fallback off). `macos-say` ignores a Kokoro voice id and uses the system
@@ -92,11 +100,16 @@ brew install yap
 { "stt": { "provider": "yap", "locale": "en-GB" } }
 ```
 
-`locale` is optional and defaults to the Mac's own. Run `parlour service
-install` afterwards so the whisper service is taken away, and `parlour doctor`
-to check yap is found.
+`locale` is optional and defaults to the Mac's own. `parlour init` installs
+yap for you once the config names it. The whisper service stays installed
+until you remove it with `parlour service uninstall`. If launchd rather than
+the app runs the agent, follow it with `parlour service install`, which puts
+back only what the config still wants. `parlour doctor` checks yap is found.
 
 ## The models
+
+This is what `parlour init` writes when you let Parlour run the local model,
+on a Mac with 16 GB, with the defaults filled in:
 
 ```json
 {
@@ -108,12 +121,33 @@ to check yap is found.
 }
 ```
 
+The catalogue Parlour can run, and how much memory it suggests each for:
+
+| Model id | Download | Suggested from |
+| --- | --- | --- |
+| `qwen3.5-4b` | 2.7 GB | 8 GB |
+| `qwen3.5-9b` | 5.7 GB | 16 GB |
+| `gemma-4-26b-a4b` | 17 GB | 32 GB |
+| `qwen3.6-35b-a3b` | 20.4 GB | 64 GB |
+
+An Intel Mac runs the model on the CPU, so it is counted as having half its
+memory and is suggested a smaller model.
+
 - **`local.managed`** means Parlour runs the model itself: llama.cpp from
   Homebrew and a GGUF from its own catalogue, kept warm by launchd on port
-  8920, just like whisper. `parlour models suggest` lists the catalogue and
-  says which model suits this Mac. `parlour models fetch --llm <id>` downloads
-  another. Turn `managed` off and Parlour talks to whatever server `baseUrl`
-  names, and starts none of its own.
+  8920, just like whisper. At a terminal, `init` offers this first and
+  suggests the largest model in the catalogue above that the Mac can hold.
+  `parlour models suggest` prints the same list with this Mac's pick marked.
+  To switch, run `init` again and pick another: it downloads the file and
+  points the service at it. By hand, that is `parlour models fetch --llm <id>`,
+  `local.model` set to the id, and `parlour service install`. For a script,
+  `parlour init --local-model auto|none|<id>` answers the question without a
+  terminal.
+- **Without `managed`**, Parlour talks to whatever server `baseUrl` names and
+  starts none of its own. The provider's defaults are LM Studio's:
+  `http://127.0.0.1:1234/v1` and `qwen3-8b-mlx`. That is also what
+  `init --yes`, or `init` with no terminal, writes on a fresh setup: a
+  download of gigabytes is said yes to, never assumed.
 - **`local.model`** is the model id exactly as the server reports it.
   `parlour doctor` lists what is being served next to what is configured.
   A mismatch there is common after loading a different model in LM Studio.
@@ -139,7 +173,7 @@ back ends through Vercel's AI SDK instead of Parlour's own clients:
 ```json
 {
   "llm": {
-    "local": { "provider": "ai-sdk", "backend": "openai-compatible", "baseUrl": "http://127.0.0.1:8920/v1", "model": "qwen3.5-9b" },
+    "local": { "provider": "ai-sdk", "backend": "openai-compatible", "baseUrl": "http://127.0.0.1:1234/v1", "model": "qwen3-8b-mlx" },
     "cloud": { "provider": "ai-sdk", "backend": "anthropic", "model": "claude-opus-5", "effort": "low", "webSearch": true }
   }
 }
@@ -149,6 +183,9 @@ The loop does not move. Tools are handed to the SDK without an `execute`,
 so the SDK returns the calls instead of running them. The tool rounds, the
 escalation and the request deadline all stay in Parlour. The only change is
 who keeps up with the two APIs.
+
+Parlour only runs its own model server for the `openai-compatible` provider,
+so an `ai-sdk` local slot needs a server of its own, such as LM Studio.
 
 The built-in clients remain the default, because they need nothing but
 `fetch`. Choose the AI SDK if you would rather track one library than two
@@ -235,5 +272,6 @@ tool.
 Set `LOG_LEVEL` in `secrets.env` (or the environment) to `debug`, `info`,
 `warn` or `error`. `debug` prints every transcription time and every tool call
 with its arguments. Use it when you want to know why the model did what it
-did. Service logs go to `~/Library/Logs/parlour/agent.log` and `whisper.log`.
-`parlour service logs --lines 200` prints the tail of both.
+did. Service logs go to `~/Library/Logs/parlour/agent.log`, `whisper.log`
+and, when Parlour runs the local model, `llm.log`.
+`parlour service logs --lines 200` prints the tail of each.

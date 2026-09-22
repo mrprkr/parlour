@@ -42,8 +42,9 @@ trigger ("what goodnight means"), not as a title.
 
 The frontmatter is optional. Without it, the filename is the name and the
 first line is the description, so a one-paragraph rule can be just that
-paragraph. A skill with files of its own can be a directory instead, with the
-rule in `SKILL.md`:
+paragraph. A name is lower case letters, digits, `-` and `_`, and when two
+skills share one, the first found wins. A skill with files of its own can be
+a directory instead, with the rule in `SKILL.md`:
 
 ```text
 ~/.config/parlour/skills/
@@ -54,8 +55,9 @@ rule in `SKILL.md`:
 ```
 
 Write the body the way you would brief a house sitter: which tools to call,
-in what order, and how short the spoken reply should be. `parlour doctor` counts the skills it found, names any
-file it could not read, and warns when a body is long enough to slow every
+in what order, and how short the spoken reply should be. `parlour doctor`
+counts the skills it found, names any file it could not use and why, and
+warns when a body (over 4,000 characters) is long enough to slow every
 answer that uses it.
 
 To keep your rules somewhere else, such as a git repository, point
@@ -74,10 +76,12 @@ parlour mcp list
 parlour mcp remove weather
 ```
 
-The first adds a server on the network. The second adds one this machine
-starts and talks to over stdin. Either way, the entry lands under
-`integrations.mcp.servers` in `config.json`, and you can write it there by
-hand instead:
+The first adds a server on the network, sending the `--token-env` variable,
+if you give one, as a bearer token. The second adds one this machine starts
+and talks to over stdin. Each tool arrives named after its server, such as
+`notes_search`, which is the name to use in a skill. Either way, the entry
+lands under `integrations.mcp.servers` in `config.json`, and you can write it
+there by hand instead:
 
 ```json
 {
@@ -107,7 +111,7 @@ If a server will not start, `parlour doctor` reports it and the rest of the
 house keeps working. A dead weather server should never stop the lights going
 off. A remote server that wants you to sign in with a browser is a connector,
 not an MCP entry. `parlour connectors add <name> <url>` does the OAuth and
-keeps the tokens in the Keychain.
+keeps the tokens in the Keychain, or in a file on a machine without one.
 
 ## Plugins
 
@@ -121,6 +125,7 @@ npm install -g parlour-plugin-car   # where parlour can resolve it
 parlour plugins add parlour-plugin-car
 parlour plugins list
 parlour restart
+parlour plugins remove parlour-plugin-car   # takes it out of config
 ```
 
 `parlour plugins add` loads the package before it writes the name into
@@ -133,7 +138,7 @@ A plugin is an npm package whose default export is a `Plugin`:
 ```ts
 import { definePlugin } from "parlour";
 import { join } from "node:path";
-import { carVoice, carTools } from "./providers.ts";
+import { carVoice, carTools } from "./providers.js";
 
 export default definePlugin({
   name: "car",

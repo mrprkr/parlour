@@ -196,7 +196,7 @@ struct TalkView: View {
   }
 
   private func makeClient() -> ParlourClient? {
-    guard let base = settings.endpoint(found: discovery.found.first?.url) else { return nil }
+    guard let base = settings.endpoint(found: nil) else { return nil }
     return ParlourClient(base: base, token: settings.token)
   }
 
