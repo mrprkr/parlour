@@ -41,6 +41,6 @@ const nextConfig: NextConfig = {
   },
 };
 
-// Fumadocs compiles content/docs: GitHub tables, heading ids and syntax
-// highlighting come with it.
+// Fumadocs compiles content/docs: GitHub tables and heading ids come with it,
+// and lib/source.ts hands the code blocks to Twinkleplop.
 export default createMDX()(nextConfig);

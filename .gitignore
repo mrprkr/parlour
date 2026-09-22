@@ -59,3 +59,6 @@ skills-lock.json
 
 # Screenshots an interface review takes of the site as it goes.
 apps/site/.impeccable/
+
+# graphify's per-file AST cache, rebuilt by `graphify update .` on every machine.
+graphify-out/cache/

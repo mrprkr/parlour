@@ -10,16 +10,19 @@
       "outputs": ["{projectRoot}/Parlour.xcodeproj"]
     },
     "app": {
-      "command": "xcodegen generate && open Parlour.xcodeproj",
-      "options": { "cwd": "apps/ios" }
+      "command": "open Parlour.xcodeproj",
+      "options": { "cwd": "apps/ios" },
+      "dependsOn": ["generate"]
     },
     "xcodebuild": {
-      "command": "xcodegen generate && xcodebuild -scheme Parlour -destination 'generic/platform=iOS Simulator' build",
-      "options": { "cwd": "apps/ios" }
+      "command": "xcodebuild -scheme Parlour -destination 'generic/platform=iOS Simulator' build",
+      "options": { "cwd": "apps/ios" },
+      "dependsOn": ["generate"]
     },
     "xcodetest": {
-      "command": "xcodegen generate && xcodebuild -scheme Parlour -destination 'platform=iOS Simulator,name=iPhone 16' test",
-      "options": { "cwd": "apps/ios" }
+      "command": "xcodebuild -scheme Parlour -destination 'platform=iOS Simulator,name=iPhone 16' test",
+      "options": { "cwd": "apps/ios" },
+      "dependsOn": ["generate"]
     }
   }
 }
