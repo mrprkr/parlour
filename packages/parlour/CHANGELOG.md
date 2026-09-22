@@ -1,5 +1,11 @@
 # parlour
 
+## 0.3.1
+
+### Patch Changes
+
+- The iPhone app only talks to a server it has been explicitly paired with, and release builds lock their Cargo dependencies.
+
 ## 0.3.0
 
 ### Minor Changes
