@@ -125,6 +125,20 @@ jobs:
         with:
           persist-credentials: false
 
+      # Verify the checked-out ref is reachable from the default branch before
+      # exposing secrets to repository-controlled build scripts. A tag or
+      # workflow_dispatch ref that is not an ancestor of main can modify
+      # package.json, tauri.conf.json or their dependencies to exfiltrate the
+      # Apple signing secrets injected below.
+      - name: Verify the ref is on the default branch
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "Error: This ref is not an ancestor of the main branch." >&2
+            echo "Only commits merged to main may be built with signing secrets." >&2
+            exit 1
+          fi
+
       # Before anything is built, because an unsigned dmg attached to a
       # release is worse than no release: it installs, it looks right, and it
       # is refused on the first machine that did not build it.
