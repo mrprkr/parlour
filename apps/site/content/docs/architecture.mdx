@@ -10,7 +10,7 @@ packages/parlour/src/
                  loop.ts, speaker.ts, registry.ts, timers.ts, prompt.ts, events.ts,
                  logger.ts, services.ts
   providers/     audio/ffmpeg, audio/afplay, wake/openwakeword, stt/whisper-cpp,
-                 tts/kokoro, tts/macos-say, llm/openai-compatible, llm/anthropic,
+                 tts/kokoro, tts/macos-say, llm/openai-compatible, llm/anthropic, llm/ai-sdk,
                  search/searxng, search/brave, secrets/macos-keychain, secrets/file,
                  service/launchd
   integrations/  home-assistant/, mcp/, connectors/
@@ -36,7 +36,7 @@ a test and to fill from an npm package.
 | `WakeWordEngine` | Loads once, hands out one `WakeWordDetector` per stream. | `openwakeword` |
 | `SpeechToText` | WAV in, text out. | `whisper-cpp` |
 | `TextToSpeech` | Text in, WAV out, with a `warm()` to load before the first reply. | `kokoro`, `macos-say` |
-| `ChatModel` | Messages and tool specs in, a completion out. | `openai-compatible`, `anthropic` |
+| `ChatModel` | Messages and tool specs in, a completion out. | `openai-compatible`, `anthropic`, `ai-sdk` |
 | `SearchProvider` | A query in, results out. | `searxng`, `brave` |
 | `SecretStore` | Where connector tokens are kept. | `macos-keychain`, `file` |
 | `ServiceManager` | Keeps Parlour running at login. | `launchd` |

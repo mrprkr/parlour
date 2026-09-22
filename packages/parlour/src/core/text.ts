@@ -50,6 +50,15 @@ function tidy(text: string): string {
     .trim();
 }
 
+/**
+ * Qwen and friends emit their reasoning inline. It must never be spoken, and
+ * every local back end has the habit, so it is tidied here rather than in one
+ * provider.
+ */
+export function stripThinking(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+}
+
 /** Whisper hallucinates these on silence. Treat them as nothing said. */
 const NOISE = /^[\s.,!?]*(\[.*\]|\(.*\)|thanks? for watching|you|thank you|bye)?[\s.,!?]*$/i;
 

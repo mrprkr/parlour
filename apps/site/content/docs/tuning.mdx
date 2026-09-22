@@ -108,6 +108,31 @@ is `macos-say`).
 - A hosted OpenAI-compatible endpoint works as the local model too: add
   `"apiKeyEnv": "SOME_NAME"` naming a variable in `secrets.env`.
 
+### Through the AI SDK instead
+
+Either slot can be filled by `"provider": "ai-sdk"`, which reaches the same
+two back ends through Vercel's AI SDK rather than through Parlour's own
+clients:
+
+```json
+{
+  "llm": {
+    "local": { "provider": "ai-sdk", "backend": "openai-compatible", "baseUrl": "http://127.0.0.1:8920/v1", "model": "qwen2.5-7b-instruct" },
+    "cloud": { "provider": "ai-sdk", "backend": "anthropic", "model": "claude-opus-5", "effort": "low", "webSearch": true }
+  }
+}
+```
+
+The loop does not move. Tools are handed to the SDK without an `execute`, so
+it returns the calls rather than running them, and the tool rounds, the
+escalation and the request deadline stay in Parlour. What changes is who
+keeps up with the two APIs.
+
+The built-in clients remain the default, because they are what a house runs
+with nothing but `fetch` behind them. Reach for this one if you would rather
+track one library than two APIs, or to put the SDK's own middleware in front
+of a model.
+
 ## The pipeline
 
 ```json
