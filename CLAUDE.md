@@ -16,8 +16,13 @@ pnpm 10 and nx, Node 22+. Run from the repo root unless noted.
 ```sh
 pnpm install
 pnpm check                                   # typecheck + lint + test, every project
-pnpm build                                   # nx run-many -t build
-pnpm exec nx run-many -t typecheck lint test build   # what CI runs (macOS), then desktop:cargo-check
+pnpm build                                   # nx run-many -t build: parlour, the site, the app's UI
+pnpm build:desktop                           # Parlour.app and the dmg (nx run desktop:bundle)
+pnpm build:ios                               # the iOS app for the simulator (nx run ios:xcodebuild)
+pnpm build:all                               # all of the above
+pnpm dev:desktop | dev:site | dev:ios        # the app window, the site, or the Xcode project
+pnpm emit / pnpm icons                       # design tokens and icons into every surface
+pnpm exec nx run-many -t typecheck lint test build   # what CI runs (macOS), then pnpm cargo-check
 pnpm exec nx run parlour:test                # one project, one target
 pnpm exec biome check --write .              # fix what lint can fix
 pnpm changeset                               # record a change to the npm package for the next release

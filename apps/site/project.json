@@ -9,7 +9,7 @@
       "options": { "cwd": "apps/site" },
       "outputs": ["{projectRoot}/.next", "!{projectRoot}/.next/cache"]
     },
-    "dev": { "command": "pnpm run dev", "options": { "cwd": "apps/site" } },
+    "dev": { "command": "pnpm run dev", "options": { "cwd": "apps/site" }, "continuous": true },
     "typecheck": { "command": "pnpm run typecheck", "options": { "cwd": "apps/site" } },
     "lint": { "command": "pnpm exec biome check .", "options": { "cwd": "apps/site" } }
   }

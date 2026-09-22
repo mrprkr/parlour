@@ -5,8 +5,26 @@
   "sourceRoot": "apps/desktop/src",
   "targets": {
     "build": { "command": "pnpm run build:ui", "options": { "cwd": "apps/desktop" }, "outputs": ["{projectRoot}/dist"] },
+    "icons": {
+      "command": "pnpm run icons",
+      "options": { "cwd": "apps/desktop" },
+      "cache": true,
+      "inputs": ["{projectRoot}/src-tauri/icon.png"],
+      "outputs": ["{projectRoot}/src-tauri/icons"]
+    },
+    "bundle": {
+      "command": "pnpm run build",
+      "options": { "cwd": "apps/desktop" },
+      "outputs": ["{projectRoot}/src-tauri/target/release/bundle"]
+    },
+    "app": { "command": "pnpm run app", "options": { "cwd": "apps/desktop" }, "continuous": true },
+    "dev": { "command": "pnpm run dev", "options": { "cwd": "apps/desktop" }, "continuous": true },
     "typecheck": { "command": "pnpm run typecheck", "options": { "cwd": "apps/desktop" } },
     "lint": { "command": "pnpm exec biome check src", "options": { "cwd": "apps/desktop" } },
-    "cargo-check": { "command": "cargo check --manifest-path src-tauri/Cargo.toml", "options": { "cwd": "apps/desktop" } }
+    "cargo-check": {
+      "command": "cargo check --manifest-path src-tauri/Cargo.toml",
+      "options": { "cwd": "apps/desktop" },
+      "dependsOn": ["build", "icons"]
+    }
   }
 }
