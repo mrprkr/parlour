@@ -12,6 +12,8 @@ struct RootView: View {
   @Environment(LocalIntelligence.self) private var intelligence
 
   @State private var tab = Screen.talk
+  /// A link from outside the app, held until the person says it is theirs.
+  @State private var offered: PairingLink?
 
   private enum Screen: Hashable {
     case talk, house, settings
@@ -31,11 +33,29 @@ struct RootView: View {
     }
     .tint(Palette.hearth)
     .onOpenURL { url in
-      // The Camera app found a pairing code and opened it here. Settings is
-      // where the result shows, and where it is checked.
-      guard let link = PairingLink(url: url) else { return }
-      settings.pair(with: link)
-      tab = .settings
+      // The Camera app found a pairing code and opened it here. So can any
+      // web page or message with a parlour:// link in it, so nothing is
+      // taken until the person has seen which server it names and agreed:
+      // otherwise a link could quietly send everything said to the phone
+      // somewhere else.
+      offered = PairingLink(url: url)
+    }
+    .confirmationDialog(
+      "Pair with \(offered?.name ?? "this server")?",
+      isPresented: Binding(get: { offered != nil }, set: { if !$0 { offered = nil } }),
+      titleVisibility: .visible,
+      presenting: offered
+    ) { link in
+      Button("Pair") {
+        settings.pair(with: link)
+        tab = .settings
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: { link in
+      Text(
+        "Everything you ask will go to \(link.server.absoluteString). "
+          + "Only pair with a code your own Parlour server showed you."
+      )
     }
     .task {
       // Browsing is what raises the local network prompt, so it happens as the

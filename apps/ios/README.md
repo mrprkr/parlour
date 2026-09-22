@@ -61,7 +61,9 @@ and the address the app keeps is the only server it talks to.
 `parlour pair` on the Mac draws a QR code holding one link,
 `parlour://pair?url=...&token=...&name=...`. Settings has Scan pairing code,
 which reads it with VisionKit's scanner; the Camera app reads it too, and
-opens the app through the `parlour` URL scheme in `Info.plist`. Either way the
+opens the app through the `parlour` URL scheme in `Info.plist`. A link that
+arrives that way is only taken once the person has confirmed the server it
+names, since any web page can open one. Either way the
 address and the token are taken together (`Core/PairingLink.swift`), the token
 goes to the keychain as if it were typed, and Settings checks the server
 straight away. The desktop app shows the same code under On the network.
