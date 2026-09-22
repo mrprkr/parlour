@@ -31,9 +31,20 @@ final class AppSettings {
     didSet { TokenStore.write(token) }
   }
 
+  /// Whether the setup has been finished or skipped. Until it has, the app
+  /// opens on it rather than on a talk button with nothing behind it.
+  var onboarded: Bool {
+    didSet { defaults.set(onboarded, forKey: Key.onboarded) }
+  }
+
   /// The server the last pairing code named, for this run only: it is what
   /// Settings says it is now paired with, and what it checks straight away.
   private(set) var pairedWith: String?
+
+  /// Whether the setup is on screen, for this run only. A pairing link that
+  /// arrives then is the setup's to ask about, not the tab bar's, which is
+  /// underneath it and cannot put a dialog up.
+  var inSetup = false
 
   private let defaults: UserDefaults
 
@@ -41,6 +52,7 @@ final class AppSettings {
     static let serverURL = "serverURL"
     static let room = "room"
     static let preferOnDevice = "preferOnDevice"
+    static let onboarded = "onboarded"
   }
 
   init(defaults: UserDefaults = .standard) {
@@ -49,6 +61,12 @@ final class AppSettings {
     room = defaults.string(forKey: Key.room) ?? ""
     preferOnDevice = defaults.bool(forKey: Key.preferOnDevice)
     token = TokenStore.read() ?? ""
+    // A phone that was already pointed at a server before there was a setup
+    // to go through has, in effect, been through it.
+    onboarded =
+      defaults.object(forKey: Key.onboarded) == nil
+      ? !serverURL.isEmpty || !token.isEmpty
+      : defaults.bool(forKey: Key.onboarded)
   }
 
   /// Everything a pairing code carries, taken at once.
