@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { InstallButton } from "../install-button";
+import { Topology } from "./topology";
 
 export default function Home() {
   return (
@@ -26,34 +27,46 @@ export default function Home() {
       </section>
 
       <section className="sheet" aria-labelledby="how-heading">
-        <h2 id="how-heading">From question to answer</h2>
+        <h2 id="how-heading">Just ask. Parlour does the rest.</h2>
         <ol className="steps">
           <li>
-            <strong>Say the wake word.</strong> Nothing is recorded until you do.
+            <strong>Speak from any room.</strong> Say the wake word and ask. Nothing is recorded until you do.
           </li>
           <li>
-            <strong>Your Mac writes down what you said.</strong> The audio goes no further.
+            <strong>Transcribed on your Mac.</strong> Your words become text right there. The recording never
+            leaves home.
           </li>
           <li>
-            <strong>A model on your Mac answers.</strong> It can use Home Assistant, timers, search and the
-            accounts you connect.
+            <strong>Answered at home.</strong> A model on your Mac takes care of it, using Home Assistant,
+            timers, search and the accounts you connect.
           </li>
           <li>
-            <strong>Tough questions go to Claude.</strong> Only when they need to, one question at a time, as
-            text.
+            <strong>The cloud, only when it helps.</strong> For the rare question that needs more, just that
+            question goes to the cloud model you choose, as text. Never your voice, and never the keys to your
+            home. Or leave it off and everything stays local.
           </li>
           <li>
-            <strong>You hear the answer</strong> in the room you asked from.
+            <strong>Hear the answer</strong> in the room you asked from.
           </li>
         </ol>
+      </section>
+
+      <section className="sheet" aria-labelledby="rooms-heading">
+        <h2 id="rooms-heading">One hub. A voice in every room.</h2>
+        <p>
+          A Mac mini on a shelf does the thinking. Everything else is a satellite that listens, passes on what
+          it hears and plays back the answer. Satellites run no models, so almost anything with a microphone
+          will do. Automations can ask too, in plain text.
+        </p>
+        <Topology />
       </section>
 
       <section className="sheet" aria-labelledby="private-heading">
         <h2 id="private-heading">What you say stays at home</h2>
         <p>
           The wake word, the transcription, the model and the voice all run on your Mac. No account to create.
-          No server in the middle. When Claude helps, it sees a single question as text and nothing of your
-          home.
+          No server in the middle. When a cloud model helps, it sees a single question as text and nothing of
+          your home.
         </p>
         <ul className="notes">
           <li>
@@ -75,57 +88,6 @@ export default function Home() {
         </ul>
       </section>
 
-      <section className="sheet" aria-labelledby="rooms-heading">
-        <h2 id="rooms-heading">Every room. Every microphone.</h2>
-        <p>One Mac does the thinking. Anything with a microphone can ask, including that Mac.</p>
-        <div className="table-scroll">
-          <table className="schedule">
-            <thead>
-              <tr>
-                <th scope="col" className="col">
-                  Client
-                </th>
-                <th scope="col" className="col">
-                  How it connects
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th scope="row" className="row">
-                  Another Mac
-                </th>
-                <td data-label="How it connects">Becomes a satellite and finds the server by itself.</td>
-              </tr>
-              <tr>
-                <th scope="row" className="row">
-                  Voice PE
-                </th>
-                <td data-label="How it connects">Answers through Home Assistant, just as it does today.</td>
-              </tr>
-              <tr>
-                <th scope="row" className="row">
-                  Your phone
-                </th>
-                <td data-label="How it connects">Open a web page, hold the button and talk.</td>
-              </tr>
-              <tr>
-                <th scope="row" className="row">
-                  Your own hardware
-                </th>
-                <td data-label="How it connects">Streams raw audio over a socket.</td>
-              </tr>
-              <tr>
-                <th scope="row" className="row">
-                  An automation
-                </th>
-                <td data-label="How it connects">Sends a question as text and gets text back.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
       <section className="sheet" aria-labelledby="ha-heading">
         <h2 id="ha-heading">Made for Home Assistant</h2>
         <div className="two-col">
@@ -140,6 +102,34 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="sheet" aria-labelledby="ios-heading">
+        <h2 id="ios-heading">
+          Parlour for iPhone <span className="badge">Coming soon</span>
+        </h2>
+        <p>
+          Your whole house, in your pocket. The iPhone app talks to the hub at home and brings HomeKit along
+          with it.
+        </p>
+        <ul className="notes">
+          <li>
+            <strong>Ask from anywhere at home.</strong> Hold the button, speak, and hear the answer from the
+            same assistant as every other room.
+          </li>
+          <li>
+            <strong>HomeKit, built in.</strong> See your rooms and accessories, and switch things on and off
+            with a tap. It still works when the Mac at home is off.
+          </li>
+          <li>
+            <strong>Finds your hub on its own.</strong> No addresses to type. It discovers Parlour on your
+            network the moment you open it.
+          </li>
+          <li>
+            <strong>Answers even when home cannot.</strong> With Apple Intelligence, your iPhone can answer by
+            itself, entirely on device.
+          </li>
+        </ul>
+      </section>
+
       <section className="sheet" aria-labelledby="parts-heading">
         <h2 id="parts-heading">Make it yours</h2>
         <p>
@@ -151,7 +141,7 @@ export default function Home() {
       </section>
 
       <section className="sheet installation" aria-labelledby="install-heading">
-        <h2 id="install-heading">Up and running in ten minutes</h2>
+        <h2 id="install-heading">Up and running in minutes</h2>
         <div className="two-col">
           <pre>
             <code>
@@ -176,9 +166,9 @@ export default function Home() {
       <section className="sheet" aria-labelledby="source-heading">
         <h2 id="source-heading">Free and open source</h2>
         <p>
-          Parlour is MIT licensed and at version 0.1.0. Bug reports, questions and pull requests are all
-          welcome on <a href="https://github.com/mrprkr/parlour">GitHub</a>. The most helpful thing you can
-          add is a provider: a new voice, another speech engine, or a Linux service manager.
+          Parlour is MIT licensed. Bug reports, questions and pull requests are all welcome on{" "}
+          <a href="https://github.com/mrprkr/parlour">GitHub</a>. The most helpful thing you can add is a
+          provider: a new voice, another speech engine, or a Linux service manager.
         </p>
       </section>
     </main>
