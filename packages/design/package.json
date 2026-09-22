@@ -10,11 +10,13 @@
   "scripts": {
     "emit": "node --experimental-strip-types src/emit.ts",
     "emit:check": "node --experimental-strip-types src/emit.ts --check",
+    "icons": "node --experimental-strip-types src/icons.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
     "lint": "biome check ."
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^26.6.1",
     "typescript": "^7.0.2"
   },

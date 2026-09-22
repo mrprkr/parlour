@@ -59,6 +59,8 @@ Design system (`packages/design`): `src/tokens.ts` is the one palette, type ramp
 vocabulary, and `src/emit.ts` writes it into the site, the app, the phone page and iOS. Never edit a
 generated `tokens.css` or `Tokens.swift`: change the tokens and run `pnpm exec nx run design:emit`.
 `design:test` fails when a generated file has drifted, so `pnpm check` catches a missed emit.
+The icons (favicon, iOS, macOS, menu bar) are drawn in `src/icon.ts` and rasterised by
+`pnpm exec nx run design:icons`; never edit a generated icon either.
 
 ## Architecture of `packages/parlour/src`
 

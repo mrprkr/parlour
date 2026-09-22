@@ -13,6 +13,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { emitAccentColour } from "./assets.ts";
 import { emitCss } from "./css.ts";
+import { emitAppIconContents, emitFaviconSvg } from "./icon.ts";
 import { emitSwift } from "./swift.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -32,6 +33,12 @@ export const targets: Target[] = [
     path: "apps/ios/Parlour/Resources/Assets.xcassets/AccentColor.colorset/Contents.json",
     contents: emitAccentColour,
   },
+  {
+    path: "apps/ios/Parlour/Resources/Assets.xcassets/AppIcon.appiconset/Contents.json",
+    contents: emitAppIconContents,
+  },
+  { path: "apps/site/app/icon.svg", contents: emitFaviconSvg },
+  { path: "packages/parlour/src/server/web/icon.svg", contents: emitFaviconSvg },
 ];
 
 /** The targets whose file on disk is not what the emitters would write. */
