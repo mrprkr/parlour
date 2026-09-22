@@ -60,7 +60,7 @@ lists the six repository secrets behind it and what each one is.
 
 | Tab | What you will find there |
 | --- | --- |
-| Onboarding | Opens by itself on a machine that is not set up yet, and from **Run setup again** in Settings after that. Four steps: find or install `parlour`, an Install button that runs `parlour init --porcelain --yes` with live output, the questions, and the doctor. |
+| Onboarding | Opens by itself on a machine that is not set up yet, and from **Run setup again** in Settings after that. One step at a time: a welcome, then Install (one button that installs `parlour` from npm if it is missing and runs `parlour init --porcelain --yes`, with the log folded away until asked for or until something fails), Voice (the microphone and the wake word), Home (Home Assistant, skippable), Extras (cloud help and the network token, each behind a switch) and Finish, which runs the doctor and starts Parlour. |
 | Status | A dot that follows Parlour through idle, listening, thinking and speaking. The last thing it heard, the last thing it said and which model said it. A Check button that runs `parlour doctor --json`. |
 | Settings | Wake word, sensitivity, microphone, silence timeout, voice, both models, the Home Assistant address and the secrets. It reads `parlour config show --raw` (the file as written, so saving does not freeze every default into it) and writes through `parlour config write` and `parlour secrets set`. |
 | Connectors | What your household has signed in to, and a form to add another. `parlour connectors`, with buttons. |
@@ -71,7 +71,7 @@ lists the six repository secrets behind it and what each one is.
 ```text
 src/
   App.tsx           the header, the tabs, and the state the panels read
-  panels/           one file per tab, plus the onboarding overlay
+  panels/           one file per tab, plus the onboarding overlay and its parts in onboarding/
   lib/bridge.ts     every Rust command, typed. Nothing else calls invoke()
   components/ui/    shadcn primitives
   |  invoke()
@@ -106,8 +106,9 @@ changes to `packages/parlour` until you point it there.
 `packages/parlour/bin/parlour-dev` runs the CLI from source. Point the app at
 it in either of two ways:
 
-- Put its absolute path in **The parlour command** on the Settings tab (or on
-  the first step of onboarding). This takes effect at once.
+- Put its absolute path in **The parlour command** on the Settings tab (or
+  under **Already have parlour somewhere else?** on the Install step of
+  onboarding). This takes effect at once.
 - Write it to the file and restart the app, which reads the file once at
   launch:
 
