@@ -89,6 +89,21 @@ export const ConfigSchema = z.object({
         /** Escalate automatically when the local model fails or times out. */
         onLocalFailure: z.boolean().default(true),
       }).prefault({}),
+      /**
+       * Optional on-device System One decision model that judges escalate-vs-local
+       * before the generative turn. "none" keeps today's ask_the_clever_one path.
+       */
+      decision: ProviderSlice.extend({
+        provider: z.string().default("none"),
+        /**
+         * shadow: call the model and log, but still let the local model decide.
+         * triage: hard-escalate above escalateThreshold; keep clear house/timer
+         * intents local without offering ask_the_clever_one.
+         */
+        mode: z.enum(["shadow", "triage"]).default("shadow"),
+        escalateThreshold: z.number().min(0).max(1).default(0.85),
+        localConfidence: z.number().min(0).max(1).default(0.75),
+      }).prefault({}),
       /** Hard ceiling on tool-call rounds per turn. */
       maxToolRounds: z.number().int().positive().default(6),
     })

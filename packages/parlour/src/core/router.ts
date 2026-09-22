@@ -1,6 +1,7 @@
+import type { DecisionMode } from "./decision.ts";
 import { type ActionAgent, dispatch } from "./dispatch.ts";
 import { logger } from "./logger.ts";
-import type { ChatModel } from "./ports.ts";
+import type { ChatModel, DecisionModel } from "./ports.ts";
 import { systemPrompt } from "./prompt.ts";
 import { RequestQueue, SupersededError } from "./queue.ts";
 import type { ToolRegistry } from "./registry.ts";
@@ -60,6 +61,15 @@ export interface RouterOptions {
   queueDepth?: number;
   /** How long one request may take before what is left of it is abandoned, in ms. */
   timeoutMs?: number;
+  /**
+   * Optional on-device model that judges escalate-vs-local for each task
+   * before the local model runs. Null or absent leaves ask_the_clever_one as
+   * the only gate.
+   */
+  decision?: DecisionModel | null;
+  decisionMode?: DecisionMode;
+  escalateThreshold?: number;
+  localConfidence?: number;
   /** The clock, injectable so a test can age a session without waiting. */
   now?: () => number;
 }
@@ -136,6 +146,15 @@ export class Router {
       registry: this.#options.registry,
       maxToolRounds: this.#options.maxToolRounds,
       onLocalFailure: this.#options.onLocalFailure,
+      decision: this.#options.decision
+        ? {
+            model: this.#options.decision,
+            mode: this.#options.decisionMode ?? "shadow",
+            escalateThreshold: this.#options.escalateThreshold ?? 0.85,
+            localConfidence: this.#options.localConfidence ?? 0.75,
+          }
+        : null,
+      room: options.room,
     };
 
     // The persona is built per turn rather than once, because it carries the

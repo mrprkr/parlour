@@ -18,6 +18,7 @@ import "./llm/anthropic.ts";
 import "./llm/ai-sdk.ts";
 import "./search/searxng.ts";
 import "./search/brave.ts";
+import "./decision/laya-mlx.ts";
 import "../integrations/home-assistant/index.ts";
 import "../integrations/mcp/index.ts";
 import "../integrations/connectors/index.ts";

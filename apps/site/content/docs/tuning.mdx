@@ -135,6 +135,36 @@ The built-in clients remain the default, because they need nothing but
 `fetch`. Choose the AI SDK if you would rather track one library than two
 APIs, or want to put the SDK's own middleware in front of a model.
 
+### Decision model (optional)
+
+```json
+{
+  "llm": {
+    "decision": {
+      "provider": "laya-mlx",
+      "mode": "shadow",
+      "escalateThreshold": 0.85,
+      "localConfidence": 0.75,
+      "model": "aac6fef/laya-mlx"
+    }
+  }
+}
+```
+
+[Laya MLX](https://github.com/mizorewww/laya-mlx) scores each task on your
+Mac and decides whether it needs the cloud. It runs after triage has split
+the request and before the local model takes its turn. It needs Apple silicon
+and `pip install laya-mlx`. The first load downloads the checkpoint into the
+Hugging Face cache.
+
+- **Start with `"mode": "shadow"`.** The log shows `needs_cloud`, the intent
+  and the confidence, but `ask_the_clever_one` still decides.
+- **Switch to `"mode": "triage"`** once the scores look right. Scores above
+  `escalateThreshold` go straight to the cloud model. A clear house or timer
+  intent keeps escalation off, so house commands stay local.
+- **`"provider": "none"`**, the default, skips the decision model entirely.
+- **Multilingual house?** Set `"model": "aac6fef/laya-multilingual-mlx"`.
+
 ## The pipeline
 
 ```json

@@ -10,8 +10,8 @@ ports, the integrations, the network server and the CLI. The desktop app in `app
 ```text
 packages/parlour/src/
   core/          ports.ts, providers.ts, config.ts, paths.ts, secrets.ts, agent.ts,
-                 session.ts, router.ts, queue.ts, triage.ts, tasks.ts, dispatch.ts,
-                 loop.ts, speaker.ts, registry.ts, timers.ts, prompt.ts, events.ts,
+                 session.ts, router.ts, queue.ts, triage.ts, tasks.ts, decision.ts,
+                 dispatch.ts, loop.ts, speaker.ts, registry.ts, timers.ts, prompt.ts, events.ts,
                  logger.ts, services.ts
   providers/     audio/ffmpeg, audio/afplay, wake/openwakeword, stt/whisper-cpp,
                  tts/kokoro, tts/macos-say, llm/openai-compatible, llm/anthropic, llm/ai-sdk,
@@ -113,10 +113,10 @@ description go in the system prompt. The model fetches the body with the
 small context cannot carry every house rule on every turn.
 [Skills, MCP and plugins](/docs/skills) is the guide.
 
-The house can run without a cloud model and without web search. A provider
-that cannot start (nearly always a missing key) is left out, and the doctor
-reports it. A name that leads nowhere is a config mistake and throws, so a
-typo cannot quietly leave you with the wrong model.
+The house can run without a cloud model, decision triage or web search. A
+provider that cannot start (nearly always a missing key) is left out, and the
+doctor reports it. A name that leads nowhere is a config mistake and throws,
+so a typo cannot quietly leave you with the wrong model.
 
 ## The session
 
@@ -239,6 +239,22 @@ apologising instead of turning the light off. Small models trained on the
 pattern sometimes ask for the clever one anyway. The loop then answers the
 call with "there is nobody to hand this to, use the tools you have" rather
 than an unknown-tool error, so the next round does the job.
+
+You can also add a decision model. `llm.decision` names an on-device model
+that scores each task before the local model takes its turn, and decides
+whether it should stay local or go to the cloud. The built-in one is
+`laya-mlx`, wired up in `core/decision.ts`. It needs Apple silicon and
+`pip install laya-mlx`, and it stays warm in a local Python worker, so the
+transcript never leaves your Mac for the decision. The default is
+`provider: "none"`.
+
+- **`shadow` mode** only logs the scores beside whatever the local model did.
+- **`triage` mode** acts on them. A high `needs_cloud` or `needs_web` score
+  skips the local model and hands the task to the cloud. A clear house or
+  timer intent keeps the escalation tool off, so the answer stays on your Mac.
+
+Like triage, it is an optimisation. If the decision model fails, the task
+carries on locally.
 
 `core/loop.ts` runs the tool rounds for whichever model is answering, up to
 `llm.maxToolRounds`. It stops with an apology rather than looping forever.

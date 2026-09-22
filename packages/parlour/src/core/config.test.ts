@@ -21,6 +21,8 @@ test("an empty object is a complete config", () => {
   assert.equal(c.stt.provider, "whisper-cpp");
   assert.equal(c.llm.local.provider, "openai-compatible");
   assert.equal(c.llm.cloud.provider, "anthropic");
+  assert.equal(c.llm.decision.provider, "none");
+  assert.equal(c.llm.decision.mode, "shadow");
   assert.equal(c.search.provider, "searxng");
   assert.equal(c.audio.source, "ffmpeg");
   assert.equal(c.audio.sink, "afplay");
