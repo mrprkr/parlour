@@ -1,9 +1,12 @@
+import type { DecisionMode } from "./decision.ts";
+import { type ActionAgent, dispatch } from "./dispatch.ts";
 import { logger } from "./logger.ts";
-import { runTurn, type TurnResult } from "./loop.ts";
 import type { ChatModel, DecisionModel } from "./ports.ts";
-import { escalateSpec, systemPrompt } from "./prompt.ts";
+import { systemPrompt } from "./prompt.ts";
+import { RequestQueue, SupersededError } from "./queue.ts";
 import type { ToolRegistry } from "./registry.ts";
-import { planTriage, runTriage, type TriageMode } from "./triage.ts";
+import { type Task, TaskList, type TaskOutcome } from "./tasks.ts";
+import { type TriageMode, triage } from "./triage.ts";
 import type { Message } from "./types.ts";
 
 const log = logger("router");
@@ -16,15 +19,18 @@ const MAX_SESSIONS = 32;
 
 export interface Answer {
   text: string;
-  /** Which model actually produced the answer. */
+  /** Which model produced the answer. Cloud if any part of it needed the cloud. */
   via: "local" | "cloud";
+  /** What the request turned out to be, one entry per task. */
+  tasks?: TaskOutcome[];
 }
 
 export interface AskOptions {
   /**
    * Which conversation this belongs to. One per client, so that a follow-up
    * said to the kitchen satellite does not resolve against something asked on
-   * a phone ten minutes ago.
+   * a phone ten minutes ago, and so that two satellites asking at once queue
+   * separately rather than behind each other.
    */
   session?: string;
   /** The room the request came from, if the client knows. */
@@ -45,16 +51,27 @@ export interface RouterOptions {
   onLocalFailure: boolean;
   /** Extra prompt lines, asked for on every turn so an integration can change its mind. */
   promptContext?: () => string[];
-  /** The clock, injectable so a test can age a session without waiting. */
-  now?: () => number;
+  /** When the request is read before it is acted on. Defaults to "auto". */
+  triage?: TriageMode;
+  /** How many tasks one request may become. */
+  maxTasks?: number;
+  /** How many requests run at once across every client. */
+  concurrency?: number;
+  /** How many requests may wait in one client's lane before the oldest is dropped. */
+  queueDepth?: number;
+  /** How long one request may take before what is left of it is abandoned, in ms. */
+  timeoutMs?: number;
   /**
-   * Optional System One model that judges escalate-vs-local before the
-   * generative turn. Null or absent keeps ask_the_clever_one as the only gate.
+   * Optional on-device model that judges escalate-vs-local for each task
+   * before the local model runs. Null or absent leaves ask_the_clever_one as
+   * the only gate.
    */
   decision?: DecisionModel | null;
-  decisionMode?: TriageMode;
+  decisionMode?: DecisionMode;
   escalateThreshold?: number;
   localConfidence?: number;
+  /** The clock, injectable so a test can age a session without waiting. */
+  now?: () => number;
 }
 
 interface Session {
@@ -63,27 +80,83 @@ interface Session {
 }
 
 /**
- * Local first, cloud when the local model says so or falls over. The local
- * model is fast, free and private; the cloud one is right more often. Sending
- * "turn the hall light off" to a data centre is a waste of both.
+ * The pipeline every request runs, whichever client it came from.
  *
- * When a DecisionModel is configured, it may short-circuit that judgment with
- * calibrated probabilities (triage mode) or only log what it would have done
- * (shadow mode).
+ *   queue -> triage -> tasks -> action agent -> one thing to say
+ *
+ * The queue keeps clients out of each other's way and the models from being
+ * asked three things at once. Triage repairs what was heard and turns it into
+ * a list. The action agent takes the list one task at a time, local first:
+ * the local model is fast, free and private, and the cloud one is right more
+ * often, so "turn the hall light off" never leaves the house and "why is the
+ * sky blue" goes straight out of it.
  */
 export class Router {
   readonly #sessions = new Map<string, Session>();
   readonly #options: RouterOptions;
+  readonly #queue: RequestQueue;
   readonly #now: () => number;
 
   constructor(options: RouterOptions) {
     this.#options = options;
     this.#now = options.now ?? Date.now;
+    this.#queue = new RequestQueue({
+      concurrency: options.concurrency ?? 2,
+      maxWaiting: options.queueDepth ?? 2,
+    });
   }
 
+  /**
+   * Answer one request. The reply belongs to the client that asked: it is
+   * returned to that caller and to nobody else, and the conversation it
+   * builds on is that client's alone.
+   */
   async ask(text: string, options: AskOptions = {}): Promise<Answer> {
-    const { local, cloud, registry, maxToolRounds } = this.#options;
-    const session = this.#session(options.session ?? "local");
+    const client = options.session ?? "local";
+    try {
+      return await this.#queue.submit(client, () => this.#turn(text, client, options));
+    } catch (error) {
+      if (error instanceof SupersededError) {
+        // The person asked for something else before this came up the queue.
+        // Answering it now would be answering the wrong question out loud.
+        log.info(`${client}: dropped, a newer request replaced it`);
+        return { text: "", via: "local", tasks: [] };
+      }
+      throw error;
+    }
+  }
+
+  /** What is in flight and what is waiting, for `/health` and the log. */
+  load(): { running: number; waiting: number } {
+    return { running: this.#queue.running, waiting: this.#queue.waiting() };
+  }
+
+  reset(key?: string): void {
+    if (key) this.#sessions.delete(key);
+    else this.#sessions.clear();
+    this.#queue.clear(key);
+  }
+
+  async #turn(text: string, client: string, options: AskOptions): Promise<Answer> {
+    const session = this.#session(client);
+    const deadline = this.#now() + (this.#options.timeoutMs ?? 45_000);
+    const agent: ActionAgent = {
+      local: this.#options.local,
+      cloud: this.#options.cloud,
+      registry: this.#options.registry,
+      maxToolRounds: this.#options.maxToolRounds,
+      onLocalFailure: this.#options.onLocalFailure,
+      decision: this.#options.decision
+        ? {
+            model: this.#options.decision,
+            mode: this.#options.decisionMode ?? "shadow",
+            escalateThreshold: this.#options.escalateThreshold ?? 0.85,
+            localConfidence: this.#options.localConfidence ?? 0.75,
+          }
+        : null,
+      room: options.room,
+    };
+
     // The persona is built per turn rather than once, because it carries the
     // date and the integrations' lines. Whether escalation exists goes in
     // here too: a prompt that names a tool the model was not given is how a
@@ -94,136 +167,72 @@ export class Router {
         this.#options.name,
         [...this.#context(), ...roomContext(options.room)],
         this.#options.locale,
-        { escalation: cloud !== null },
+        { escalation: this.#options.cloud !== null },
       ),
     };
-    const messages: Message[] = [system, ...session.history, { role: "user", content: text }];
-    const tools = registry.specs();
 
-    const triage = await this.#triage(
-      text,
-      options.room,
-      tools.map((tool) => tool.name),
-    );
-    if (triage?.path === "cloud" && cloud) {
-      return this.#finish(
-        session,
-        text,
-        await this.#cloudTurn(cloud, system, session.history, text, maxToolRounds, registry),
-        "cloud",
-      );
-    }
+    const plan = await triage(text, {
+      model: this.#options.local,
+      mode: this.#options.triage ?? "auto",
+      maxTasks: this.#options.maxTasks ?? 4,
+      tools: this.#options.registry.specs().map((spec) => spec.name),
+      history: session.history,
+      room: options.room,
+      deadline,
+      now: this.#now,
+    });
+    const list = new TaskList(plan.tasks);
+    if (!list.length) return { text: "", via: "local", tasks: [] };
+    if (list.length > 1) log.info(`${client}: ${list.length} things in one request`);
 
-    const offerEscalate = triage ? triage.offerEscalate : cloud !== null;
-    const localTools = offerEscalate ? [...tools, escalateSpec] : tools;
-
-    let via: "local" | "cloud" = "local";
-    let result: TurnResult;
-    try {
-      result = await runTurn({
-        model: local,
-        messages,
-        tools: localTools,
-        registry,
-        maxRounds: maxToolRounds,
-        allowEscalation: offerEscalate,
-      });
-    } catch (error) {
-      log.warn(`${local.label} failed:`, error instanceof Error ? error.message : error);
-      if (!cloud || !this.#options.onLocalFailure) {
-        return { text: "My local model is not answering. Try again in a moment.", via: "local" };
-      }
-      result = { text: "", escalateTo: text, messages };
-    }
-
-    if (result.escalateTo && cloud) {
-      if (triage?.shadow) {
-        log.info(
-          `shadow triage would ${triage.verdict.needsCloud >= (this.#options.escalateThreshold ?? 0.85) ? "escalate" : "stay local"}` +
-            ` (needs_cloud=${triage.verdict.needsCloud.toFixed(2)} intent=${triage.verdict.intent}` +
-            ` conf=${triage.verdict.intentConfidence.toFixed(2)}); local escalated`,
-        );
-      }
-      via = "cloud";
-      result = await this.#cloudTurn(
-        cloud,
+    for (let task = list.next(); task; task = list.next()) {
+      // Each task sees the conversation, then what the tasks before it did,
+      // then itself: "turn the light on and tell me if it worked" needs the
+      // first answer to answer the second.
+      const messages: Message[] = [
         system,
-        session.history,
-        result.escalateTo,
-        maxToolRounds,
-        registry,
-      );
-    } else if (triage?.shadow) {
-      log.info(
-        `shadow triage: needs_cloud=${triage.verdict.needsCloud.toFixed(2)}` +
-          ` needs_web=${triage.verdict.needsWeb.toFixed(2)} intent=${triage.verdict.intent}` +
-          ` conf=${triage.verdict.intentConfidence.toFixed(2)} via=${triage.verdict.model}; local answered`,
-      );
+        ...session.history,
+        ...list.transcript(),
+        { role: "user", content: task.text },
+      ];
+      const started = this.#now();
+      const result = await dispatch(task, messages, agent, deadline);
+      const ms = this.#now() - started;
+
+      if (result.failed) {
+        list.fail(task, result.text, result.via, ms);
+        // Whatever is left would fail the same way, and the person is owed
+        // one apology rather than three.
+        list.abandon();
+        break;
+      }
+      list.finish(task, { reply: result.text, via: result.via, ms });
+      if (this.#now() > deadline) {
+        const left = list.tasks.filter((pending) => pending.status === "pending").length;
+        log.warn(`${client}: out of time with ${left} to go`);
+        // What was done is said, and so is what was not: half a request
+        // answered in silence is worse than being told to ask again.
+        list.abandon("I ran out of time before the rest of that.");
+        break;
+      }
     }
 
-    return this.#finish(session, text, result, via);
-  }
-
-  async #triage(text: string, room: string | undefined, toolNames: string[]) {
-    const decision = this.#options.decision;
-    if (!decision) return null;
-    try {
-      const verdict = await runTriage(decision, { transcript: text, room, tools: toolNames });
-      const plan = planTriage(verdict, {
-        mode: this.#options.decisionMode ?? "shadow",
-        escalateThreshold: this.#options.escalateThreshold ?? 0.85,
-        localConfidence: this.#options.localConfidence ?? 0.75,
-        hasCloud: this.#options.cloud !== null,
-      });
-      log.info(
-        `triage ${plan.shadow ? "shadow" : plan.path}: needs_cloud=${verdict.needsCloud.toFixed(2)}` +
-          ` intent=${verdict.intent} conf=${verdict.intentConfidence.toFixed(2)} via ${verdict.model}`,
-      );
-      return plan;
-    } catch (error) {
-      log.warn(`triage failed, continuing locally:`, error instanceof Error ? error.message : error);
-      return null;
+    const reply = list.reply() || "Done.";
+    // The words as they were said go in the history, not the tidied ones:
+    // triage reads it next time and does the tidying with the same context
+    // the person had. The tool traffic stays out; it is long, it is stale by
+    // the next question, and it is the bulk of the tokens. A turn where
+    // nothing worked is left out altogether, so an apology about a model
+    // being down is not what the next question builds on.
+    if (list.tasks.some((task) => task.status === "done")) {
+      const turn: Message[] = [
+        { role: "user", content: text },
+        { role: "assistant", content: reply },
+      ];
+      session.history = [...session.history, ...turn].slice(-MAX_HISTORY);
     }
-  }
 
-  async #cloudTurn(
-    cloud: ChatModel,
-    system: Message,
-    history: Message[],
-    question: string,
-    maxToolRounds: number,
-    registry: ToolRegistry,
-  ): Promise<TurnResult> {
-    try {
-      // No house tools for the cloud: the house stays local, the cloud gets
-      // the question and brings its own web search. Handing it the local
-      // web_search tool as well would clash with that one by name.
-      return await runTurn({
-        model: cloud,
-        messages: [system, ...history, { role: "user", content: question }],
-        tools: [],
-        registry,
-        maxRounds: maxToolRounds,
-        allowEscalation: false,
-      });
-    } catch (error) {
-      log.error(`${cloud.label} failed:`, error instanceof Error ? error.message : error);
-      return {
-        text: "I could not reach the cloud model, and I did not want to guess.",
-        messages: [],
-      };
-    }
-  }
-
-  #finish(session: Session, text: string, result: TurnResult, via: "local" | "cloud"): Answer {
-    // Keep the user and assistant turns, drop the tool traffic: it is long,
-    // it is stale by the next question, and it is the bulk of the tokens.
-    const turn: Message[] = [
-      { role: "user", content: text },
-      { role: "assistant", content: result.text },
-    ];
-    session.history = [...session.history, ...turn].slice(-MAX_HISTORY);
-    return { text: result.text || "Done.", via };
+    return { text: reply, via: list.via, tasks: list.outcomes() };
   }
 
   /** The integrations' lines, set off from the persona by a blank line when there are any. */
@@ -248,12 +257,9 @@ export class Router {
     }
     return session;
   }
-
-  reset(key?: string): void {
-    if (key) this.#sessions.delete(key);
-    else this.#sessions.clear();
-  }
 }
+
+export type { Task, TaskOutcome };
 
 function roomContext(room: string | undefined): string[] {
   if (!room) return [];

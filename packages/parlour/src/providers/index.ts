@@ -15,6 +15,7 @@ import "./tts/kokoro.ts";
 import "./tts/macos-say.ts";
 import "./llm/openai-compatible.ts";
 import "./llm/anthropic.ts";
+import "./llm/ai-sdk.ts";
 import "./search/searxng.ts";
 import "./search/brave.ts";
 import "./decision/laya-mlx.ts";

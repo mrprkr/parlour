@@ -164,7 +164,7 @@ test("VoiceSession: a hallucinated transcript is nothing said", async () => {
 test("VoiceSession: utterance() skips wake and endpointing", async () => {
   const { session, sink, wake } = pipeline({ room: "kitchen" });
   const answer = await session.utterance([loud(), loud()]);
-  assert.deepEqual(answer, { text: "hello", via: "local" });
+  assert.deepEqual({ text: answer?.text, via: answer?.via }, { text: "hello", via: "local" });
   assert.deepEqual(
     sink.said.map((s) => s.text),
     ["hello"],

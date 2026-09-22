@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FRAME_MS, FRAME_SAMPLES, rms, toWav, wavToFrames } from "./audio.ts";
+import { FRAME_MS, FRAME_SAMPLES, FrameCutter, rms, toWav, wavToFrames } from "./audio.ts";
 
 const ramp = (offset: number) =>
   Int16Array.from({ length: FRAME_SAMPLES }, (_, i) => ((i + offset) % 2000) - 1000);
@@ -53,4 +53,37 @@ test("wavToFrames walks past a LIST chunk to find the data", () => {
   const back = wavToFrames(wav);
   assert.equal(back.length, 1);
   assert.deepEqual([...back[0]!], [...ramp(0)]);
+});
+
+test("FrameCutter re-cuts whatever a client sends into whole frames", () => {
+  const source = [ramp(0), ramp(7)];
+  const pcm = Buffer.from(toWav(source, 16000).subarray(44));
+  const cutter = new FrameCutter();
+
+  // A chunk and a half, then the rest: what a socket actually hands over.
+  const first = cutter.push(pcm.subarray(0, FRAME_SAMPLES * 3));
+  const second = cutter.push(pcm.subarray(FRAME_SAMPLES * 3));
+
+  assert.equal(first.length, 1, "one whole frame, with the part frame kept back");
+  assert.equal(second.length, 1);
+  assert.deepEqual([...(first[0] as Int16Array)], [...(source[0] as Int16Array)]);
+  assert.deepEqual([...(second[0] as Int16Array)], [...(source[1] as Int16Array)]);
+});
+
+test("FrameCutter copies, so a frame outlives the buffer it came from", () => {
+  const pcm = Buffer.from(toWav([ramp(3)], 16000).subarray(44));
+  const frames = new FrameCutter().push(pcm);
+  const before = [...(frames[0] as Int16Array)];
+  // The socket reuses its buffer as soon as the handler returns. The frame is
+  // held for the whole utterance, so it cannot be a view of one.
+  pcm.fill(0);
+  assert.deepEqual([...(frames[0] as Int16Array)], before);
+});
+
+test("FrameCutter forgets a part frame when it is reset", () => {
+  const pcm = Buffer.from(toWav([ramp(0)], 16000).subarray(44));
+  const cutter = new FrameCutter();
+  assert.deepEqual(cutter.push(pcm.subarray(0, 100)), []);
+  cutter.reset();
+  assert.equal(cutter.push(pcm).length, 1);
 });

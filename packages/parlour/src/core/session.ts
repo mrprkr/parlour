@@ -140,6 +140,12 @@ export class VoiceSession {
 
       const answer = await router.ask(text, { session: id, room });
       const ms = Date.now() - started;
+      // Nothing to say: the request was dropped because this client said
+      // something else while it was queued, and the newer one is on its way.
+      if (!answer.text.trim()) {
+        log.info(`${id}: nothing to say, a newer request replaced this one`);
+        return null;
+      }
       log.info(`${id} replied in ${ms}ms via ${answer.via}:`, answer.text);
 
       this.#enter("speaking");

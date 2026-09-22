@@ -141,7 +141,7 @@ test("without a token the server binds to loopback", async (t) => {
   assert.ok(server.port > 0);
   const health = await fetch(`${server.url}/health`);
   assert.equal(health.status, 200);
-  assert.deepEqual(await health.json(), { ok: true, tools: 2, cloud: false });
+  assert.deepEqual(await health.json(), { ok: true, tools: 2, cloud: false, running: 0, waiting: 0 });
 });
 
 test("a port already in use is one sentence naming the service, not a stack", async (t) => {
@@ -263,6 +263,9 @@ test("building twice ships one copy of the phone page, not a copy nested inside 
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, "src/server/web"), { recursive: true });
   writeFileSync(join(root, "src/server/web/index.html"), "<!doctype html>");
+  // The decision worker is copied by the same step, so it has to be there too.
+  mkdirSync(join(root, "src/providers/decision"), { recursive: true });
+  writeFileSync(join(root, "src/providers/decision/laya-worker.py"), "");
   // tsc has already written dist/server/ by the time the copy runs.
   mkdirSync(join(root, "dist/server"), { recursive: true });
 
@@ -438,4 +441,61 @@ test("/listen closes a socket that sends a message too large to be audio", async
   socket.send(Buffer.alloc(300 * 1024));
   // 1009 is "message too big", from ws's own maxPayload.
   assert.equal(await closed, 1009);
+});
+
+test("two satellites that claim the same name do not end up in one conversation", async (t) => {
+  const model = new FakeChatModel([say("one"), say("two")]);
+  const agent: ServerDeps["agent"] = {
+    ...fakeAgent(),
+    router: new Router({
+      name: "Test",
+      local: model,
+      cloud: null,
+      registry: new ToolRegistry(),
+      maxToolRounds: 3,
+      onLocalFailure: false,
+    }),
+  };
+  const server = await serve(t, { agent });
+
+  /** A socket in push mode, and the messages it has been sent. */
+  const connect = async (query: string) => {
+    const socket = new WebSocket(`ws://127.0.0.1:${server.port}/listen?${query}`);
+    t.after(() => socket.close());
+    const messages: Record<string, unknown>[] = [];
+    socket.on("message", (data: Buffer, isBinary: boolean) => {
+      if (!isBinary) messages.push(JSON.parse(data.toString()) as Record<string, unknown>);
+    });
+    await new Promise<void>((resolve, reject) => {
+      socket.once("open", resolve);
+      socket.once("error", reject);
+    });
+    await until(() => messages.length > 0, "the ready message");
+    return { socket, messages };
+  };
+  const speak = async (client: { socket: WebSocket; messages: Record<string, unknown>[] }) => {
+    client.socket.send(JSON.stringify({ type: "start" }));
+    client.socket.send(frameBytes(3000));
+    client.socket.send(JSON.stringify({ type: "end" }));
+    await until(() => client.messages.some((m) => m.type === "state" && m.value === "idle"), "idle again");
+  };
+
+  // Both call themselves the kitchen, which is what a satellite copied from
+  // another satellite does.
+  const first = await connect("client=kitchen&mode=push");
+  const second = await connect("client=kitchen&mode=push");
+  await speak(first);
+  await speak(second);
+
+  const turns = (index: number) =>
+    (model.calls[index]?.messages ?? [])
+      .filter((message) => message.role !== "system")
+      .map((message) => (message as { content: string }).content);
+  assert.deepEqual(turns(0), ["hi"]);
+  // The second satellite starts from nothing rather than from the first one's turn.
+  assert.deepEqual(turns(1), ["hi"]);
+  assert.deepEqual(
+    second.messages.filter((m) => m.type === "reply"),
+    [{ type: "reply", text: "two", via: "local" }],
+  );
 });

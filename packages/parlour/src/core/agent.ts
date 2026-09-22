@@ -175,6 +175,11 @@ export async function buildAgent(
     decisionMode: config.llm.decision.mode,
     escalateThreshold: config.llm.decision.escalateThreshold,
     localConfidence: config.llm.decision.localConfidence,
+    triage: config.pipeline.triage,
+    maxTasks: config.pipeline.maxTasks,
+    concurrency: config.pipeline.concurrency,
+    queueDepth: config.pipeline.queueDepth,
+    timeoutMs: config.pipeline.timeoutMs,
   });
 
   if (audio) {

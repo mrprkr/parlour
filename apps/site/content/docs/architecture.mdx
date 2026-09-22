@@ -10,10 +10,11 @@ ports, the integrations, the network server and the CLI. The desktop app in `app
 ```text
 packages/parlour/src/
   core/          ports.ts, providers.ts, config.ts, paths.ts, secrets.ts, agent.ts,
-                 session.ts, router.ts, loop.ts, speaker.ts, registry.ts, timers.ts,
-                 prompt.ts, events.ts, logger.ts, services.ts
+                 session.ts, router.ts, queue.ts, triage.ts, tasks.ts, decision.ts,
+                 dispatch.ts, loop.ts, speaker.ts, registry.ts, timers.ts, prompt.ts, events.ts,
+                 logger.ts, services.ts
   providers/     audio/ffmpeg, audio/afplay, wake/openwakeword, stt/whisper-cpp,
-                 tts/kokoro, tts/macos-say, llm/openai-compatible, llm/anthropic,
+                 tts/kokoro, tts/macos-say, llm/openai-compatible, llm/anthropic, llm/ai-sdk,
                  search/searxng, search/brave, secrets/macos-keychain, secrets/file,
                  service/launchd
   integrations/  home-assistant/, mcp/, connectors/
@@ -39,7 +40,7 @@ a test and to fill from an npm package.
 | `WakeWordEngine` | Loads once, hands out one `WakeWordDetector` per stream. | `openwakeword` |
 | `SpeechToText` | WAV in, text out. | `whisper-cpp` |
 | `TextToSpeech` | Text in, WAV out, with a `warm()` to load before the first reply. | `kokoro`, `macos-say` |
-| `ChatModel` | Messages and tool specs in, a completion out. | `openai-compatible`, `anthropic` |
+| `ChatModel` | Messages and tool specs in, a completion out. | `openai-compatible`, `anthropic`, `ai-sdk` |
 | `SearchProvider` | A query in, results out. | `searxng`, `brave` |
 | `SecretStore` | Where connector tokens are kept. | `macos-keychain`, `file` |
 | `ServiceManager` | Keeps Parlour running at login. | `launchd` |
@@ -153,18 +154,85 @@ instead of `push(frame)` and skip the first two states.
 
 Every client has its own session, keyed by a client id, so a follow-up in
 the kitchen cannot pick up something asked in the study. Each session's
-history is forgotten after four minutes of silence.
+history is forgotten after four minutes of silence. The id is also that
+client's lane in the queue and its own wake word detector, so it decides
+both what a client can see and how much of the house it can hold up. It
+comes off the network, so the server trims it to something short and
+printable, and gives an id of their own to two clients that claim one name
+at the same time: a satellite that reconnects should pick its conversation
+back up, but the kitchen and a guest's phone both called "parlour" should
+not be sharing one.
 
-## The router
+## The pipeline
 
-`core/router.ts` is local first. The local model gets the system prompt, the
-tools and one extra tool, `ask_the_clever_one`, which the prompt tells it to
-call whenever a question needs real reasoning, current information or
+Whichever door a request came in by, `core/router.ts` runs it through the
+same stages, and the answer goes back to the client that asked and to
+nobody else.
+
+```text
+ask -> queue -> triage -> tasks -> action agent -> one thing to say
+```
+
+### The queue
+
+A house has more microphones than it has GPUs. Two satellites that hear
+their wake word at the same moment both want the local model, and letting
+both in at once makes each answer arrive later than if they had taken
+turns: the model is one process and its batch is one request deep.
+
+`core/queue.ts` gives every client a lane of its own, which is what keeps
+satellites out of each other's way in every sense that matters. One request
+per lane runs at a time, so a conversation stays in order and no client can
+hold more than one slot. Lanes take turns as they finish, so the study
+cannot starve the kitchen however fast it asks. `pipeline.concurrency` caps
+how many run at once across the house. A lane that backs up past
+`pipeline.queueDepth` drops its own oldest waiting request and nobody
+else's: somebody who asks twice wants the second answer, and hearing the
+first one first is worse than not hearing it. The client is told nothing to
+say rather than given a stale one.
+
+### Triage
+
+Speech recognition hands over a plausible sentence rather than a correct
+one, people say "it" and "in there" and expect the house to know, and one
+breath is often two jobs. A small model given all of that at once, with
+thirty tools in front of it, does the first job and claims the second.
+
+`core/triage.ts` reads the request before anything acts on it: the words are
+repaired, the pronouns are resolved from the conversation and the room, and
+what is left becomes a list of tasks, each written to stand on its own and
+each marked as something to do, something to look up, or small talk. A
+question it is sure needs the clever one is marked so, and skips the local
+round trip that would only have ended in `ask_the_clever_one`.
+
+That costs a round trip, and "lights off" does not need one. In the default
+`auto` mode a request that is plainly one short instruction goes straight
+through, and anything compound, long or ambiguous gets the full pass;
+`always` buys the accuracy on every request and `never` sells it. Triage is
+an optimisation and never a gate: a model that answers with prose, with
+rubbish, or not at all leaves the request exactly as it was said.
+
+### The task list
+
+`core/tasks.ts` holds what the request turned out to be, and the action
+agent takes one task at a time in the order they were said. Each one is
+asked with what the tasks before it did in front of it, so "turn the lamp on
+and tell me if it worked" has something to work with. The replies are joined
+into one thing to say, and two jobs that both answer "Done." are one "Done."
+rather than a stutter. A task that fails abandons the rest, because the
+person is owed one apology and not three.
+
+### The action agent
+
+`core/dispatch.ts` is local first. The local model gets the system prompt,
+the tools and one extra tool, `ask_the_clever_one`, which the prompt tells
+it to call whenever a question needs real reasoning, current information or
 knowledge it is unsure of. When it does, the rewritten question and the
 session's history go to the cloud model, which has server-side web search
 and no house tools. If the local model throws or times out and
 `llm.cloud.onLocalFailure` is true, the cloud model gets the original
-question instead.
+question instead. Small talk is given no tools at all, which is both faster
+and the only reliable way to stop a small model calling one.
 
 With no cloud model configured, three things change together, and they have
 to: the escalation tool is not offered, the persona stops naming it, and
@@ -176,17 +244,24 @@ answers the call with "there is nobody to hand this to, use the tools you
 have" rather than with an unknown-tool error, so the next round does the job.
 
 Optionally, `llm.decision` names an on-device System One decision model
-(built-in: `laya-mlx`) that judges escalate-versus-local before the
-generative turn. In `shadow` mode it only logs calibrated scores beside
-whatever the local model did; in `triage` mode a high `needs_cloud` /
-`needs_web` score skips local and hands the transcript to the cloud, while
+(built-in: `laya-mlx`, set up in `core/decision.ts`) that judges
+escalate-versus-local for each task before the local model's turn. In
+`shadow` mode it only logs calibrated scores beside whatever the local model
+did; in `triage` mode a high `needs_cloud` / `needs_web` score skips local
+and hands the task to the cloud, while
 a clear house or timer intent keeps the escalate tool off so the answer
 stays on-box. Default is `provider: "none"`. `laya-mlx` needs Apple Silicon
 and `pip install laya-mlx`; the checkpoint stays warm in a local Python
-worker, so transcripts never leave the machine for triage.
+worker, so transcripts never leave the machine for the decision.
 
 `core/loop.ts` runs the tool rounds for whichever model is answering, up to
 `llm.maxToolRounds`, and stops with an apology rather than looping forever.
+Every tool the model asked for in one round runs at once: it asked for all
+of them before it saw any of the answers, so nothing in the round depends on
+anything else in it, and two lights cost the slower one rather than the sum.
+`pipeline.timeoutMs` is the ceiling on a whole request, checked between
+rounds and between tasks; what is left of a request that runs past it is
+abandoned rather than spoken ten seconds after everyone has left the room.
 
 ## Configuration, secrets and paths
 
