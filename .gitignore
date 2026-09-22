@@ -10,6 +10,8 @@ dist/
 secrets.env
 config.json
 models/
+# Changesets' own config, which is not Parlour's and does belong in the repository.
+!.changeset/config.json
 
 # Tauri
 apps/desktop/src-tauri/target/

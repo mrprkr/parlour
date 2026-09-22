@@ -95,12 +95,24 @@ signing, so a tag is never the first time that build runs.
 Commit messages are a sentence in the imperative, the way the history
 already reads: "Move the agent into a workspace and call it Parlour".
 
+If the pull request changes what the `parlour` package does, add a changeset:
+run `pnpm changeset`, pick patch, minor or major, and write the one line you
+would want to read in the changelog. It is a small file in `.changeset/`;
+commit it with the change. Changes to the site, the app, the iOS app, the
+design tokens or CI need none.
+
 ## Releasing
 
-For maintainers. `pnpm version:set X.Y.Z` bumps both packages and the app;
-pushing a `vX.Y.Z` tag publishes the package to npm and attaches the dmg to a
-GitHub release, with notes generated from the pull requests since the last
-tag.
+For maintainers. `pnpm release:version` gathers the changesets into
+`packages/parlour/CHANGELOG.md`, bumps the package, and writes the same
+version into the desktop app's `package.json`, `tauri.conf.json`,
+`Cargo.toml` and `Cargo.lock`. You rarely run it yourself: on every push to
+main, [`.github/workflows/changesets.yml`](.github/workflows/changesets.yml)
+runs it and keeps a "Release the pending changesets" pull request up to date.
+Merge that, then push a `vX.Y.Z` tag on the merge commit: it
+publishes the package to npm and attaches the dmg to a GitHub release, with
+notes generated from the pull requests since the last tag. `pnpm version:set
+X.Y.Z` sets a version by hand when there are no changesets to go on.
 
 The dmg is signed with a Developer ID certificate and notarised, so it opens
 on a machine that has never seen this repository. That rests on six
