@@ -5,8 +5,10 @@
   "description": "The marketing page and the docs at heyparlour.app",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "rm -rf .next/dev/types",
     "build": "next build",
     "start": "next start",
+    "pretypecheck": "rm -rf .next/dev/types",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
