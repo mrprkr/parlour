@@ -47,15 +47,9 @@ test("readSecretsFile returns every key in the file, not only the named ones", (
 });
 
 test("loadSecrets without a file reads only the environment", () => {
-  const s = loadSecrets(paths, {
-    ANTHROPIC_API_KEY: "k",
-    BRAVE_API_KEY: "b",
-    TYPESAFE_API_KEY: "t",
-    LOG_LEVEL: "debug",
-  });
+  const s = loadSecrets(paths, { ANTHROPIC_API_KEY: "k", BRAVE_API_KEY: "b", LOG_LEVEL: "debug" });
   assert.equal(s.anthropicKey, "k");
   assert.equal(s.braveKey, "b");
-  assert.equal(s.typesafeKey, "t");
   assert.equal(s.logLevel, "debug");
   assert.equal(s.haToken, undefined);
   assert.equal(s.token, undefined);

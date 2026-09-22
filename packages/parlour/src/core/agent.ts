@@ -225,6 +225,7 @@ export async function buildAgent(
     async close() {
       speaker.stop();
       source.close();
+      await decision.value?.close?.();
       await Promise.all(integrations.map((integration) => integration.close?.()));
     },
   };

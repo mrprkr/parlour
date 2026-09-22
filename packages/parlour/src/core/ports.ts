@@ -108,6 +108,8 @@ export interface DecisionResult {
 export interface DecisionModel extends Diagnosable {
   readonly label: string;
   evaluate(state: DecisionState, questions: Record<string, DecisionQuestion>): Promise<DecisionResult>;
+  /** Release a warm worker or other resources. */
+  close?(): void | Promise<void>;
 }
 
 export interface SearchResult {

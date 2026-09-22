@@ -149,14 +149,15 @@ and no house tools. If the local model throws or times out and
 question instead. With no cloud model configured, failures are final and the
 escalation tool is not offered at all.
 
-Optionally, `llm.decision` names a System One decision model (built-in:
-`jev`) that judges escalate-versus-local before the generative turn. In
-`shadow` mode it only logs calibrated scores beside whatever the local model
-did; in `triage` mode a high `needs_cloud` / `needs_web` score skips local
-and hands the transcript to the cloud, while a clear house or timer intent
-keeps the escalate tool off so the answer stays on-box. Default is
-`provider: "none"`, so local-only houses are unchanged. Triage needs
-`TYPESAFE_API_KEY` in `secrets.env` and sends the transcript to TypeSafe.
+Optionally, `llm.decision` names an on-device System One decision model
+(built-in: `laya-mlx`) that judges escalate-versus-local before the
+generative turn. In `shadow` mode it only logs calibrated scores beside
+whatever the local model did; in `triage` mode a high `needs_cloud` /
+`needs_web` score skips local and hands the transcript to the cloud, while
+a clear house or timer intent keeps the escalate tool off so the answer
+stays on-box. Default is `provider: "none"`. `laya-mlx` needs Apple Silicon
+and `pip install laya-mlx`; the checkpoint stays warm in a local Python
+worker, so transcripts never leave the machine for triage.
 
 `core/loop.ts` runs the tool rounds for whichever model is answering, up to
 `llm.maxToolRounds`, and stops with an apology rather than looping forever.

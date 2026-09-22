@@ -105,23 +105,27 @@ is `macos-say`).
 {
   "llm": {
     "decision": {
-      "provider": "jev",
+      "provider": "laya-mlx",
       "mode": "shadow",
       "escalateThreshold": 0.85,
-      "localConfidence": 0.75
+      "localConfidence": 0.75,
+      "model": "aac6fef/laya-mlx"
     }
   }
 }
 ```
 
-TypeSafe [Jev](https://docs.typesafe.ai) answers a fixed set of Noul and
-Choice questions about each utterance before the local model runs. Put
-`TYPESAFE_API_KEY` in `secrets.env`. Start with `"mode": "shadow"`: the
-router logs `needs_cloud`, intent and confidence, but still lets
-`ask_the_clever_one` decide. Switch to `"mode": "triage"` once the scores
-look right: scores above `escalateThreshold` go straight to the cloud model,
-and a clear house or timer intent keeps escalation off so house commands
-stay local. `"provider": "none"` (the default) skips the call entirely.
+[Laya MLX](https://github.com/mizorewww/laya-mlx) answers a fixed set of
+Noul and Choice questions about each utterance on-device before the local
+model runs. Needs Apple Silicon and `pip install laya-mlx` (first load
+downloads the checkpoint into the Hugging Face cache). Start with
+`"mode": "shadow"`: the router logs `needs_cloud`, intent and confidence,
+but still lets `ask_the_clever_one` decide. Switch to `"mode": "triage"`
+once the scores look right: scores above `escalateThreshold` go straight
+to the cloud model, and a clear house or timer intent keeps escalation off
+so house commands stay local. `"provider": "none"` (the default) skips the
+call entirely. Multilingual houses can set `"model":
+"aac6fef/laya-multilingual-mlx"`.
 
 ## Search
 

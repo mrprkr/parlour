@@ -86,7 +86,7 @@ test("runTriage maps DecisionModel answers into a verdict", async () => {
     label: "fake",
     async evaluate(): Promise<DecisionResult> {
       return {
-        model: "jev-test",
+        model: "laya-test",
         answers: {
           needs_cloud: { type: "noul", noul: 0.2 },
           needs_web: { type: "noul", noul: 0.1 },
@@ -107,7 +107,7 @@ test("runTriage maps DecisionModel answers into a verdict", async () => {
     tools: ["ha_call_service"],
   });
   assert.equal(verdict.intent, "house");
-  assert.equal(verdict.model, "jev-test");
+  assert.equal(verdict.model, "laya-test");
   assert.equal(verdict.needsCloud, 0.2);
   assert.equal(verdict.intentConfidence, 0.88);
 });

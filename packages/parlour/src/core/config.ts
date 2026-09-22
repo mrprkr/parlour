@@ -90,7 +90,7 @@ export const ConfigSchema = z.object({
         onLocalFailure: z.boolean().default(true),
       }).prefault({}),
       /**
-       * Optional System One decision model (Jev) that judges escalate-vs-local
+       * Optional on-device System One decision model that judges escalate-vs-local
        * before the generative turn. "none" keeps today's ask_the_clever_one path.
        */
       decision: ProviderSlice.extend({

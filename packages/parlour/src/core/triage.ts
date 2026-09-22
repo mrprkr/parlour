@@ -1,9 +1,9 @@
 import type { DecisionModel, DecisionQuestion } from "./ports.ts";
 
 /**
- * Pre-router judgment for one utterance. Jev (or any DecisionModel) answers
- * these in parallel; `planTriage` turns the probabilities into a branch the
- * Router owns. The generative models still write the spoken reply.
+ * Pre-router judgment for one utterance. Laya MLX (or any DecisionModel)
+ * answers these in parallel; `planTriage` turns the probabilities into a
+ * branch the Router owns. The generative models still write the spoken reply.
  */
 
 export const TRIAGE_INTENTS = ["house", "timer", "search", "chat", "unclear"] as const;
