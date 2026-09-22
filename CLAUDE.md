@@ -20,6 +20,8 @@ pnpm build                                   # nx run-many -t build
 pnpm exec nx run-many -t typecheck lint test build   # what CI runs (macOS), then desktop:cargo-check
 pnpm exec nx run parlour:test                # one project, one target
 pnpm exec biome check --write .              # fix what lint can fix
+pnpm changeset                               # record a change to the npm package for the next release
+pnpm release:version                         # apply the changesets, then carry the version to the app
 ```
 
 Inside `packages/parlour`:
@@ -120,7 +122,16 @@ and a fake in `testing/`; open an issue first, a port is a promise to every prov
 - Biome formats and lints (double quotes, 110 columns, 2-space).
 - British English, no em dashes, in comments, docs and CLI output. Comments explain why, not what.
 - Commit messages are one imperative sentence, as the history reads. One change per pull request.
-- Releasing: `pnpm version:set X.Y.Z`, then a `vX.Y.Z` tag publishes, with notes from the pull requests.
+- A pull request that changes what `parlour` does ships a changeset (`pnpm changeset`, or write
+  `.changeset/<name>.md` by hand with `"parlour": patch|minor|major` in the front matter and one
+  line for the changelog). Changes to the site, the app, iOS, tokens or CI alone need none: only
+  `parlour` is versioned by changesets, the private packages are not.
+- Releasing: `pnpm release:version` turns the changesets into `packages/parlour/CHANGELOG.md` and a
+  version, then `set-version.mjs --sync` writes that version into the desktop app's four files.
+  `.github/workflows/changesets.yml` runs it on every push to main and keeps a "Release the pending
+  changesets" pull request open; merge it, then a `vX.Y.Z` tag on the merge publishes to npm and
+  attaches the dmg. `pnpm version:set X.Y.Z` still
+  sets a version by hand, and the release workflow refuses a tag that disagrees with the package.
 
 ## This is a public repository
 

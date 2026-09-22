@@ -1,0 +1,58 @@
+name: Changesets
+
+# Keeps one pull request open against main that applies every pending
+# changeset: `pnpm release:version` bumps parlour, writes its CHANGELOG.md and
+# carries the version over to the desktop app. Merging that pull request is
+# the release decision; tagging the merge commit vX.Y.Z is what publishes,
+# through release.yml, exactly as before. Nothing here publishes anything.
+#
+# The repository has to allow it: Settings, Actions, General, "Allow GitHub
+# Actions to create and approve pull requests". A pull request opened with
+# the workflow's own token does not start other workflows, so CI does not run
+# on it by itself; close and reopen it, or push to its branch, to get a run.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Open or update the version pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # Versioning only reads and writes text files, so the native builds
+      # (onnxruntime, sharp) are skipped rather than paid for on every push.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Open or update the pull request
+        uses: changesets/action@v2
+        with:
+          version-script: pnpm release:version
+          commit-message: Release the pending changesets
+          pr-title: Release the pending changesets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

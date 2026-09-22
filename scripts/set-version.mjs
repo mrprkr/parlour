@@ -56,11 +56,16 @@ const TARGETS = [
 
 function usage(message) {
   console.error(message);
-  console.error("Usage: pnpm version:set X.Y.Z");
+  console.error("Usage: pnpm version:set X.Y.Z, or --sync to follow packages/parlour");
   process.exit(1);
 }
 
-const version = process.argv[2];
+// `--sync` takes the version from the npm package, which is how
+// `pnpm release:version` carries what `changeset version` chose over to the app.
+const version =
+  process.argv[2] === "--sync"
+    ? JSON.parse(readFileSync(join(root, "packages/parlour/package.json"), "utf8")).version
+    : process.argv[2];
 if (!version) usage("A version is required.");
 if (!SEMVER.test(version)) usage(`"${version}" is not a version of the form X.Y.Z.`);
 

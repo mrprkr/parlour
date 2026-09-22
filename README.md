@@ -15,7 +15,7 @@ You can read the short version at
 ```text
 "Hey Jarvis"        openWakeWord, in process, always local
   -> record         energy endpointing, stops on 800 ms of silence
-  -> speech to text whisper.cpp, small.en, kept warm on this machine
+  -> speech to text whisper.cpp, small.en, kept warm on this machine (or yap, Apple's own)
   -> the queue      one lane per room, so two satellites never wait on each other
   -> triage         the words repaired, and the request split into a list of tasks
   -> the model      a local model with tools, over the OpenAI API, one task at a time
@@ -140,6 +140,7 @@ microphone is just one client among them, with no special privileges.
 | A satellite | `role: "satellite"`. Finds the server with Bonjour and holds a socket open. | The server, over the stream. Or the satellite itself, with `localWake`. |
 | Home Assistant, and every Voice PE satellite through it | The OpenAI-compatible endpoint at `/v1`. | The Voice PE, on device. Home Assistant does speech to text and speech back. |
 | A phone | The page the server serves at `/`. Hold the button. | Nobody. Your thumb is a better endpoint detector, and the phone is not listening to the room all day. |
+| Parlour for iOS | `/voice` and `/ask`, finding the server with Bonjour. Adds HomeKit and a model on the phone for when home is out of reach. | Nobody. Hold the button. |
 | Custom hardware | The socket at `/listen`, raw 16 kHz mono PCM. | The server, or the device. Its choice. |
 | An automation | `POST /ask` with text, an answer back as text. | Nobody. |
 
@@ -161,6 +162,8 @@ in `apps/site/content/docs` in this repository.
 | [Clients](https://heyparlour.app/docs/clients) | Satellites, the phone page, custom hardware, `/ask`, and Bonjour. |
 | [Home Assistant](https://heyparlour.app/docs/home-assistant) | The MCP Server integration, the OpenAI Conversation integration, muting, and moving over from the old config. |
 | [The menu bar app](https://heyparlour.app/docs/desktop) | What the app does, how it drives the CLI, and running it against a checkout. |
+| [The iOS app](https://heyparlour.app/docs/ios) | A client in your pocket, with HomeKit, local discovery and a model on the phone. |
+| [The design system](https://heyparlour.app/docs/design) | One palette, one type ramp and one set of states, shared by all four interfaces. |
 | [Tuning](https://heyparlour.app/docs/tuning) | Which setting to turn when it keeps waking up for the television. |
 | [Your own wake word](https://heyparlour.app/docs/wake-word) | Training a wake word of your own, and dropping it in. |
 
@@ -168,13 +171,17 @@ in `apps/site/content/docs` in this repository.
 
 ```text
 packages/parlour   the npm package: core, built-in providers, integrations, server, CLI
+packages/design    the tokens and icons every interface is drawn from
 apps/desktop       the menu bar app: Tauri, React and a Rust shell that drives the CLI
+apps/ios           Parlour for iOS: SwiftUI, a client of the server
 apps/site          the website: the front page and the docs, Next.js and MDX
 ```
 
 pnpm and nx. `pnpm install`, then `pnpm check` runs typecheck, lint and the
-tests across every project. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest,
-and we would be glad of your help.
+tests across every project. A change to the npm package comes with a
+changeset: `pnpm changeset` asks which kind of bump it is and writes one line
+for the changelog. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest, and we
+would be glad of your help.
 
 ## What Parlour does not do, on purpose
 
