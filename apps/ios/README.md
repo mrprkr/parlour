@@ -53,8 +53,10 @@ else, because the server is on a private address and speaks HTTP.
 The same way a satellite does: it browses for `_parlour._tcp`, and because
 Bonjour hands back a service rather than an address, it opens a connection to
 the service and reads the host and port off the resolved path. Anything it
-finds is offered in Settings; typing an address in wins over anything found,
-and the address the app keeps is the only server it talks to.
+finds is offered in Settings for manual selection, but discovered servers are
+never used automatically: a server must be paired (QR code) or typed manually
+to prevent an attacker from advertising a rogue service and capturing the
+bearer token. The address the app keeps is the only server it talks to.
 
 ## The first run
 

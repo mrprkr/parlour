@@ -17,15 +17,15 @@ struct SettingsTests {
     return AppSettings(defaults: UserDefaults(suiteName: name)!)
   }
 
-  @Test("an empty address falls back to what Bonjour found")
-  func emptyAddressUsesDiscovery() {
-    let found = URL(string: "http://study-mac.local:8765")!
-    #expect(settings().endpoint(found: found) == found)
+  @Test("an empty address with nothing configured is no server at all")
+  func nothingConfigured() {
+    #expect(settings().endpoint(found: nil) == nil)
   }
 
-  @Test("an empty address with nothing found is no server at all")
-  func nothingFound() {
-    #expect(settings().endpoint(found: nil) == nil)
+  @Test("discovered servers are never used automatically")
+  func discoveryNotAutomatic() {
+    let found = URL(string: "http://study-mac.local:8765")!
+    #expect(settings().endpoint(found: found) == nil)
   }
 
   @Test("a bare host gets a scheme, because that is what people type")
@@ -35,7 +35,7 @@ struct SettingsTests {
     #expect(subject.endpoint(found: nil)?.absoluteString == "http://study-mac.local:8765")
   }
 
-  @Test("a typed address wins over anything Bonjour found")
+  @Test("a typed address is used regardless of what Bonjour found")
   func typedAddressWins() {
     let subject = settings()
     subject.serverURL = "http://10.0.0.4:8765"
