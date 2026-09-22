@@ -6,28 +6,25 @@
 	<string>en_GB</string>
 	<key>CFBundleDisplayName</key>
 	<string>Parlour</string>
-	<key>UILaunchScreen</key>
-	<dict/>
 
 	<!--
-		The four things the app asks for, and why. Every string says what the
-		permission buys the person, because a prompt with no reason in it is a
-		prompt people say no to.
+		Filled in from the build settings xcodegen writes out of project.yml, so
+		the identifier and the version are stated in one place rather than two.
 	-->
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Parlour records what you say while you hold the talk button and sends it to your own server at home to be answered.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Parlour can turn what you say into text on this device, so a request never has to leave the house.</string>
-	<key>NSHomeKitUsageDescription</key>
-	<string>Parlour shows the rooms and accessories in your home so you can see and switch them without leaving the app.</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Parlour looks for your Parlour server on the local network so you do not have to type its address, and everything you say is answered there rather than in the cloud.</string>
-
-	<!-- What the browser in ServerDiscovery is allowed to look for. -->
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_parlour._tcp</string>
-	</array>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
 
 	<!--
 		The server on the house network is plain HTTP on a private address, so
@@ -40,6 +37,33 @@
 		<true/>
 	</dict>
 
+	<!-- What the browser in ServerDiscovery is allowed to look for. -->
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_parlour._tcp</string>
+	</array>
+
+	<!--
+		The four things the app asks for, and why. Every string says what the
+		permission buys the person, because a prompt with no reason in it is a
+		prompt people say no to.
+	-->
+	<key>NSHomeKitUsageDescription</key>
+	<string>Parlour shows the rooms and accessories in your home so you can see and switch them without leaving the app.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Parlour looks for your Parlour server on the local network so you do not have to type its address, and everything you say is answered there rather than in the cloud.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Parlour records what you say while you hold the talk button and sends it to your own server at home to be answered.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Parlour can turn what you say into text on this device, so a request never has to leave the house.</string>
+
+	<!-- Playing the server's reply, and recording while the screen is off. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+	<key>UILaunchScreen</key>
+	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -50,12 +74,6 @@
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-
-	<!-- Playing the server's reply, and recording while the screen is off. -->
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>audio</string>
 	</array>
 </dict>
 </plist>

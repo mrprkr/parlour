@@ -21,6 +21,37 @@ enum RecorderError: LocalizedError {
   }
 }
 
+/// The one audio session, always touched on its own queue: activation can
+/// block for long enough to hitch the interface (AVAudioSession warns about
+/// exactly this), and the queue keeps a deactivation at the end of one turn
+/// ordered before the activation at the start of the next.
+enum SharedAudioSession {
+  private static let queue = DispatchQueue(label: "app.heyparlour.audio-session", qos: .userInitiated)
+
+  /// Configures and activates the session off the main thread.
+  static func activate(_ configure: @escaping @Sendable (AVAudioSession) throws -> Void) async throws {
+    try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, any Error>) in
+      queue.async {
+        do {
+          let session = AVAudioSession.sharedInstance()
+          try configure(session)
+          try session.setActive(true)
+          done.resume()
+        } catch {
+          done.resume(throwing: error)
+        }
+      }
+    }
+  }
+
+  /// Fire and forget: nothing downstream depends on deactivation finishing.
+  static func deactivate() {
+    queue.async {
+      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+  }
+}
+
 /// One recording, start to finish. Not an observable: the view owns the state
 /// and this owns the audio graph.
 @MainActor
@@ -41,15 +72,16 @@ final class Recorder {
     AVAudioApplication.shared.recordPermission
   }
 
-  func start() throws {
+  func start() async throws {
     guard !recording else { return }
     guard Self.permission == .granted else { throw RecorderError.denied }
 
-    let audioSession = AVAudioSession.sharedInstance()
     // playAndRecord rather than record, because the reply comes straight back
     // and re-activating the session between the two clips the first word.
-    try audioSession.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetooth])
-    try audioSession.setActive(true)
+    try await SharedAudioSession.activate { session in
+      try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetoothHFP])
+    }
+    guard !recording else { return }
 
     let input = engine.inputNode
     let hardware = input.outputFormat(forBus: 0)
@@ -86,7 +118,7 @@ final class Recorder {
     engine.stop()
     recording = false
     converter = nil
-    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    SharedAudioSession.deactivate()
 
     let seconds = Double(samples.count / 2) / WAV.sampleRate
     guard seconds >= Self.shortestSeconds else { throw RecorderError.tooShort }
@@ -101,7 +133,7 @@ final class Recorder {
     recording = false
     converter = nil
     samples.removeAll()
-    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    SharedAudioSession.deactivate()
   }
 
   private func append(_ buffer: AVAudioPCMBuffer) {
@@ -172,6 +204,6 @@ enum WAV {
 
 extension Data {
   fileprivate mutating func append<T: FixedWidthInteger>(little value: T) {
-    withUnsafeBytes(of: value.littleEndian) { append(contentsOf: $0) }
+    Swift.withUnsafeBytes(of: value.littleEndian) { append(contentsOf: $0) }
   }
 }
