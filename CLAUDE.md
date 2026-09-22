@@ -3,9 +3,11 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 Parlour is a local-first voice assistant for the house that runs on a Mac. One npm package
-(`packages/parlour`) holds everything; the desktop app drives its CLI; the website is a Next.js app with
-the docs in it. `README.md` is the user-facing tour, `CONTRIBUTING.md` the conventions, and
-`apps/site/content/docs/architecture.mdx` the long version of the architecture section below.
+(`packages/parlour`) holds everything; the desktop app drives its CLI; the iOS app and the phone page
+are clients of its server; the website is a Next.js app with the docs in it. `packages/design` holds
+the tokens all four interfaces are drawn from. `README.md` is the user-facing tour, `CONTRIBUTING.md`
+the conventions, and `apps/site/content/docs/architecture.mdx` the long version of the architecture
+section below.
 
 ## Commands
 
@@ -35,7 +37,9 @@ never run `init` without `--no-service` against a scratch home.
 
 Desktop app (`apps/desktop`, Tauri + React + Tailwind): `pnpm -C apps/desktop app` for the window
 with live reload; `pnpm exec nx run desktop:cargo-check` for the Rust side. It only ever shells out
-to the `parlour` CLI, so a capability the app needs must exist in the CLI first.
+to the `parlour` CLI, so a capability the app needs must exist in the CLI first. Release builds are
+signed and notarised: `src-tauri/Entitlements.plist` and the `macOS` block in `tauri.conf.json` are
+what allow it, and `scripts/notarise.sh` does the dmg, which Tauri signs but does not notarise.
 
 Site (`apps/site`, Next.js): the front page in `app/page.tsx`, the docs in `content/docs/*.mdx` served
 by `app/docs/[slug]` from the list in `app/docs/pages.ts`, looks in `app/globals.css`, header, footer,
@@ -43,6 +47,16 @@ metadata, font and the analytics component in `app/layout.tsx`, security headers
 `next.config.ts`.
 `pnpm -C apps/site dev` locally; `pnpm exec nx run-many -t typecheck lint build -p site` is what CI
 runs. Vercel builds it with the Next.js builder, Root Directory `apps/site`.
+
+iOS app (`apps/ios`, SwiftUI): a client of the server's `/health`, `/voice` and `/ask`, with HomeKit,
+Bonjour discovery and Apple's on-device model. The Xcode project is generated from `project.yml`, so
+`brew install xcodegen` then `pnpm exec nx run ios:app`. There is no iOS job in CI; build it by hand
+with `nx run ios:xcodebuild` and `nx run ios:xcodetest`. `apps/ios/README.md` has the detail.
+
+Design system (`packages/design`): `src/tokens.ts` is the one palette, type ramp and session-state
+vocabulary, and `src/emit.ts` writes it into the site, the app, the phone page and iOS. Never edit a
+generated `tokens.css` or `Tokens.swift`: change the tokens and run `pnpm exec nx run design:emit`.
+`design:test` fails when a generated file has drifted, so `pnpm check` catches a missed emit.
 
 ## Architecture of `packages/parlour/src`
 
@@ -57,6 +71,11 @@ runs. Vercel builds it with the Next.js builder, Root Directory `apps/site`.
   by `provider` name; the rest of the slice passes through untouched to the provider's own Zod
   schema. An unregistered name is `await import`ed as an npm package, which is the whole extension
   mechanism. `secrets` and `service` are chosen by platform, not config.
+- `core/plugins.ts` loads the packages in `config.plugins` before anything is resolved: a plugin
+  brings providers, skills and integration config at once, and its `integrations` block is merged
+  under the one in config. `core/skills.ts` reads markdown skills from `~/.config/parlour/skills`
+  and the plugins' own directories; only the names and descriptions go in the prompt, the bodies
+  come back through the `read_skill` tool.
 - `core/agent.ts` `buildAgent(config, secrets, paths)` resolves every provider, wires the fallback
   voice (`Speaker` = TTS + sink + sentence splitting, `FallbackTextToSpeech` defaults to
   `macos-say`), builds the tool registry (integrations + search + timers) and the `Router`. The
@@ -94,6 +113,23 @@ and a fake in `testing/`; open an issue first, a port is a promise to every prov
 - British English, no em dashes, in comments, docs and CLI output. Comments explain why, not what.
 - Commit messages are one imperative sentence, as the history reads. One change per pull request.
 - Releasing: `pnpm version:set X.Y.Z`, then a `vX.Y.Z` tag publishes, with notes from the pull requests.
+
+## This is a public repository
+
+Parlour is open source under MIT. Everything pushed here is world readable, permanently, including
+commit messages, pull request titles and bodies, issues, comments and code review threads. Write as
+though a stranger is reading, because one is.
+
+- Never put Claude session information in a pull request description, a commit message, an issue, a
+  comment or any other file in the repository. That means no `claude.ai/code/session_...` links, no
+  session ids, no conversation or transcript links, no run or task ids, and no model identifiers.
+  They are useless to anyone outside the session and they leak how the work was done.
+- Do not paste agent transcripts, internal tool output, reasoning traces or prompts into a pull
+  request, an issue or a comment. Describe the change and why, not the process that produced it.
+- A pull request body explains what changed, why, and how it was verified. Nothing else belongs in
+  it: no credentials, tokens, environment variables, absolute paths from a developer machine,
+  internal hostnames or private URLs.
+- The same goes for anything the site or the CLI prints: it is public too.
 
 ## graphify
 

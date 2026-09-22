@@ -4,17 +4,47 @@ name: Release
 # and push the tag. The package goes to npm and the app to a GitHub release
 # on the tag, with notes generated from the pull requests since the last one.
 #
+# The app is signed with a Developer ID certificate and notarised, which is
+# what lets someone open it without being told macOS cannot check it. Six
+# repository secrets stand behind that, and the app job stops before building
+# rather than shipping a dmg that looks fine and is refused on the first
+# machine that is not this one:
+#
+# | Secret                     | What it is                                              |
+# | -------------------------- | ------------------------------------------------------- |
+# | APPLE_CERTIFICATE          | The Developer ID Application .p12, base64 encoded        |
+# | APPLE_CERTIFICATE_PASSWORD | The password set when that .p12 was exported             |
+# | APPLE_SIGNING_IDENTITY     | "Developer ID Application: Name (TEAMID)", in full       |
+# | APPLE_ID                   | The Apple account the certificate belongs to             |
+# | APPLE_PASSWORD             | An app-specific password for that account, not its own   |
+# | APPLE_TEAM_ID              | The ten-character team identifier                        |
+#
+# The certificate expires after five years and the app-specific password when
+# somebody revokes it, and either one turns into a failed release rather than
+# a warning, so the preflight below names what is missing. The preflight only
+# sees whether a secret is set, though, not whether it is right: a certificate
+# that does not decode or an identity with a typo in it gets as far as the
+# signing step before it says so. Run this workflow by hand after changing any
+# of them, and find out in a few minutes rather than during a release.
+#
 # Follow-ups, deliberately not done here:
-# - The app is unsigned and not notarised. Gatekeeper asks the person to
-#   allow it in System Settings on first open. Signing needs an Apple
-#   Developer certificate in the repository's secrets and tauri-action or
-#   `xcrun notarytool` in the app job.
+# - The dmg is built for Apple silicon only, because the runner is. An Intel
+#   or universal build means `--target universal-apple-darwin` and both Rust
+#   targets installed.
 # - There is no Homebrew tap. `npm install -g parlour` is the install path,
 #   and the app is a plain .dmg download until a cask is worth maintaining.
+# - The app has no updater. A release is something you download, not something
+#   an installed copy notices; that would need Tauri's updater, its own signing
+#   key and a manifest served from somewhere.
 
 on:
   push:
     tags: ["v*"]
+  # A manual run builds, signs and notarises the app and stops there: no npm
+  # publish, no release. It is how the six secrets above get proved without
+  # spending a version number, and the only thing a real tag then adds is the
+  # publishing.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,6 +52,9 @@ permissions:
 jobs:
   publish:
     name: Publish parlour to npm
+    # Tags only. A manual run is a rehearsal of the app build, and npm is the
+    # one part of a release that cannot be taken back.
+    if: github.event_name == 'push'
     # macOS, because the package's tests assume launchd and avfoundation, as CI does.
     runs-on: macos-latest
     timeout-minutes: 20
@@ -76,15 +109,41 @@ jobs:
         working-directory: packages/parlour
 
   app:
-    name: Build the app and attach it to the release
+    name: Build, sign and notarise the app
     runs-on: macos-latest
-    timeout-minutes: 45
+    # Longer than CI's budget for the same build: notarisation is two round
+    # trips to Apple, and how long each takes is Apple's business, not ours.
+    timeout-minutes: 60
     permissions:
       # To create the release and upload the .dmg to it.
       contents: write
     steps:
       - name: Check out
         uses: actions/checkout@v7
+
+      # Before anything is built, because an unsigned dmg attached to a
+      # release is worse than no release: it installs, it looks right, and it
+      # is refused on the first machine that did not build it.
+      - name: Check the signing secrets are present
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=""
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
+                      APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name:-}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "Missing repository secrets:$missing" >&2
+            echo "The header of this file says what each one is and where it comes from." >&2
+            exit 1
+          fi
+          echo "All six signing secrets are set."
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -109,10 +168,37 @@ jobs:
       # `pnpm build` in the app is `pnpm icons && tauri build`, and Tauri runs
       # `pnpm build:ui` first through beforeBuildCommand, so this one step
       # produces the icons, the frontend, the binary, the .app and the .dmg.
-      - name: Build the app
+      #
+      # The Apple variables are what turns that into a signed build. Tauri
+      # imports the certificate into a keychain of its own, signs with the
+      # hardened runtime and the entitlements named in tauri.conf.json, then
+      # notarises Parlour.app and staples the ticket into it. It signs the dmg
+      # as well, but stops there, which is what the next step is for.
+      - name: Build, sign and notarise the app
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm -C apps/desktop build
 
+      # The disk image needs a ticket of its own, or the download is refused
+      # before anybody gets as far as the app inside it. This also asks
+      # Gatekeeper for its verdict on both, which is the only check that
+      # answers the question a release actually raises.
+      - name: Notarise the dmg and check Gatekeeper accepts it
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: scripts/notarise.sh
+
+      # Tags only, for the same reason. A manual run has proved what it came to
+      # prove by this point: the dmg above is signed, notarised and stapled.
       - name: Create the release
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v3
         with:
           files: apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg

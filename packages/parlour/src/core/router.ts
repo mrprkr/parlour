@@ -84,12 +84,17 @@ export class Router {
   async ask(text: string, options: AskOptions = {}): Promise<Answer> {
     const { local, cloud, registry, maxToolRounds } = this.#options;
     const session = this.#session(options.session ?? "local");
+    // The persona is built per turn rather than once, because it carries the
+    // date and the integrations' lines. Whether escalation exists goes in
+    // here too: a prompt that names a tool the model was not given is how a
+    // local-only house ends up apologising instead of calling ha_call_service.
     const system: Message = {
       role: "system",
       content: systemPrompt(
         this.#options.name,
         [...this.#context(), ...roomContext(options.room)],
         this.#options.locale,
+        { escalation: cloud !== null },
       ),
     };
     const messages: Message[] = [system, ...session.history, { role: "user", content: text }];

@@ -108,7 +108,10 @@ test("runTurn does not escalate when escalation is not allowed", async () => {
   });
   assert.equal(result.escalateTo, undefined);
   assert.equal(result.text, "fine");
-  // The call went to the registry like any other, which does not know it.
+  // A small model reaches for the escalation tool whether or not it was given
+  // one. It is answered with what to do instead, so the next round uses the
+  // tools it does have rather than reading "unknown tool" as a dead end.
   const answer = result.messages.find((m) => m.role === "tool") as { content: string };
-  assert.match(answer.content, /No tool called/);
+  assert.match(answer.content, /no other model/);
+  assert.match(answer.content, /use the tools you have/);
 });

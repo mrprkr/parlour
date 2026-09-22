@@ -8,7 +8,9 @@ of its depth. It controls Home Assistant over MCP, and reaches anything else
 that has an MCP server too.
 
 You will need a Mac with Node 22 or later and [Homebrew](https://brew.sh).
-`init` fetches the rest (ffmpeg, whisper.cpp and the models) through `brew`.
+`init` fetches the rest (ffmpeg, whisper.cpp, llama.cpp and the models)
+through `brew`, including a local model sized to the machine, so there is
+nothing to install by hand and nothing to remember to start.
 
 ```sh
 npm install -g parlour
@@ -21,11 +23,14 @@ Day to day:
 
 ```sh
 parlour doctor            which of the moving parts is down, and how to fix it
+parlour restart           after editing config.json or a secret
+parlour stop              until the next login
 parlour service status    is it running, and does it start at login
 parlour service logs      what it has been saying
 parlour config edit       ~/.config/parlour/config.json
 parlour secrets status    which secrets are set, never their values
 parlour connectors list   the accounts your household has signed in to
+parlour models suggest    which local model fits this machine
 parlour models fetch      the wake word and whisper models
 ```
 

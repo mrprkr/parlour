@@ -138,10 +138,15 @@ test("--help lists the commands and an unknown command fails with one line", asy
   for (const command of [
     "init",
     "start",
+    "stop",
+    "restart",
     "text",
     "doctor",
     "service",
     "connectors",
+    "mcp",
+    "skills",
+    "plugins",
     "config",
     "secrets",
     "models",
@@ -315,6 +320,56 @@ test("init --porcelain --yes --no-deps in a temp home writes config without touc
 
   // The app owns the agent under --porcelain, so no agent LaunchAgent is written.
   assert.equal(existsSync(join(home, "Library", "LaunchAgents", "io.parlour.agent.plist")), false);
+});
+
+test("init --local-model answers the model question without a terminal", async () => {
+  // The desktop app and a script have no terminal to be asked in, and both
+  // should be able to say yes to the bundled model rather than only to be
+  // told it did not happen.
+  const configDir = join(home, "config");
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(
+    join(configDir, "config.json"),
+    JSON.stringify({ integrations: {}, search: { provider: "none" }, llm: { cloud: { enabled: false } } }),
+  );
+  const read = () =>
+    JSON.parse(readFileSync(join(configDir, "config.json"), "utf8")) as {
+      llm: { local?: { managed?: boolean; model?: string; baseUrl?: string } };
+    };
+
+  const auto = await parlour(
+    ["init", "--porcelain", "--yes", "--no-deps", "--no-service", "--local-model", "auto"],
+    {
+      env: { PARLOUR_TOKEN: "net-secret", PARLOUR_SKIP_MODELS: "1" },
+    },
+  );
+  assert.equal(auto.code, 0, auto.stderr);
+  const managed = read().llm.local;
+  assert.equal(managed?.managed, true);
+  assert.match(String(managed?.model), /^qwen/, `a catalogue model: ${managed?.model}`);
+  // Its own port, so a running LM Studio on 1234 and this can both exist.
+  assert.equal(managed?.baseUrl, "http://127.0.0.1:8920/v1");
+
+  const none = await parlour(
+    ["init", "--porcelain", "--yes", "--no-deps", "--no-service", "--local-model", "none"],
+    {
+      env: { PARLOUR_TOKEN: "net-secret", PARLOUR_SKIP_MODELS: "1" },
+    },
+  );
+  assert.equal(none.code, 0, none.stderr);
+  assert.equal(read().llm.local?.managed, false);
+
+  // A name that is not on the list stops the run rather than quietly setting
+  // up a different model from the one that was asked for.
+  const bogus = await parlour(
+    ["init", "--porcelain", "--no-deps", "--no-service", "--local-model", "llama-9000"],
+    {
+      env: { PARLOUR_SKIP_MODELS: "1" },
+    },
+  );
+  assert.equal(bogus.code, 1);
+  assert.match(bogus.stderr, /No local model called "llama-9000"/);
+  assert.match(bogus.stderr, /auto, none, or one of/);
 });
 
 test("init on a file with no integrations block writes every default integration, not only the house", async () => {
@@ -562,6 +617,41 @@ test("doctor --json reports checks and exits 1 when something fails", async () =
   assert.equal(run.code, checks.some((check) => check.status === "fail") ? 1 : 0);
 });
 
+test("stop and restart say what they would have stopped when nothing is installed", async () => {
+  // The stub answers "not loaded" whatever the host's launchd has. Neither
+  // command may invent a job: a person who runs the agent under the menu bar
+  // app has nothing here to stop, and should be told where to look instead.
+  const stopped = await parlour(["stop"]);
+  assert.equal(stopped.code, 0, stopped.stderr);
+  assert.match(stopped.stdout, /Nothing is installed to stop/);
+  assert.match(stopped.stdout, /menu bar app/);
+
+  const restarted = await parlour(["restart"]);
+  assert.equal(restarted.code, 0, restarted.stderr);
+  assert.match(restarted.stdout, /Nothing is installed to restart/);
+  assert.ok(
+    !launchctlCalls().some((call) => /^(bootstrap|load) /.test(call)),
+    `nothing was loaded: ${launchctlCalls().join("; ")}`,
+  );
+});
+
+test("stop leaves the LaunchAgent in place for the next login", async () => {
+  const plist = join(home, "Library", "LaunchAgents", `${AGENT_LABEL}.plist`);
+  assert.equal((await parlour(["service", "install"])).code, 0);
+  const before = launchctlCalls().length;
+
+  const run = await parlour(["stop"]);
+  assert.equal(run.code, 0, run.stderr);
+  assert.ok(existsSync(plist), "stopping is not forgetting: the plist stays");
+  assert.ok(
+    launchctlCalls()
+      .slice(before)
+      .some((call) => call === `bootout gui/${process.getuid?.() ?? 0}/${AGENT_LABEL}`),
+    `booted out through the stub: ${launchctlCalls().slice(before).join("; ")}`,
+  );
+  assert.match(run.stdout, /io\.parlour\.agent/);
+});
+
 test("service status without an install says so", async () => {
   // The stub answers "not loaded" whatever the host's launchd has, so this
   // passes on a Mac that runs Parlour for real as well as on a clean one.
@@ -628,4 +718,121 @@ test("connectors list is empty to begin with", async () => {
   const run = await parlour(["connectors", "list", "--json"]);
   assert.equal(run.code, 0, run.stderr);
   assert.deepEqual(JSON.parse(run.stdout), []);
+});
+
+test("mcp add writes a server into config without turning the house's own integrations off", async () => {
+  const added = await parlour(["mcp", "add", "weather", "--url", "https://weather.test/mcp"]);
+  assert.equal(added.code, 0, added.stderr);
+  const config = JSON.parse(readFileSync(join(home, "config", "config.json"), "utf8"));
+  assert.deepEqual(config.integrations.mcp.servers.weather, {
+    transport: "http",
+    url: "https://weather.test/mcp",
+  });
+  // The block replaces the default rather than adding to it, so the first
+  // write has to carry the integrations that were on before it.
+  assert.deepEqual(Object.keys(config.integrations).sort(), ["connectors", "home-assistant", "mcp"]);
+
+  const local = await parlour([
+    "mcp",
+    "add",
+    "notes",
+    "--token-env",
+    "NOTES_TOKEN",
+    "--",
+    "npx",
+    "-y",
+    "notes",
+  ]);
+  assert.equal(local.code, 0, local.stderr);
+  const withLocal = JSON.parse(readFileSync(join(home, "config", "config.json"), "utf8"));
+  assert.deepEqual(withLocal.integrations.mcp.servers.notes, {
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "notes"],
+    env: {},
+    tokenEnv: "NOTES_TOKEN",
+  });
+
+  const listed = await parlour(["mcp", "list", "--json"]);
+  assert.deepEqual(
+    (JSON.parse(listed.stdout) as { name: string }[]).map((server) => server.name),
+    ["weather", "notes"],
+  );
+
+  const again = await parlour(["mcp", "add", "weather", "--url", "https://other.test/mcp"]);
+  assert.equal(again.code, 1);
+  assert.match(again.stderr, /already an MCP server called weather/);
+
+  const removed = await parlour(["mcp", "remove", "weather"]);
+  assert.equal(removed.code, 0, removed.stderr);
+  const left = JSON.parse(readFileSync(join(home, "config", "config.json"), "utf8"));
+  assert.deepEqual(Object.keys(left.integrations.mcp.servers), ["notes"]);
+  assert.equal((await parlour(["mcp", "remove", "weather"])).code, 1);
+});
+
+test("mcp add refuses a server that is neither a url nor a command", async () => {
+  const neither = await parlour(["mcp", "add", "half"]);
+  assert.equal(neither.code, 1);
+  assert.match(neither.stderr, /parlour mcp add/);
+
+  const both = await parlour(["mcp", "add", "half", "--url", "https://a.test", "--", "npx"]);
+  assert.equal(both.code, 1);
+  assert.match(both.stderr, /either --url or a command/);
+
+  const bad = await parlour(["mcp", "add", "half", "--url", "not-a-url"]);
+  assert.equal(bad.code, 1);
+  assert.equal(existsSync(join(home, "config", "config.json")), false, "nothing was written");
+});
+
+test("skills new writes a file the list and the show can read back", async () => {
+  const made = await parlour(["skills", "new", "bedtime", "--description", "What goodnight means"]);
+  assert.equal(made.code, 0, made.stderr);
+  const file = made.stdout.trim();
+  assert.equal(file, join(home, "config", "skills", "bedtime.md"));
+  assert.equal((await parlour(["skills", "path"])).stdout.trim(), join(home, "config", "skills"));
+
+  writeFileSync(file, "---\nname: bedtime\ndescription: What goodnight means\n---\nPorch light on.\n");
+  const listed = await parlour(["skills", "list", "--json"]);
+  assert.deepEqual((JSON.parse(listed.stdout) as { skills: { name: string }[] }).skills, [
+    { name: "bedtime", description: "What goodnight means", source: file },
+  ]);
+
+  const shown = await parlour(["skills", "show", "bedtime"]);
+  assert.equal(shown.stdout.trim(), "Porch light on.");
+  assert.equal((await parlour(["skills", "show", "nothing"])).code, 1);
+  assert.equal((await parlour(["skills", "new", "bedtime"])).code, 1, "an existing file is not overwritten");
+});
+
+test("plugins add loads the package before it writes the name into config", async () => {
+  const file = join(home, "car-plugin.js");
+  writeFileSync(
+    file,
+    'export default { name: "car", description: "The car", skills: [], integrations: { mcp: {} } };\n',
+  );
+
+  const added = await parlour(["plugins", "add", file]);
+  assert.equal(added.code, 0, added.stderr);
+  assert.match(added.stdout, /Added car/);
+  assert.deepEqual(JSON.parse(readFileSync(join(home, "config", "config.json"), "utf8")).plugins, [file]);
+
+  const listed = await parlour(["plugins", "list", "--json"]);
+  assert.deepEqual((JSON.parse(listed.stdout) as { name: string; integrations: string[] }[])[0], {
+    specifier: file,
+    name: "car",
+    description: "The car",
+    providers: [],
+    skills: 0,
+    skillsDir: "",
+    integrations: ["mcp"],
+  });
+
+  // A package that is not installed is caught here, not at the next start.
+  const missing = await parlour(["plugins", "add", "parlour-plugin-that-is-not-installed"]);
+  assert.equal(missing.code, 1);
+  assert.match(missing.stderr, /is not installed/);
+  assert.deepEqual(JSON.parse(readFileSync(join(home, "config", "config.json"), "utf8")).plugins, [file]);
+
+  const removed = await parlour(["plugins", "remove", file]);
+  assert.equal(removed.code, 0, removed.stderr);
+  assert.deepEqual(JSON.parse(readFileSync(join(home, "config", "config.json"), "utf8")).plugins, []);
 });

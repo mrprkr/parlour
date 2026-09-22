@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { systemPrompt } from "./prompt.ts";
+import { ESCALATE_TOOL, systemPrompt } from "./prompt.ts";
 
 /** The date line, formatted the way the prompt does it. */
 const dateLine = (locale: string) =>
@@ -25,4 +25,16 @@ test("systemPrompt follows the locale for both the date and the language", () =>
 test("systemPrompt names the language, or repeats the tag when ICU has no name for it", () => {
   assert.match(systemPrompt("Test", [], "de"), /Deutsch\./);
   assert.match(systemPrompt("Test", [], "zz"), /sentences\. zz\./);
+});
+
+test("the persona only tells the model to hand over when there is somebody to hand over to", () => {
+  assert.match(systemPrompt("Test"), new RegExp(ESCALATE_TOOL));
+
+  // Local only. Naming a tool the model was never given is how a house with
+  // no cloud key ends up apologising rather than turning the light off, so
+  // the line goes and one telling it to finish the job takes its place.
+  const alone = systemPrompt("Test", [], "en-GB", { escalation: false });
+  assert.doesNotMatch(alone, new RegExp(ESCALATE_TOOL));
+  assert.match(alone, /only model in this house/);
+  assert.match(alone, /Work with the tools you have/);
 });

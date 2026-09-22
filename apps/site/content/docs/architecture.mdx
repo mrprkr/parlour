@@ -1,7 +1,11 @@
-If you want to know how Parlour is put together before you change it, this
-is the page. One npm package, `parlour`, holds a pure core, the built-in
-providers behind its ports, the integrations, the network server and the
-CLI. The desktop app in `apps/desktop` drives the CLI and knows nothing else.
+---
+title: Architecture
+description: The ports, the provider registry, the session state machine, and why each part was chosen.
+---
+
+How Parlour is put together, for anyone who wants to change it. One npm
+package, `parlour`, holds a pure core, the built-in providers behind its
+ports, the integrations, the network server and the CLI. The desktop app in `apps/desktop` drives the CLI and knows nothing else.
 
 ```text
 packages/parlour/src/
@@ -19,8 +23,8 @@ packages/parlour/src/
 ```
 
 Nothing in `core/` imports from `providers/` except `core/builtins.ts`. That
-file exists only to register the built-ins, and it is the one seam a program
-embedding Parlour with providers of its own can leave out.
+file only registers the built-ins, so a program embedding Parlour with
+providers of its own can leave it out.
 
 ## Ports
 
@@ -41,9 +45,9 @@ a test and to fill from an npm package.
 | `ServiceManager` | Keeps Parlour running at login. | `launchd` |
 | `Integration` | A named source of tools, prompt lines and a gate. | `home-assistant`, `mcp`, `connectors` |
 
-Any of them can also expose `doctor(): Promise<Check[]>`, and `parlour
-doctor` is simply every configured part's checks joined together, plus three
-of core's own: the config parses, the network is let in, and something keeps
+Any of them can also expose `doctor(): Promise<Check[]>`. `parlour doctor`
+is every configured part's checks joined together, plus three of core's
+own: the config parses, the network is let in, and something keeps
 Parlour running.
 
 Two things are composed in core rather than left to a provider:
@@ -71,8 +75,8 @@ when they are imported. Config selects each slot by name:
 
 Core only knows about the `provider` key of each slice. The rest (`voice`,
 `url`, `model` and so on) passes straight through and is validated by the
-provider's own Zod schema when it is created, so core has no idea that
-Kokoro has a voice or that whisper has a URL.
+provider's own Zod schema when it is created. Core does not need to know
+that Kokoro has a voice or that whisper has a URL.
 
 A name that is not registered is tried as a package: `await import(name)`,
 and the default export is accepted when its `kind` matches. That is the
@@ -86,24 +90,38 @@ would be a welcome contribution.
 
 ## Assembly
 
-`buildAgent(config, secrets, paths)` in `core/agent.ts` resolves every
-provider, wires up the fallback voice, builds the tool registry (every
-integration's tools, the search tool unless `search.provider` is `"none"`,
-and the timers), builds the `Router`, and hands back an `Agent`. The
+`buildAgent(config, secrets, paths)` in `core/agent.ts` loads the plugins,
+resolves every provider, wires up the fallback voice, builds the tool
+registry (every integration's tools, the search tool unless
+`search.provider` is `"none"`, the timers, and `read_skill` when the house
+has skills), builds the `Router`, and hands back an `Agent`. The
 microphone loop, the text REPL, the doctor and the network server all take
 one of these rather than building their own, which is why a timer set from
 a phone still sounds in the room and every client shares one tool list.
 
+Plugins come first, before any provider is resolved: a plugin
+(`core/plugins.ts`) is one package that can bring providers, skills and
+integration config at once, and a provider it registers has to exist by the
+time a slot in config names it. Its `integrations` block is merged
+underneath the one in `config.json`, key by key, so what the person wrote
+wins.
+
+Skills (`core/skills.ts`) are markdown files under `~/.config/parlour/skills`
+and in whatever directories the plugins add. Only each skill's name and
+description go in the system prompt; the body is fetched with the
+`read_skill` tool when the model decides the rule applies, because a local
+model with a small context cannot carry every house rule on every turn.
+[Skills, MCP and plugins](/docs/skills) is the guide.
+
 The cloud model, decision triage and web search are the slots the house can run without.
 A provider that cannot start (nearly always a missing key) is reported by
-the doctor and left out. A name that leads nowhere, on the other hand, is a
-mistake in config and is thrown, because a house that quietly answers with
-the wrong model is worse than one that refuses to start.
+the doctor and left out. A name that leads nowhere is a mistake in config and
+throws, so a typo cannot quietly leave you with the wrong model.
 
 ## The session
 
 `core/session.ts` is one state machine over a stream of 80 ms frames. It
-does not know or care where the frames come from: this machine's
+does not know where the frames come from: this machine's
 microphone, a satellite relaying audio, a phone or custom hardware all feed
 the same object.
 
@@ -146,8 +164,16 @@ knowledge it is unsure of. When it does, the rewritten question and the
 session's history go to the cloud model, which has server-side web search
 and no house tools. If the local model throws or times out and
 `llm.cloud.onLocalFailure` is true, the cloud model gets the original
-question instead. With no cloud model configured, failures are final and the
-escalation tool is not offered at all.
+question instead.
+
+With no cloud model configured, three things change together, and they have
+to: the escalation tool is not offered, the persona stops naming it, and
+failures are final. A prompt that tells a small model to hand over while
+giving it nothing to hand over to is how a local-only house ends up
+apologising instead of turning the light off. If the model asks for the
+clever one anyway, which small models trained on the pattern do, the loop
+answers the call with "there is nobody to hand this to, use the tools you
+have" rather than with an unknown-tool error, so the next round does the job.
 
 Optionally, `llm.decision` names an on-device System One decision model
 (built-in: `laya-mlx`) that judges escalate-versus-local before the
@@ -168,9 +194,9 @@ worker, so transcripts never leave the machine for triage.
 | --- | --- |
 | `config.json`, `secrets.env`, `connectors.json` | `~/.config/parlour/`, or `$PARLOUR_HOME` |
 | Just the config file | `$PARLOUR_CONFIG`, or `parlour --config <file>` |
-| Models | `~/Library/Caches/parlour/models/{openwakeword,whisper}` |
-| Logs | `~/Library/Logs/parlour/{agent,whisper}.log` |
-| LaunchAgent labels | `io.parlour.agent`, `io.parlour.whisper` |
+| Models | `~/Library/Caches/parlour/models/{openwakeword,whisper,llm}` |
+| Logs | `~/Library/Logs/parlour/{agent,whisper,llm}.log` |
+| LaunchAgent labels | `io.parlour.agent`, `io.parlour.whisper`, `io.parlour.llm` |
 | Bonjour service type | `_parlour._tcp` |
 | Keychain service for connector tokens | `parlour-connector` |
 | The desktop app's own settings | `~/Library/Application Support/io.parlour.desktop/settings.json` |
@@ -192,15 +218,16 @@ Nothing else about Linux is done yet, and we would be glad of help with it.
 timestamp. The desktop app reads these to draw its status rather than
 scraping log text. Without the flag, stdout is a log for a person.
 
-## Why the pieces are the pieces
+## Why each part was chosen
 
 | Stage | Choice | Why |
 | --- | --- | --- |
 | Wake word | openWakeWord, ONNX, in process | Free, offline, and it runs in the same Node process as everything else, which is what makes barge-in possible. |
 | Capture | ffmpeg on avfoundation | Nothing to compile, and the only reliable way to pin one input device on macOS. |
 | Speech to text | whisper.cpp `small.en`, kept warm | Loading the model costs more than transcribing a sentence, so it runs as a server. |
-| Model | LM Studio, MLX build | The fastest way to run an 8B model on Apple silicon, and it speaks the OpenAI API, so the runtime stays swappable. |
+| Model | llama.cpp with a Qwen2.5 GGUF, kept warm | It comes with Parlour, so a house answers after `init` rather than after somebody installs LM Studio and remembers to press Start Server. It speaks the OpenAI API, so LM Studio, Ollama or anything else can take its place. |
 | Escalation | Claude with server-side web search | The local model is fast and private but wrong more often. Handing over is cheap; being wrong out loud is not. |
 | Speech | Kokoro 82M, ONNX | Close to a cloud voice, runs in process, and has British voices. `say` is the fallback for when it fails. |
 
-Latency adds up, so each stage is chosen to be fast rather than best.
+Every stage adds to the wait before an answer, so each is chosen to be fast
+rather than best.

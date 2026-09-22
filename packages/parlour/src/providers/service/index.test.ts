@@ -28,6 +28,7 @@ test("anywhere else every method names the gap rather than failing later", async
   const expected = /only supported on macOS so far/;
   await assert.rejects(manager.install([]), expected);
   await assert.rejects(manager.uninstall([]), expected);
+  await assert.rejects(manager.stop([]), expected);
   await assert.rejects(manager.restart([]), expected);
   await assert.rejects(manager.status([]), expected);
   await assert.rejects(manager.tail("/nowhere", 10), expected);

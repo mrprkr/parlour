@@ -141,6 +141,7 @@ const NOT_FOUND = new Set(["ERR_MODULE_NOT_FOUND", "ERR_PACKAGE_PATH_NOT_EXPORTE
 
 /**
  * Whether the specifier itself leads anywhere, decided before it is imported.
+ * Exported for the plugin loader, which resolves the same kind of name.
  * `import()` raises the same not-found code for a package that is missing and
  * for a package that exists but imports something missing, so the two cannot
  * be told apart afterwards. `import.meta.resolve` walks the same lookup as
@@ -149,7 +150,7 @@ const NOT_FOUND = new Set(["ERR_MODULE_NOT_FOUND", "ERR_PACKAGE_PATH_NOT_EXPORTE
  * other resolution error is left for `import()` to raise, so it is reported
  * as a load failure with Node's own message.
  */
-function specifierExists(name: string): boolean {
+export function specifierExists(name: string): boolean {
   let url: string;
   try {
     url = import.meta.resolve(name);

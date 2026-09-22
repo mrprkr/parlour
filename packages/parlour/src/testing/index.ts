@@ -296,23 +296,39 @@ export class FakeSecretStore implements SecretStore {
 export class FakeServiceManager implements ServiceManager {
   readonly installed = new Map<string, ServiceSpec>();
   readonly restarts: string[] = [];
+  /** Labels stopped since they were installed, which still count as installed. */
+  readonly stopped = new Set<string>();
   readonly tailed: { logPath: string; lines: number }[] = [];
   /** What `tail()` answers, keyed by log path. */
   readonly logs = new Map<string, string>();
 
   async install(specs: ServiceSpec[]): Promise<ServiceState[]> {
-    for (const spec of specs) this.installed.set(spec.label, spec);
+    for (const spec of specs) {
+      this.installed.set(spec.label, spec);
+      this.stopped.delete(spec.label);
+    }
     return this.status(specs);
   }
 
   async uninstall(labels: string[]): Promise<string[]> {
     // Only what was actually there, as launchd reports only what it removed.
-    return labels.filter((label) => this.installed.delete(label));
+    return labels.filter((label) => {
+      this.stopped.delete(label);
+      return this.installed.delete(label);
+    });
+  }
+
+  async stop(specs: Pick<ServiceSpec, "label" | "what" | "logPath">[]): Promise<ServiceState[]> {
+    for (const spec of specs) {
+      if (this.installed.has(spec.label)) this.stopped.add(spec.label);
+    }
+    return this.status(specs);
   }
 
   async restart(specs: ServiceSpec[]): Promise<ServiceState[]> {
     for (const spec of specs) {
       this.installed.set(spec.label, spec);
+      this.stopped.delete(spec.label);
       this.restarts.push(spec.label);
     }
     return this.status(specs);
@@ -321,12 +337,13 @@ export class FakeServiceManager implements ServiceManager {
   async status(specs: Pick<ServiceSpec, "label" | "what" | "logPath">[]): Promise<ServiceState[]> {
     return specs.map((spec) => {
       const installed = this.installed.has(spec.label);
+      const running = installed && !this.stopped.has(spec.label);
       return {
         label: spec.label,
         what: spec.what,
         installed,
-        running: installed,
-        pid: installed ? 1000 : null,
+        running,
+        pid: running ? 1000 : null,
         lastExit: null,
         logPath: spec.logPath,
       };
