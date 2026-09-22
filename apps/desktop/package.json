@@ -9,7 +9,8 @@
     "build:ui": "vite build",
     "typecheck": "tsc --noEmit",
     "app": "pnpm icons && tauri dev",
-    "build": "pnpm icons && tauri build"
+    "build": "pnpm icons && tauri build",
+    "build:locked": "pnpm icons && tauri build -- --locked"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
