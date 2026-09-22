@@ -127,7 +127,7 @@ and a fake in `testing/`; open an issue first, a port is a promise to every prov
   line for the changelog). Changes to the site, the app, iOS, tokens or CI alone need none: only
   `parlour` is versioned by changesets, the private packages are not.
 - Releasing: `pnpm release:version` turns the changesets into `packages/parlour/CHANGELOG.md` and a
-  version, then `set-version.mjs --sync` writes that version into the desktop app's four files.
+  version, then `set-version.mjs --sync` writes that version into the desktop app's three files.
   `.github/workflows/changesets.yml` runs it on every push to main and keeps a "Release the pending
   changesets" pull request open; merge it, then a `vX.Y.Z` tag on the merge publishes to npm and
   attaches the dmg. `pnpm version:set X.Y.Z` still
