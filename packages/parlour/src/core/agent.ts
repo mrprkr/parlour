@@ -9,6 +9,7 @@ import type {
   AudioSource,
   ChatModel,
   Check,
+  DecisionModel,
   Diagnosable,
   Integration,
   SearchProvider,
@@ -122,6 +123,12 @@ export async function buildAgent(
     : { value: null };
   if (cloud.problem) log.warn(`no cloud model: ${cloud.problem}`);
 
+  const decision =
+    config.llm.decision.provider === "none"
+      ? { value: null }
+      : await optional<DecisionModel>("decision", config.llm.decision.provider, config.llm.decision, context);
+  if (decision.problem) log.warn(`no decision model: ${decision.problem}`);
+
   const search =
     config.search.provider === "none"
       ? { value: null }
@@ -164,6 +171,10 @@ export async function buildAgent(
       ...integrations.flatMap((integration) => integration.promptContext?.() ?? []),
       ...skillPromptContext(skills.skills),
     ],
+    decision: decision.value,
+    decisionMode: config.llm.decision.mode,
+    escalateThreshold: config.llm.decision.escalateThreshold,
+    localConfidence: config.llm.decision.localConfidence,
     triage: config.pipeline.triage,
     maxTasks: config.pipeline.maxTasks,
     concurrency: config.pipeline.concurrency,
@@ -218,6 +229,14 @@ export async function buildAgent(
           detail: `${cloud.problem}, so questions stay with the local model.`,
         });
       }
+      if (decision.value) checks.push(...(await checksOf(decision.value)));
+      if (decision.problem) {
+        checks.push({
+          name: "decision model",
+          status: "warn",
+          detail: `${decision.problem}, so triage is skipped.`,
+        });
+      }
       if (search.value) checks.push(...(await checksOf(search.value)));
       if (search.problem) {
         checks.push({
@@ -235,18 +254,19 @@ export async function buildAgent(
     async close() {
       speaker.stop();
       source.close();
+      await decision.value?.close?.();
       await Promise.all(integrations.map((integration) => integration.close?.()));
     },
   };
 }
 
 /**
- * The cloud model and web search are the two slots the house runs without.
- * A provider that cannot start (nearly always a missing key) is reported and
- * left out. A name that leads nowhere, a package of the wrong kind or an
- * option that fails its schema is a mistake in config, and is thrown rather
- * than worked around, because a house that quietly answers with the wrong
- * model is worse than one that refuses to start.
+ * The cloud model, decision triage and web search are the slots the house
+ * runs without. A provider that cannot start (nearly always a missing key) is
+ * reported and left out. A name that leads nowhere, a package of the wrong
+ * kind or an option that fails its schema is a mistake in config, and is
+ * thrown rather than worked around, because a house that quietly answers with
+ * the wrong model is worse than one that refuses to start.
  */
 async function optional<T>(
   kind: ProviderKind,

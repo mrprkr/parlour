@@ -137,6 +137,34 @@ with nothing but `fetch` behind them. Reach for this one if you would rather
 track one library than two APIs, or to put the SDK's own middleware in front
 of a model.
 
+### Decision model (optional)
+
+```json
+{
+  "llm": {
+    "decision": {
+      "provider": "laya-mlx",
+      "mode": "shadow",
+      "escalateThreshold": 0.85,
+      "localConfidence": 0.75,
+      "model": "aac6fef/laya-mlx"
+    }
+  }
+}
+```
+
+[Laya MLX](https://github.com/mizorewww/laya-mlx) answers a fixed set of
+Noul and Choice questions about each task on-device, after the pipeline's
+triage has split the request and before the local model runs. Needs Apple
+Silicon and `pip install laya-mlx` (first load downloads the checkpoint into
+the Hugging Face cache). Start with `"mode": "shadow"`: the log shows
+`needs_cloud`, intent and confidence, but `ask_the_clever_one` still
+decides. Switch to `"mode": "triage"` once the scores look right: scores
+above `escalateThreshold` go straight to the cloud model, and a clear house
+or timer intent keeps escalation off so house commands stay local.
+`"provider": "none"` (the default) skips the call entirely. Multilingual
+houses can set `"model": "aac6fef/laya-multilingual-mlx"`.
+
 ## The pipeline
 
 ```json

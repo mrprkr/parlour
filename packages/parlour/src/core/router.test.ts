@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { ChatModel } from "./ports.ts";
+import { FakeDecisionModel, triageAnswers } from "../testing/index.ts";
+import type { ChatModel, DecisionModel } from "./ports.ts";
 import { ESCALATE_TOOL } from "./prompt.ts";
 import { defineTool, ToolRegistry } from "./registry.ts";
 import { type Answer, CONTEXT_TTL_MS, Router, type RouterOptions } from "./router.ts";
@@ -195,6 +196,74 @@ test("Router puts the room and the integrations' context in the prompt", async (
 test("Router says Done. when the model says nothing", async () => {
   const r = router({ local: new FakeChatModel([say("")]) });
   assert.equal((await r.ask("turn it off")).text, "Done.");
+});
+
+test("Router in triage mode escalates before the local model when needsCloud is high", async () => {
+  const local = new FakeChatModel([say("should not run")]);
+  const cloud = new FakeChatModel([say("Lima.")], "cloud");
+  const decision = new FakeDecisionModel(
+    triageAnswers({ needsCloud: 0.95, needsWeb: 0.1, intent: "search", intentConfidence: 0.9 }),
+  );
+  const r = router({
+    local,
+    cloud,
+    decision,
+    decisionMode: "triage",
+    escalateThreshold: 0.85,
+  });
+  assert.deepEqual(answered(await r.ask("capital of peru")), { text: "Lima.", via: "cloud" });
+  assert.equal(local.calls.length, 0);
+  assert.equal(decision.calls.length, 1);
+  assert.deepEqual(turns(cloud.calls[0]), [["user", "capital of peru"]]);
+});
+
+test("Router in triage mode keeps clear house intents local without escalate", async () => {
+  const local = new FakeChatModel([say("Done.")]);
+  const cloud = new FakeChatModel([say("should not run")], "cloud");
+  const decision = new FakeDecisionModel(
+    triageAnswers({ needsCloud: 0.1, intent: "house", intentConfidence: 0.9 }),
+  );
+  const r = router({
+    local,
+    cloud,
+    decision,
+    decisionMode: "triage",
+    escalateThreshold: 0.85,
+    localConfidence: 0.75,
+  });
+  assert.deepEqual(answered(await r.ask("turn the lights off")), { text: "Done.", via: "local" });
+  assert.equal(local.calls[0]?.tools.includes(ESCALATE_TOOL), false);
+  assert.equal(cloud.calls.length, 0);
+});
+
+test("Router in shadow mode still lets the local model escalate", async () => {
+  const local = new FakeChatModel([escalate("What is the capital of Peru?")]);
+  const cloud = new FakeChatModel([say("Lima.")], "cloud");
+  const decision = new FakeDecisionModel(
+    triageAnswers({ needsCloud: 0.95, intent: "search", intentConfidence: 0.9 }),
+  );
+  const r = router({
+    local,
+    cloud,
+    decision,
+    decisionMode: "shadow",
+    escalateThreshold: 0.85,
+  });
+  assert.deepEqual(answered(await r.ask("capital of peru")), { text: "Lima.", via: "cloud" });
+  assert.equal(local.calls.length, 1);
+  assert.equal(local.calls[0]?.tools.includes(ESCALATE_TOOL), true);
+});
+
+test("Router continues locally when the decision model throws", async () => {
+  const local = new FakeChatModel([say("ok")]);
+  const decision: DecisionModel = {
+    label: "broken",
+    async evaluate() {
+      throw new Error("timeout");
+    },
+  };
+  const r = router({ local, decision, decisionMode: "triage" });
+  assert.deepEqual(answered(await r.ask("hi")), { text: "ok", via: "local" });
 });
 
 test("the persona stops naming the escalation tool when there is no cloud model", async () => {

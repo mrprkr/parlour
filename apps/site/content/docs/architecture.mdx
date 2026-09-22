@@ -10,8 +10,8 @@ ports, the integrations, the network server and the CLI. The desktop app in `app
 ```text
 packages/parlour/src/
   core/          ports.ts, providers.ts, config.ts, paths.ts, secrets.ts, agent.ts,
-                 session.ts, router.ts, queue.ts, triage.ts, tasks.ts, dispatch.ts,
-                 loop.ts, speaker.ts, registry.ts, timers.ts, prompt.ts, events.ts,
+                 session.ts, router.ts, queue.ts, triage.ts, tasks.ts, decision.ts,
+                 dispatch.ts, loop.ts, speaker.ts, registry.ts, timers.ts, prompt.ts, events.ts,
                  logger.ts, services.ts
   providers/     audio/ffmpeg, audio/afplay, wake/openwakeword, stt/whisper-cpp,
                  tts/kokoro, tts/macos-say, llm/openai-compatible, llm/anthropic, llm/ai-sdk,
@@ -114,7 +114,7 @@ description go in the system prompt; the body is fetched with the
 model with a small context cannot carry every house rule on every turn.
 [Skills, MCP and plugins](/docs/skills) is the guide.
 
-The cloud model and web search are the two slots the house can run without.
+The cloud model, decision triage and web search are the slots the house can run without.
 A provider that cannot start (nearly always a missing key) is reported by
 the doctor and left out. A name that leads nowhere is a mistake in config and
 throws, so a typo cannot quietly leave you with the wrong model.
@@ -242,6 +242,17 @@ apologising instead of turning the light off. If the model asks for the
 clever one anyway, which small models trained on the pattern do, the loop
 answers the call with "there is nobody to hand this to, use the tools you
 have" rather than with an unknown-tool error, so the next round does the job.
+
+Optionally, `llm.decision` names an on-device System One decision model
+(built-in: `laya-mlx`, set up in `core/decision.ts`) that judges
+escalate-versus-local for each task before the local model's turn. In
+`shadow` mode it only logs calibrated scores beside whatever the local model
+did; in `triage` mode a high `needs_cloud` / `needs_web` score skips local
+and hands the task to the cloud, while
+a clear house or timer intent keeps the escalate tool off so the answer
+stays on-box. Default is `provider: "none"`. `laya-mlx` needs Apple Silicon
+and `pip install laya-mlx`; the checkpoint stays warm in a local Python
+worker, so transcripts never leave the machine for the decision.
 
 `core/loop.ts` runs the tool rounds for whichever model is answering, up to
 `llm.maxToolRounds`, and stops with an apology rather than looping forever.
