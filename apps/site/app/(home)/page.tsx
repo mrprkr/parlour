@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { InstallButton } from "../install-button";
+import { DesktopSettings, PhoneHouse, PhoneTalk, PrivacyDiagram, RoomScene } from "./pictures";
 import { Topology } from "./topology";
 
 export default function Home() {
@@ -24,6 +25,7 @@ export default function Home() {
             </div>
           </div>
         </div>
+        <RoomScene />
       </section>
 
       <section className="sheet" aria-labelledby="how-heading">
@@ -63,11 +65,14 @@ export default function Home() {
 
       <section className="sheet" aria-labelledby="private-heading">
         <h2 id="private-heading">What you say stays at home</h2>
-        <p>
-          The wake word, the transcription, the model and the voice all run on your Mac. No account to create.
-          No server in the middle. When a cloud model helps, it sees a single question as text and nothing of
-          your home.
-        </p>
+        <div className="with-art">
+          <p>
+            The wake word, the transcription, the model and the voice all run on your Mac. No account to
+            create. No server in the middle. When a cloud model helps, it sees a single question as text and
+            nothing of your home.
+          </p>
+          <PrivacyDiagram />
+        </div>
         <ul className="notes">
           <li>
             <strong>You decide what it can touch.</strong> Parlour controls only what you expose to voice
@@ -104,40 +109,49 @@ export default function Home() {
 
       <section className="sheet" aria-labelledby="ios-heading">
         <h2 id="ios-heading">
-          Parlour for iPhone <span className="badge">Coming soon</span>
+          Parlour for iOS <span className="badge">Coming soon</span>
         </h2>
         <p>
-          Your whole house, in your pocket. The iPhone app talks to the hub at home and brings HomeKit along
-          with it.
+          Your whole house, in your pocket. The iOS app talks to the hub at home and brings HomeKit along with
+          it.
         </p>
-        <ul className="notes">
-          <li>
-            <strong>Ask from anywhere at home.</strong> Hold the button, speak, and hear the answer from the
-            same assistant as every other room.
-          </li>
-          <li>
-            <strong>HomeKit, built in.</strong> See your rooms and accessories, and switch things on and off
-            with a tap. It still works when the Mac at home is off.
-          </li>
-          <li>
-            <strong>Finds your hub on its own.</strong> No addresses to type. It discovers Parlour on your
-            network the moment you open it.
-          </li>
-          <li>
-            <strong>Answers even when home cannot.</strong> With Apple Intelligence, your iPhone can answer by
-            itself, entirely on device.
-          </li>
-        </ul>
+        <div className="ios-grid">
+          <ul className="notes">
+            <li>
+              <strong>Ask from anywhere at home.</strong> Hold the button, speak, and hear the answer from the
+              same assistant as every other room.
+            </li>
+            <li>
+              <strong>HomeKit, built in.</strong> See your rooms and accessories, and switch things on and off
+              with a tap. It still works when the Mac at home is off.
+            </li>
+            <li>
+              <strong>Finds your hub on its own.</strong> No addresses to type. It discovers Parlour on your
+              network the moment you open it.
+            </li>
+            <li>
+              <strong>Answers even when home cannot.</strong> With Apple Intelligence, your phone can answer
+              by itself, entirely on device.
+            </li>
+          </ul>
+          <div className="phones">
+            <PhoneTalk />
+            <PhoneHouse />
+          </div>
+        </div>
       </section>
 
       <section className="sheet" aria-labelledby="parts-heading">
         <h2 id="parts-heading">Make it yours</h2>
-        <p>
-          Pick the wake word, the voice, the models and the search you want, all by name in one config file.
-          Teach it your <Link href="/docs/skills">house rules</Link> in plain markdown. And if you want
-          something that is not built in, plug it in as an npm package. The{" "}
-          <Link href="/docs/providers">provider guide</Link> shows you how.
-        </p>
+        <div className="with-art">
+          <p>
+            Pick the wake word, the voice, the models and the search you want, all by name in one config file.
+            Teach it your <Link href="/docs/skills">house rules</Link> in plain markdown. And if you want
+            something that is not built in, plug it in as an npm package. The{" "}
+            <Link href="/docs/providers">provider guide</Link> shows you how.
+          </p>
+          <DesktopSettings />
+        </div>
       </section>
 
       <section className="sheet installation" aria-labelledby="install-heading">

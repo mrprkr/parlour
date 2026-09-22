@@ -747,6 +747,403 @@ body {
   background: var(--lamp);
 }
 
+/* ---------------------------------------------------------- pictures */
+
+/* Text on one side, a picture on the other, stacking on a phone. */
+.with-art {
+  display: grid;
+  gap: 2rem 4rem;
+  align-items: center;
+}
+
+@media (min-width: 56rem) {
+  .with-art {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.with-art > p {
+  max-width: var(--measure);
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.scene,
+.privacy-art {
+  margin: 0;
+  color: var(--ink);
+}
+
+.scene {
+  margin-top: clamp(2.5rem, 5vw, 4rem);
+  border-bottom: 1px solid var(--rule);
+}
+
+.scene svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 15rem;
+}
+
+.scene .said,
+.scene .answer {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 26px;
+  fill: var(--ink);
+}
+
+.scene .answer {
+  fill: var(--accent);
+}
+
+.glow {
+  fill: var(--lamp-glow);
+}
+
+.lit {
+  fill: var(--hearth);
+}
+
+.privacy-art svg {
+  display: block;
+  width: 100%;
+  max-width: 34rem;
+  height: auto;
+}
+
+.privacy-art .stage {
+  font-family: var(--sans);
+  font-size: 14px;
+  fill: var(--ink);
+}
+
+.privacy-art .caption {
+  font-family: var(--sans);
+  font-size: 13px;
+  fill: var(--ink-2);
+}
+
+.privacy-art .faint {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+/* The mockups: the apps drawn with the apps' own tokens. */
+.phone,
+.window {
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--plate);
+  border: 1px solid var(--ink-2);
+}
+
+.phone p,
+.window p {
+  margin: 0;
+}
+
+.app-title {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.1rem;
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--accent);
+}
+
+.state .dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--corner-full);
+  background: var(--hearth);
+}
+
+.state .breathing {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hearth) 25%, transparent);
+  animation: breathe 1100ms ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .state .breathing {
+    animation: none;
+  }
+}
+
+.phones {
+  display: flex;
+  justify-content: center;
+  gap: 1.2rem;
+}
+
+.phone {
+  flex: 0 1 15rem;
+  aspect-ratio: 9 / 19;
+  border-radius: 2.2rem;
+  padding: 0.55rem;
+}
+
+.phone .screen {
+  height: 100%;
+  border-radius: 1.7rem;
+  background: var(--page);
+  border: 1px solid var(--rule);
+  padding: 2.2rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  overflow: hidden;
+}
+
+.phone .app-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.phone .heard {
+  color: var(--ink-2);
+}
+
+.phone .reply {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  line-height: 1.25;
+}
+
+.phone .via,
+.phone .room-name {
+  font-size: 0.66rem;
+  color: var(--ink-2);
+}
+
+.phone .talk {
+  margin-top: auto;
+  text-align: center;
+  padding: 0.7rem;
+  border-radius: var(--corner-full);
+  background: var(--hearth);
+  color: var(--hearth-ink);
+  font-weight: 600;
+}
+
+.phone .house-room {
+  margin-top: 0.9rem;
+}
+
+.phone .room-name {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.accessory {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.accessory .name {
+  flex: 1;
+}
+
+.accessory .mark {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--corner-full);
+  border: 1px solid var(--ink-2);
+}
+
+.accessory .mark.on {
+  background: var(--hearth);
+  border-color: var(--hearth);
+}
+
+.toggle {
+  width: 1.9rem;
+  height: 1.1rem;
+  border-radius: var(--corner-full);
+  background: var(--inset);
+  border: 1px solid var(--rule);
+  position: relative;
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: calc(1.1rem - 4px);
+  height: calc(1.1rem - 4px);
+  border-radius: var(--corner-full);
+  background: var(--plate);
+  border: 1px solid var(--rule);
+}
+
+.toggle.on {
+  background: var(--hearth);
+  border-color: var(--hearth);
+}
+
+.toggle.on::after {
+  left: auto;
+  right: 1px;
+}
+
+.window {
+  width: 100%;
+  max-width: 30rem;
+  justify-self: center;
+  border-radius: var(--corner-lg);
+  overflow: hidden;
+  font-size: 0.85rem;
+}
+
+.window-bar {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.window-bar span {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: var(--corner-full);
+  border: 1px solid var(--rule);
+  background: var(--inset);
+}
+
+.window-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 1.1rem 0.8rem;
+}
+
+.window-tabs {
+  display: flex;
+  gap: 1.2rem;
+  padding: 0 1.1rem;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-2);
+}
+
+.window-tabs span {
+  padding-bottom: 0.55rem;
+}
+
+.window-tabs .current {
+  color: var(--ink);
+  border-bottom: 2px solid var(--accent);
+}
+
+.window-rows {
+  margin: 0;
+  padding: 0.4rem 1.1rem 0.9rem;
+  background: var(--page);
+}
+
+.window-rows div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.window-rows div:last-child {
+  border-bottom: 0;
+}
+
+.window-rows dt {
+  color: var(--ink-2);
+}
+
+.window-rows dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+}
+
+.slider {
+  display: block;
+  width: 8rem;
+  height: 3px;
+  border-radius: var(--corner-full);
+  background: var(--rule);
+  position: relative;
+}
+
+.slider span {
+  position: absolute;
+  inset: 0 50% 0 0;
+  background: var(--accent);
+  border-radius: inherit;
+}
+
+.slider span::after {
+  content: "";
+  position: absolute;
+  right: -0.45rem;
+  top: -0.35rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: var(--corner-full);
+  background: var(--plate);
+  border: 1px solid var(--ink-2);
+}
+
+/* The iOS section: what it does beside what it looks like. */
+.ios-grid {
+  display: grid;
+  gap: 2.5rem 4rem;
+  align-items: center;
+}
+
+.ios-grid .notes {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 56rem) {
+  .ios-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  }
+}
+
+@media (max-width: 30rem) {
+  .phones {
+    gap: 0.7rem;
+  }
+
+  .phone {
+    border-radius: 1.8rem;
+  }
+
+  .phone .screen {
+    border-radius: 1.4rem;
+    padding: 1.6rem 0.7rem 0.7rem;
+    font-size: 0.7rem;
+  }
+
+  .phone .reply {
+    font-size: 0.95rem;
+  }
+}
+
 /* ----------------------------------------------------------- utility */
 
 .visually-hidden {
