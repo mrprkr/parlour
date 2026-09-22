@@ -31,6 +31,10 @@ final class AppSettings {
     didSet { TokenStore.write(token) }
   }
 
+  /// The server the last pairing code named, for this run only: it is what
+  /// Settings says it is now paired with, and what it checks straight away.
+  private(set) var pairedWith: String?
+
   private let defaults: UserDefaults
 
   private enum Key {
@@ -45,6 +49,13 @@ final class AppSettings {
     room = defaults.string(forKey: Key.room) ?? ""
     preferOnDevice = defaults.bool(forKey: Key.preferOnDevice)
     token = TokenStore.read() ?? ""
+  }
+
+  /// Everything a pairing code carries, taken at once.
+  func pair(with link: PairingLink) {
+    serverURL = link.server.absoluteString
+    token = link.token
+    pairedWith = link.name
   }
 
   /// What the client should talk to, if anything. `found` is what Bonjour

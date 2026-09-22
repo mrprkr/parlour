@@ -93,6 +93,7 @@ parlour plugins add <package>|list|remove <package>
 parlour models fetch [--llm auto]|suggest
 parlour config path|show|write|edit
 parlour secrets status|set <NAME>
+parlour pair [--host <name>] [--json]            a code for the iPhone app to scan: address and token
 ```
 
 `parlour <command> --help` shows the flags for each one. `parlour connectors

@@ -32,7 +32,8 @@ pnpm exec nx run ios:xcodetest    # run ParlourTests
 ## What it asks for, and why
 
 Every string is in `Parlour/Resources/Info.plist`, and the Settings tab lists
-the same four with a mark against each, so nothing is asked for out of sight.
+the first four with a mark against each, so nothing is asked for out of sight.
+The camera is asked for only when a pairing code is scanned.
 
 | Permission | What it buys | Raised by |
 | --- | --- | --- |
@@ -40,6 +41,7 @@ the same four with a mark against each, so nothing is asked for out of sight.
 | Local network | Finding the server with Bonjour, then talking to it | Opening the app |
 | HomeKit | The rooms and accessories on the House tab | Opening that tab |
 | Speech recognition | Making out a request on the phone when the server cannot be reached | Only when the on-device answer is switched on |
+| Camera | Scanning the pairing code `parlour pair` shows | Tapping Scan pairing code |
 
 HomeKit and multicast are entitlements as well as prompts, in
 `Parlour/Resources/Parlour.entitlements`. Plain HTTP to the house is allowed by
@@ -53,6 +55,16 @@ Bonjour hands back a service rather than an address, it opens a connection to
 the service and reads the host and port off the resolved path. Anything it
 finds is offered in Settings; typing an address in wins over anything found,
 and the address the app keeps is the only server it talks to.
+
+## Pairing
+
+`parlour pair` on the Mac draws a QR code holding one link,
+`parlour://pair?url=...&token=...&name=...`. Settings has Scan pairing code,
+which reads it with VisionKit's scanner; the Camera app reads it too, and
+opens the app through the `parlour` URL scheme in `Info.plist`. Either way the
+address and the token are taken together (`Core/PairingLink.swift`), the token
+goes to the keychain as if it were typed, and Settings checks the server
+straight away. The desktop app shows the same code under On the network.
 
 ## The model on the phone
 

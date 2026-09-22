@@ -29,6 +29,7 @@ const COMMANDS: Record<string, () => Promise<{ command: Command }>> = {
   config: () => import("./config.ts"),
   secrets: () => import("./secrets.ts"),
   models: () => import("./models.ts"),
+  pair: () => import("./pair.ts"),
 };
 
 const SUMMARIES: Record<keyof typeof COMMANDS, string> = {
@@ -46,6 +47,7 @@ const SUMMARIES: Record<keyof typeof COMMANDS, string> = {
   models: "fetch the wake word and whisper models",
   config: "path, show, write, edit",
   secrets: "status, set",
+  pair: "show a code for the iPhone app to scan: this server's address and token",
 };
 
 function help(): string {

@@ -852,6 +852,7 @@ function afterword(config: Config, paths: Paths, token: string): void {
       `    Phones:          http://${hostname()}:${port}`,
       `    Home Assistant:  http://${hostname()}:${port}/v1  (OpenAI Conversation integration)`,
       "    Satellites:      nothing to type. They find this machine by name.",
+      "    iPhone app:      parlour pair, and scan the code it shows.",
       `    The token is in ${paths.secretsFile} as PARLOUR_TOKEN. Satellites need the same one.`,
       "",
     );
