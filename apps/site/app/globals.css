@@ -851,16 +851,98 @@ body {
   color: var(--ink);
 }
 
+/*
+ * The drawings are filled but colourless: every shape is a tint of the ink,
+ * so they sit quietly until photographs replace them. The lamp's light and
+ * the green status lights are the only colour, as they always were.
+ */
+.scene,
+.privacy-art,
+.topology {
+  --art-wall: var(--plate);
+  --art-paper: color-mix(in srgb, var(--rule) 45%, var(--plate));
+  --art-floor: color-mix(in srgb, var(--ink) 6%, var(--page));
+  --art-board: color-mix(in srgb, var(--ink) 14%, var(--page));
+  --art-shadow: color-mix(in srgb, var(--ink) 12%, transparent);
+  --art-fabric: color-mix(in srgb, var(--ink) 9%, var(--page));
+  --art-fabric-deep: color-mix(in srgb, var(--ink) 16%, var(--page));
+  --art-wood: color-mix(in srgb, var(--ink) 5%, var(--page));
+  --art-wood-deep: color-mix(in srgb, var(--ink) 12%, var(--page));
+  --art-metal: color-mix(in srgb, var(--ink) 4%, var(--plate));
+  --art-glass: color-mix(in srgb, var(--ink) 22%, var(--page));
+  --art-leaf: color-mix(in srgb, var(--ink) 20%, var(--page));
+  --art-clay: color-mix(in srgb, var(--ink) 11%, var(--page));
+  --art-shade: var(--page);
+}
+
+.a-wall {
+  fill: var(--art-wall);
+}
+.a-paper {
+  stroke: var(--art-paper);
+}
+.a-floor {
+  fill: var(--art-floor);
+}
+.a-board {
+  stroke: var(--art-board);
+}
+.a-shadow {
+  fill: var(--art-shadow);
+  stroke: none;
+}
+.a-fabric {
+  fill: var(--art-fabric);
+}
+.a-fabric-deep {
+  fill: var(--art-fabric-deep);
+}
+.a-wood {
+  fill: var(--art-wood);
+}
+.a-wood-deep {
+  fill: var(--art-wood-deep);
+}
+.a-metal {
+  fill: var(--art-metal);
+}
+.a-glass {
+  fill: var(--art-glass);
+}
+.a-leaf {
+  fill: var(--art-leaf);
+}
+.a-clay {
+  fill: var(--art-clay);
+}
+.a-shade {
+  fill: var(--art-shade);
+}
+.a-page {
+  fill: var(--page);
+}
+.a-ink {
+  fill: var(--ink);
+}
+.a-light {
+  stop-color: var(--lamp);
+}
+.a-ring {
+  stroke: var(--ink);
+}
+
 .scene {
   margin-top: clamp(2.5rem, 5vw, 4rem);
-  border-bottom: 1px solid var(--rule);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  overflow: hidden;
 }
 
 .scene svg {
   display: block;
   width: 100%;
   height: auto;
-  min-height: 15rem;
+  min-height: 16rem;
 }
 
 .scene .said,
@@ -873,10 +955,6 @@ body {
 
 .scene .answer {
   fill: var(--accent);
-}
-
-.glow {
-  fill: var(--lamp-glow);
 }
 
 .lit {
@@ -1507,8 +1585,6 @@ body {
   }
 
   .scene .glow {
-    transform-box: fill-box;
-    transform-origin: center;
     animation: dim 1400ms cubic-bezier(0.16, 1, 0.3, 1) 2500ms both;
   }
 }
@@ -1538,18 +1614,16 @@ body {
 @keyframes dim {
   from {
     opacity: 1;
-    scale: 1;
   }
   to {
-    opacity: 0.55;
-    scale: 0.82;
+    opacity: 0.45;
   }
 }
 
 /* Reduced motion lands on the same final frame: the lamp already dimmed. */
 @media (prefers-reduced-motion: reduce) {
   .scene .glow {
-    opacity: 0.55;
+    opacity: 0.45;
   }
 }
 
