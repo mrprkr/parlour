@@ -105,7 +105,7 @@ design tokens or CI need none.
 
 For maintainers. `pnpm release:version` gathers the changesets into
 `packages/parlour/CHANGELOG.md`, bumps the package, and writes the same
-version into the desktop app's `package.json`, `tauri.conf.json`,
+version into the desktop app's `tauri.conf.json`,
 `Cargo.toml` and `Cargo.lock`. You rarely run it yourself: on every push to
 main, [`.github/workflows/changesets.yml`](.github/workflows/changesets.yml)
 runs it and keeps a "Release the pending changesets" pull request up to date.

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 /**
  * `pnpm version:set X.Y.Z`. The package and the app share one version, and
- * it is written in five places that three different tools read, so bumping
+ * it is written in four places that three different tools read, so bumping
  * by hand is how they drift apart. This rewrites all of them and prints what
  * changed. It is a no-op when every file already carries the version asked
  * for, which is how the tree is checked before a release.
@@ -41,10 +41,14 @@ function crateName() {
  * the next build anyway, but doing it here keeps that build from leaving
  * the tree dirty straight after a release. A lock that predates the crate's
  * current name has no entry to rewrite, and says so rather than failing.
+ *
+ * The desktop app's package.json is left out on purpose. Tauri takes the
+ * app's version from tauri.conf.json, and changesets/action reads a
+ * CHANGELOG.md for every workspace package whose version moved, private or
+ * not, so bumping it there fails the version pull request.
  */
 const TARGETS = [
   { file: "packages/parlour/package.json", find: /^(\s*"version":\s*")([^"]*)(")/m },
-  { file: "apps/desktop/package.json", find: /^(\s*"version":\s*")([^"]*)(")/m },
   { file: "apps/desktop/src-tauri/tauri.conf.json", find: /^(\s*"version":\s*")([^"]*)(")/m },
   { file: CARGO_TOML, find: /(^\[package\]\n(?:(?!\[)[^\n]*\n)*?version = ")([^"]*)(")/m },
   {
