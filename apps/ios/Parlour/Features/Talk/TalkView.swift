@@ -21,6 +21,7 @@ struct TalkView: View {
   @State private var recorder = Recorder()
   @State private var speaker = Speaker()
   @State private var holding = false
+  @State private var starting: Task<Void, Never>?
 
   var body: some View {
     Wall {
@@ -104,22 +105,35 @@ struct TalkView: View {
   // MARK: - The turn
 
   private func begin() {
+    guard !holding else { return }
     failure = nil
     speaker.stop()
-    do {
-      try recorder.start()
-      holding = true
-      state = .listening
-    } catch RecorderError.denied {
-      Task { await askForMicrophone() }
-    } catch {
-      failure = error.localizedDescription
+    // Claimed before the recorder is ready, because the gesture fires again
+    // for every movement of the finger and must not start twice.
+    holding = true
+    state = .listening
+    starting = Task {
+      do {
+        try await recorder.start()
+      } catch RecorderError.denied {
+        holding = false
+        state = .idle
+        await askForMicrophone()
+      } catch {
+        holding = false
+        state = .idle
+        failure = error.localizedDescription
+      }
     }
   }
 
   private func end() async {
     guard holding else { return }
     holding = false
+    // A quick tap lets go before the recorder has finished starting; it can
+    // only be stopped once the start has settled.
+    await starting?.value
+    starting = nil
     do {
       let wav = try recorder.finish()
       state = .thinking
@@ -201,8 +215,9 @@ final class Speaker {
   func play(_ wav: Data) async {
     stop()
     do {
-      try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
-      try AVAudioSession.sharedInstance().setActive(true)
+      try await SharedAudioSession.activate { session in
+        try session.setCategory(.playback, mode: .spokenAudio)
+      }
       let player = try AVAudioPlayer(data: wav)
       self.player = player
       player.play()
@@ -218,7 +233,7 @@ final class Speaker {
   func stop() {
     player?.stop()
     player = nil
-    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    SharedAudioSession.deactivate()
   }
 }
 
