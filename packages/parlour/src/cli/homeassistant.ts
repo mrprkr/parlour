@@ -133,7 +133,7 @@ export async function setupHomeAssistant(options: HouseOptions): Promise<HomeAss
     muteEntity: options.muteEntity,
   };
 
-  report.step("Home Assistant");
+  // The heading is the caller's: init's wizard draws its own.
   if (yes || !canAsk()) {
     if (kept.token && (await tokenWorks(kept.url, kept.token, fetchImpl))) report.ok(`reached ${kept.url}`);
     else if (kept.token)

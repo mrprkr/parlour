@@ -135,7 +135,7 @@ export async function serviceSpecs(
           String(portOf(local.baseUrl) ?? MANAGED_LLM_PORT),
           "--model",
           model.file,
-          // The name the server answers to, so config can say "qwen2.5-7b-instruct"
+          // The name the server answers to, so config can say "qwen3.5-9b"
           // rather than the file name of whatever quantisation was fetched.
           "--alias",
           model.id,
@@ -143,6 +143,12 @@ export async function serviceSpecs(
           // the model has been trained to emit calls from. Without it the
           // house has a model that talks and never touches a light.
           "--jinja",
+          // Every model in the catalogue reasons before it answers unless told
+          // not to, and a paragraph of thinking is seconds of silence after a
+          // question asked out loud. Anything that needs thought is what the
+          // cloud model is for.
+          "--chat-template-kwargs",
+          JSON.stringify({ enable_thinking: false }),
           "--ctx-size",
           "8192",
           // Everything on the GPU where there is one. llama.cpp ignores this

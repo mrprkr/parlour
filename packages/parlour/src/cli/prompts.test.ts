@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import { test } from "node:test";
-import { select } from "./prompts.ts";
+import { allowBack, ask, GoBack, select, splitKeys } from "./prompts.ts";
 
 /**
  * A terminal on both ends, which is what `canAsk` looks for, with what was
@@ -107,4 +107,71 @@ test("without a terminal select takes the default, as every other prompt does", 
     ),
     "b",
   );
+});
+
+test("Escape goes back only while the wizard allows it, from a list and from typing alike", async () => {
+  const tty = terminal();
+  try {
+    const choices = [
+      { value: 1, label: "One" },
+      { value: 2, label: "Two" },
+    ];
+    // Outside the wizard a stray Escape does nothing and the question stays.
+    const ignored = select("Pick", choices, 1);
+    tty.keys.write(ESC);
+    tty.keys.write("\r");
+    assert.equal(await ignored, 1);
+
+    allowBack(true);
+    const list = select("Pick", choices, 1);
+    tty.keys.write(ESC);
+    await assert.rejects(list, GoBack);
+
+    const typed = ask("Room", "kitchen");
+    tty.keys.write("hall");
+    tty.keys.write(ESC);
+    await assert.rejects(typed, GoBack);
+  } finally {
+    allowBack(false);
+    tty.restore();
+  }
+});
+
+test("ask edits in place: backspace, arrows ignored, and an empty line is the default", async () => {
+  const tty = terminal();
+  try {
+    const edited = ask("Room", "kitchen");
+    tty.keys.write("halx");
+    tty.keys.write("\x7f");
+    tty.keys.write(`${ESC}[D`);
+    tty.keys.write("l\r");
+    assert.equal(await edited, "hall");
+
+    const empty = ask("Room", "kitchen");
+    tty.keys.write("\r");
+    assert.equal(await empty, "kitchen");
+  } finally {
+    tty.restore();
+  }
+});
+
+test("several keys in one chunk are several keys, and an arrow stays in one piece", async () => {
+  assert.deepEqual(splitKeys(`${ESC}[B${ESC}[B\r`), [`${ESC}[B`, `${ESC}[B`, "\r"]);
+  assert.deepEqual(splitKeys(`ab${ESC}`), ["a", "b", ESC]);
+  const tty = terminal();
+  try {
+    const picked = select(
+      "Pick",
+      [
+        { value: 1, label: "One" },
+        { value: 2, label: "Two" },
+        { value: 3, label: "Three" },
+      ],
+      1,
+    );
+    tty.keys.write(`${ESC}[B${ESC}[B\r`);
+    assert.equal(await picked, 3);
+  } finally {
+    tty.restore();
+  }
 });

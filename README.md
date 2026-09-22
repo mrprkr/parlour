@@ -46,10 +46,12 @@ parlour start         # the real thing, unless init already set it to run at log
 `init` walks you through it with arrow keys and a handful of questions: what
 this machine is, which local model to run, your Home Assistant, an Anthropic
 key if you would like the cloud behind it, and preferences like the wake word
-and the voice. It writes `~/.config/parlour/config.json` and `secrets.env`,
-offers to run Parlour at login, and finishes by running `parlour doctor` so
-you know everything is in place. Changed your mind about something? Run
-`init` again: every answer defaults to what is already set.
+and the voice. Escape goes back a question, and nothing is downloaded or
+written until a last screen has shown every answer and you have said yes. It
+writes `~/.config/parlour/config.json` and `secrets.env`, offers to run
+Parlour at login, and finishes by running `parlour doctor` so you know
+everything is in place. Changed your mind later? Run `init` again: every
+answer defaults to what is already set.
 
 **The local model comes with it.** `init` looks at how much memory the Mac
 has, suggests the largest model it can hold comfortably, downloads it, and

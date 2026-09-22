@@ -9,6 +9,7 @@ import type { Check } from "../core/ports.ts";
 export const bold = (text: string) => (process.stdout.isTTY ? `\x1b[1m${text}\x1b[0m` : text);
 /** For the part of a line that is there to be skimmed past, not read. */
 export const dim = (text: string) => (process.stdout.isTTY ? `\x1b[2m${text}\x1b[0m` : text);
+export const green = (text: string) => (process.stdout.isTTY ? `\x1b[32m${text}\x1b[0m` : text);
 const yellow = (text: string) => (process.stdout.isTTY ? `\x1b[33m${text}\x1b[0m` : text);
 const red = (text: string) => (process.stderr.isTTY ? `\x1b[31m${text}\x1b[0m` : text);
 

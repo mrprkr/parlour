@@ -33,12 +33,12 @@ test("llama.cpp is installed only for a house that asked Parlour to run the mode
   assert.deepEqual(formulaeFor(parseConfig({})), ["ffmpeg", "whisper-cpp"]);
   assert.equal(localModelFor(parseConfig({})), null);
 
-  const managed = parseConfig({ llm: { local: { managed: true, model: "qwen2.5-7b-instruct" } } });
+  const managed = parseConfig({ llm: { local: { managed: true, model: "qwen3.5-9b" } } });
   assert.ok(formulaeFor(managed).includes("llama.cpp"));
   assert.ok(formulaeFor(parseConfig({ stt: { provider: "yap" } })).includes("yap"));
   assert.ok(!formulaeFor(parseConfig({})).includes("yap"));
-  assert.equal(localModelFor(managed)?.file, "Qwen2.5-7B-Instruct-Q4_K_M.gguf");
-  assert.equal(modelsFor(managed)?.llm?.id, "qwen2.5-7b-instruct");
+  assert.equal(localModelFor(managed)?.file, "Qwen3.5-9B-Q4_K_M.gguf");
+  assert.equal(modelsFor(managed)?.llm?.id, "qwen3.5-9b");
 
   // A satellite has no model server of its own, whatever the llm block says.
   assert.ok(!formulaeFor(parseConfig({ role: "satellite", ...{} })).includes("llama.cpp"));
