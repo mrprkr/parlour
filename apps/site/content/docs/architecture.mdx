@@ -13,7 +13,7 @@ packages/parlour/src/
                  session.ts, router.ts, queue.ts, triage.ts, tasks.ts, decision.ts,
                  dispatch.ts, loop.ts, speaker.ts, registry.ts, timers.ts, prompt.ts, events.ts,
                  logger.ts, services.ts
-  providers/     audio/ffmpeg, audio/afplay, wake/openwakeword, stt/whisper-cpp,
+  providers/     audio/ffmpeg, audio/afplay, wake/openwakeword, stt/whisper-cpp, stt/yap,
                  tts/kokoro, tts/macos-say, llm/openai-compatible, llm/anthropic, llm/ai-sdk,
                  search/searxng, search/brave, secrets/macos-keychain, secrets/file,
                  service/launchd
@@ -38,7 +38,7 @@ a test and to fill from an npm package.
 | `AudioSource` | Yields 16 kHz mono frames of 1280 samples (80 ms). | `ffmpeg` on avfoundation |
 | `AudioSink` | Plays a WAV, and can be stopped. | `afplay` |
 | `WakeWordEngine` | Loads once, hands out one `WakeWordDetector` per stream. | `openwakeword` |
-| `SpeechToText` | WAV in, text out. | `whisper-cpp` |
+| `SpeechToText` | WAV in, text out. | `whisper-cpp`, `yap` |
 | `TextToSpeech` | Text in, WAV out, with a `warm()` to load before the first reply. | `kokoro`, `macos-say` |
 | `ChatModel` | Messages and tool specs in, a completion out. | `openai-compatible`, `anthropic`, `ai-sdk` |
 | `SearchProvider` | A query in, results out. | `searxng`, `brave` |

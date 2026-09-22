@@ -77,6 +77,25 @@ fallback off). `macos-say` ignores a Kokoro voice id and uses the system
 voice. You can also give it a macOS voice name of its own (`"voice": "Daniel"`
 when `provider` is `macos-say`).
 
+## Speech to text
+
+whisper.cpp is the default, kept warm as a service. On macOS 26 you can use
+Apple's own on-device recogniser instead, through the
+[yap](https://github.com/finnvoor/yap) command line tool: nothing to download
+and no server to run.
+
+```sh
+brew install yap
+```
+
+```json
+{ "stt": { "provider": "yap", "locale": "en-GB" } }
+```
+
+`locale` is optional and defaults to the Mac's own. Run `parlour service
+install` afterwards so the whisper service is taken away, and `parlour doctor`
+to check yap is found.
+
 ## The models
 
 ```json

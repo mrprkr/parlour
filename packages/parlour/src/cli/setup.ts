@@ -50,7 +50,10 @@ export function formulaeFor(config: Config): string[] {
   const local = config.llm.local as { managed?: boolean };
   const managed =
     config.role === "server" && config.llm.local.provider === "openai-compatible" && local.managed;
-  return managed ? [...HOMEBREW_FORMULAE, LLAMA_FORMULA] : [...HOMEBREW_FORMULAE];
+  const formulae: string[] = [...HOMEBREW_FORMULAE];
+  if (config.stt.provider === "yap") formulae.push("yap");
+  if (managed) formulae.push(LLAMA_FORMULA);
+  return formulae;
 }
 
 /**
@@ -123,7 +126,10 @@ export async function runSetup(options: SetupOptions, report: Reporter): Promise
   else report.ok(`node ${process.version}`);
   if (await findOnPath("ffmpeg")) report.ok("ffmpeg");
   else fail("ffmpeg is missing. Without it there is no microphone.");
-  if (await findOnPath("whisper-server")) report.ok("whisper-server");
+  if (config.stt.provider === "yap") {
+    if (await findOnPath("yap")) report.ok("yap");
+    else report.warn("yap is missing, so there is no speech to text. brew install yap");
+  } else if (await findOnPath("whisper-server")) report.ok("whisper-server");
   else report.warn("whisper-server is missing, so there is no speech to text.");
   if (formulaeFor(config).includes(LLAMA_FORMULA)) {
     if (await findOnPath("llama-server")) report.ok("llama-server");

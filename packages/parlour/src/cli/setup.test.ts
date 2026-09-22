@@ -35,6 +35,8 @@ test("llama.cpp is installed only for a house that asked Parlour to run the mode
 
   const managed = parseConfig({ llm: { local: { managed: true, model: "qwen2.5-7b-instruct" } } });
   assert.ok(formulaeFor(managed).includes("llama.cpp"));
+  assert.ok(formulaeFor(parseConfig({ stt: { provider: "yap" } })).includes("yap"));
+  assert.ok(!formulaeFor(parseConfig({})).includes("yap"));
   assert.equal(localModelFor(managed)?.file, "Qwen2.5-7B-Instruct-Q4_K_M.gguf");
   assert.equal(modelsFor(managed)?.llm?.id, "qwen2.5-7b-instruct");
 
