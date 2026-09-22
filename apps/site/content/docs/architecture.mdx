@@ -1,7 +1,11 @@
-If you want to know how Parlour is put together before you change it, this
-is the page. One npm package, `parlour`, holds a pure core, the built-in
-providers behind its ports, the integrations, the network server and the
-CLI. The desktop app in `apps/desktop` drives the CLI and knows nothing else.
+---
+title: Architecture
+description: The ports, the provider registry, the session state machine, and why each part was chosen.
+---
+
+How Parlour is put together, for anyone who wants to change it. One npm
+package, `parlour`, holds a pure core, the built-in providers behind its
+ports, the integrations, the network server and the CLI. The desktop app in `apps/desktop` drives the CLI and knows nothing else.
 
 ```text
 packages/parlour/src/
@@ -20,8 +24,8 @@ packages/parlour/src/
 ```
 
 Nothing in `core/` imports from `providers/` except `core/builtins.ts`. That
-file exists only to register the built-ins, and it is the one seam a program
-embedding Parlour with providers of its own can leave out.
+file only registers the built-ins, so a program embedding Parlour with
+providers of its own can leave it out.
 
 ## Ports
 
@@ -42,9 +46,9 @@ a test and to fill from an npm package.
 | `ServiceManager` | Keeps Parlour running at login. | `launchd` |
 | `Integration` | A named source of tools, prompt lines and a gate. | `home-assistant`, `mcp`, `connectors` |
 
-Any of them can also expose `doctor(): Promise<Check[]>`, and `parlour
-doctor` is simply every configured part's checks joined together, plus three
-of core's own: the config parses, the network is let in, and something keeps
+Any of them can also expose `doctor(): Promise<Check[]>`. `parlour doctor`
+is every configured part's checks joined together, plus three of core's
+own: the config parses, the network is let in, and something keeps
 Parlour running.
 
 Two things are composed in core rather than left to a provider:
@@ -72,8 +76,8 @@ when they are imported. Config selects each slot by name:
 
 Core only knows about the `provider` key of each slice. The rest (`voice`,
 `url`, `model` and so on) passes straight through and is validated by the
-provider's own Zod schema when it is created, so core has no idea that
-Kokoro has a voice or that whisper has a URL.
+provider's own Zod schema when it is created. Core does not need to know
+that Kokoro has a voice or that whisper has a URL.
 
 A name that is not registered is tried as a package: `await import(name)`,
 and the default export is accepted when its `kind` matches. That is the
@@ -112,14 +116,13 @@ model with a small context cannot carry every house rule on every turn.
 
 The cloud model and web search are the two slots the house can run without.
 A provider that cannot start (nearly always a missing key) is reported by
-the doctor and left out. A name that leads nowhere, on the other hand, is a
-mistake in config and is thrown, because a house that quietly answers with
-the wrong model is worse than one that refuses to start.
+the doctor and left out. A name that leads nowhere is a mistake in config and
+throws, so a typo cannot quietly leave you with the wrong model.
 
 ## The session
 
 `core/session.ts` is one state machine over a stream of 80 ms frames. It
-does not know or care where the frames come from: this machine's
+does not know where the frames come from: this machine's
 microphone, a satellite relaying audio, a phone or custom hardware all feed
 the same object.
 
@@ -279,7 +282,7 @@ Nothing else about Linux is done yet, and we would be glad of help with it.
 timestamp. The desktop app reads these to draw its status rather than
 scraping log text. Without the flag, stdout is a log for a person.
 
-## Why the pieces are the pieces
+## Why each part was chosen
 
 | Stage | Choice | Why |
 | --- | --- | --- |
@@ -290,4 +293,5 @@ scraping log text. Without the flag, stdout is a log for a person.
 | Escalation | Claude with server-side web search | The local model is fast and private but wrong more often. Handing over is cheap; being wrong out loud is not. |
 | Speech | Kokoro 82M, ONNX | Close to a cloud voice, runs in process, and has British voices. `say` is the fallback for when it fails. |
 
-Latency adds up, so each stage is chosen to be fast rather than best.
+Every stage adds to the wait before an answer, so each is chosen to be fast
+rather than best.

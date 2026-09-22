@@ -30,6 +30,9 @@ export function InstallButton() {
       aria-label="Copy the install command"
       onClick={copy}
     >
+      <span className="prompt" aria-hidden="true">
+        $
+      </span>
       <code>{command}</code>
       <span className="copied" aria-live="polite">
         {note}

@@ -118,6 +118,23 @@ and a fake in `testing/`; open an issue first, a port is a promise to every prov
 - Commit messages are one imperative sentence, as the history reads. One change per pull request.
 - Releasing: `pnpm version:set X.Y.Z`, then a `vX.Y.Z` tag publishes, with notes from the pull requests.
 
+## This is a public repository
+
+Parlour is open source under MIT. Everything pushed here is world readable, permanently, including
+commit messages, pull request titles and bodies, issues, comments and code review threads. Write as
+though a stranger is reading, because one is.
+
+- Never put Claude session information in a pull request description, a commit message, an issue, a
+  comment or any other file in the repository. That means no `claude.ai/code/session_...` links, no
+  session ids, no conversation or transcript links, no run or task ids, and no model identifiers.
+  They are useless to anyone outside the session and they leak how the work was done.
+- Do not paste agent transcripts, internal tool output, reasoning traces or prompts into a pull
+  request, an issue or a comment. Describe the change and why, not the process that produced it.
+- A pull request body explains what changed, why, and how it was verified. Nothing else belongs in
+  it: no credentials, tokens, environment variables, absolute paths from a developer machine,
+  internal hostnames or private URLs.
+- The same goes for anything the site or the CLI prints: it is public too.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

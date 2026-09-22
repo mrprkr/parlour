@@ -26,6 +26,7 @@ apps/desktop/src-tauri/icons/
 apps/site/.next/
 apps/site/next-env.d.ts
 apps/site/tsconfig.tsbuildinfo
+apps/site/.source/
 
 # Claude Code's own worktrees; settings.json next to it is shared and checked in.
 .claude/worktrees/
