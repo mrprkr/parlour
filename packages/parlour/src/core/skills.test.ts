@@ -46,6 +46,15 @@ test("a skill is frontmatter over a body, and the filename names it when the fro
   assert.equal("description" in bare && bare.description, "Turn the kettle on.");
 });
 
+test("frontmatter still accepts spaces around the colon", () => {
+  const parsed = parseSkill(
+    "---\nname : bedtime\ndescription : What goodnight means\n---\nPorch light on.",
+    "/x.md",
+  );
+  assert.equal("name" in parsed && parsed.name, "bedtime");
+  assert.equal("description" in parsed && parsed.description, "What goodnight means");
+});
+
 test("a name the prompt and the tool schema could not carry is a problem, not a skill", () => {
   const spaced = parseSkill("---\nname: bed time\n---\nbody", "/x.md");
   assert.match("detail" in spaced ? spaced.detail : "", /not a usable skill name/);

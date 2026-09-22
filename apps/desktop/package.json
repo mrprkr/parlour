@@ -1,6 +1,6 @@
 {
   "name": "@parlour/desktop",
-  "version": "0.3.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Menu bar app that runs and configures Parlour",
   "scripts": {

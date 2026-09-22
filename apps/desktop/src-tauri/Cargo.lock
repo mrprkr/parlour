@@ -2162,7 +2162,7 @@ dependencies = [
 
 [[package]]
 name = "parlour-desktop"
-version = "0.3.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",

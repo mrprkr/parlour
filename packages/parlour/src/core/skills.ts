@@ -73,8 +73,12 @@ export function parseSkill(text: string, source: string): Skill | SkillProblem {
   const fields: Record<string, string> = {};
   if (match) {
     for (const line of (match[1] as string).split(/\r?\n/)) {
-      const pair = /^([A-Za-z][\w-]*)\s*:\s*(.*)$/.exec(line.trim());
-      if (pair) fields[(pair[1] as string).toLowerCase()] = unquote((pair[2] as string).trim());
+      const trimmed = line.trim();
+      const split = trimmed.indexOf(":");
+      if (split < 1) continue;
+      const key = trimmed.slice(0, split).trim();
+      if (!/^[A-Za-z][\w-]*$/.test(key)) continue;
+      fields[key.toLowerCase()] = unquote(trimmed.slice(split + 1).trim());
     }
   }
   const body = (match ? text.slice(match[0].length) : text).trim();
