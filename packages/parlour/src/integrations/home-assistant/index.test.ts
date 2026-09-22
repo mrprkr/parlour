@@ -77,11 +77,7 @@ test("without a token there are no tools and no throw", async () => {
 });
 
 test("rest tools are named ha_get_state and ha_call_service", async () => {
-  const i = await createHomeAssistant(
-    { rest: true, mcp: false, assist: false },
-    ctxWith({ haToken: "t" }),
-    fetchNever,
-  );
+  const i = await createHomeAssistant({ rest: true, mcp: false }, ctxWith({ haToken: "t" }), fetchNever);
   assert.deepEqual(
     (await i.tools()).map((tool) => tool.name),
     ["ha_get_state", "ha_call_service"],
@@ -89,7 +85,7 @@ test("rest tools are named ha_get_state and ha_call_service", async () => {
 });
 
 test("assist adds ha_assist after the rest tools", async () => {
-  const i = await createHomeAssistant({ mcp: false }, ctxWith({ haToken: "t" }), fetchNever);
+  const i = await createHomeAssistant({ mcp: false, assist: true }, ctxWith({ haToken: "t" }), fetchNever);
   assert.deepEqual(
     (await i.tools()).map((tool) => tool.name),
     ["ha_get_state", "ha_call_service", "ha_assist"],
@@ -106,7 +102,7 @@ const assistAnswers = (response: unknown, calls: { url: string; body: unknown }[
 test("ha_assist asks the built-in agent and returns what it said", async () => {
   const calls: { url: string; body: unknown }[] = [];
   const i = await createHomeAssistant(
-    { url: "http://h:8123", mcp: false, rest: false, language: "en" },
+    { url: "http://h:8123", mcp: false, rest: false, assist: true, language: "en" },
     ctxWith({ haToken: "t" }),
     assistAnswers({ response_type: "action_done", speech: { plain: { speech: "Good night" } } }, calls),
   );
@@ -123,7 +119,7 @@ test("ha_assist asks the built-in agent and returns what it said", async () => {
 test("ha_assist leaves the language to Home Assistant when none is set", async () => {
   const calls: { url: string; body: unknown }[] = [];
   const i = await createHomeAssistant(
-    { mcp: false, rest: false },
+    { mcp: false, rest: false, assist: true },
     ctxWith({ haToken: "t" }),
     assistAnswers({ response_type: "action_done" }, calls),
   );
@@ -133,7 +129,7 @@ test("ha_assist leaves the language to Home Assistant when none is set", async (
 
 test("ha_assist throws what Assist said when it could not handle the command", async () => {
   const i = await createHomeAssistant(
-    { mcp: false, rest: false },
+    { mcp: false, rest: false, assist: true },
     ctxWith({ haToken: "t" }),
     assistAnswers({
       response_type: "error",
@@ -205,7 +201,7 @@ test("the definition registers as an integration with defaults", () => {
     url: "http://homeassistant.local:8123",
     mcp: true,
     rest: true,
-    assist: true,
+    assist: false,
     language: "",
     muteEntity: "",
   });

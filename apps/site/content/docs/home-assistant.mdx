@@ -14,7 +14,7 @@ prompt, and a mute switch. It is on by default and lives under
       "url": "http://homeassistant.local:8123",
       "mcp": true,
       "rest": true,
-      "assist": true,
+      "assist": false,
       "language": "",
       "muteEntity": ""
     }
@@ -69,9 +69,10 @@ Tools come from three places, and the model sees them as one list:
   service. Its description tells the model to use it only when no more
   specific tool fits.
 
-- **Through Assist** (`assist: true`). `ha_assist` passes a command, word for
-  word, to [Assist](https://www.home-assistant.io/voice_control/), Home
-  Assistant's own voice assistant, and returns what it said. See below.
+- **Through Assist** (`assist: true`, off by default). `ha_assist` passes a
+  command, word for word, to
+  [Assist](https://www.home-assistant.io/voice_control/), Home Assistant's own
+  voice assistant, and returns what it said. See below.
 
 Parlour connects to the MCP endpoint at `<url>/mcp_server/sse` with the token.
 If that connection fails, the failure is logged and the REST tools still reach
@@ -79,8 +80,15 @@ the house.
 
 ## Assist
 
-Assist is Home Assistant's built-in conversation agent. What you set up for it
-keeps working when Parlour is the one listening:
+Assist is Home Assistant's built-in conversation agent. It is off by default,
+because the MCP tools are the better way to control the house: the model sees
+each entity and action and picks the right one, where Assist has to match the
+words. Turn it on when you have set up Assist for things MCP cannot reach, and
+it keeps working when Parlour is the one listening:
+
+```json
+{ "integrations": { "home-assistant": { "assist": true } } }
+```
 
 - **Custom sentences.** An automation with a sentence trigger, such as
   "good night" or "movie time", only fires when Assist hears the sentence.
@@ -102,8 +110,7 @@ the MCP Server integration publishes.
 
 To make an announcement on a Home Assistant voice satellite, such as a Voice
 PE, the model can call `assist_satellite.announce` with `ha_call_service`,
-with a `message` in its data. Turn `assist` off to leave custom sentences to
-Home Assistant's own satellites.
+with a `message` in its data. That needs only the REST tools, not `assist`.
 
 ## Home Assistant as a client
 

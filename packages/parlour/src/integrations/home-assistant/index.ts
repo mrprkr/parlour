@@ -13,9 +13,11 @@ export const HomeAssistantOptions = z.object({
   rest: z.boolean().default(true),
   /**
    * Add `ha_assist`, which hands a command to Home Assistant's own Assist, so
-   * its custom sentences and sentence-triggered automations still fire.
+   * its custom sentences and sentence-triggered automations still fire. Off by
+   * default: the MCP tools control the house better, and a second way to do
+   * the same thing only gives the model a worse choice to make.
    */
-  assist: z.boolean().default(true),
+  assist: z.boolean().default(false),
   /** The language Assist parses in. Empty means Home Assistant's own default. */
   language: z.string().default(""),
   /** An entity that, when on, makes the agent ignore its wake word. Empty means never. */
