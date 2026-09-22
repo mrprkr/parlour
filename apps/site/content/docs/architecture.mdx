@@ -9,14 +9,15 @@ ports, the integrations, the network server and the CLI. The desktop app in `app
 
 ```text
 packages/parlour/src/
-  core/          ports.ts, providers.ts, config.ts, paths.ts, secrets.ts, agent.ts,
-                 session.ts, router.ts, queue.ts, triage.ts, tasks.ts, decision.ts,
-                 dispatch.ts, loop.ts, speaker.ts, registry.ts, timers.ts, prompt.ts, events.ts,
-                 logger.ts, services.ts
+  core/          ports.ts, providers.ts, builtins.ts, plugins.ts, skills.ts, config.ts,
+                 migrate.ts, paths.ts, secrets.ts, agent.ts, session.ts, audio.ts, endpoint.ts,
+                 text.ts, router.ts, queue.ts, triage.ts, tasks.ts, decision.ts, dispatch.ts,
+                 loop.ts, speaker.ts, registry.ts, search.ts, timers.ts, prompt.ts, types.ts,
+                 events.ts, logger.ts, process.ts, services.ts, localmodel.ts, version.ts
   providers/     audio/ffmpeg, audio/afplay, wake/openwakeword, stt/whisper-cpp, stt/yap,
                  tts/kokoro, tts/macos-say, llm/openai-compatible, llm/anthropic, llm/ai-sdk,
-                 search/searxng, search/brave, secrets/macos-keychain, secrets/file,
-                 service/launchd
+                 decision/laya-mlx, search/searxng, search/brave, secrets/macos-keychain,
+                 secrets/file, service/launchd
   integrations/  home-assistant/, mcp/, connectors/
   server/        the HTTP and WebSocket server, discovery.ts, satellite.ts, web/
   cli/           one file per command
@@ -41,14 +42,16 @@ a test and to fill from an npm package.
 | `SpeechToText` | WAV in, text out. | `whisper-cpp`, `yap` |
 | `TextToSpeech` | Text in, WAV out, with a `warm()` to load before the first reply. | `kokoro`, `macos-say` |
 | `ChatModel` | Messages and tool specs in, a completion out. | `openai-compatible`, `anthropic`, `ai-sdk` |
+| `DecisionModel` | A request and typed questions in, answers with probabilities out. | `laya-mlx` |
 | `SearchProvider` | A query in, results out. | `searxng`, `brave` |
 | `SecretStore` | Where connector tokens are kept. | `macos-keychain`, `file` |
 | `ServiceManager` | Keeps Parlour running at login. | `launchd` |
 | `Integration` | A named source of tools, prompt lines and a gate. | `home-assistant`, `mcp`, `connectors` |
 
-Any port can also expose `doctor(): Promise<Check[]>`. `parlour doctor`
-joins every configured part's checks together and adds three of core's own.
-The config parses, the network is let in, and something keeps Parlour running.
+Every port except `SecretStore` and `ServiceManager` can also expose
+`doctor(): Promise<Check[]>`. `parlour doctor` joins every configured part's
+checks together and adds three of core's own: the config parses, the network
+is let in, and something keeps Parlour running.
 
 Core composes two things itself rather than leaving them to a provider:
 
@@ -65,9 +68,9 @@ Core composes two things itself rather than leaving them to a provider:
 ## Providers
 
 `core/providers.ts` is a registry keyed by `(kind, name)`. The kind is one
-of `audioSource`, `audioSink`, `wake`, `stt`, `tts`, `llm`, `search`,
-`secrets`, `service` or `integration`. Built-ins call `registerProvider`
-when they are imported. You select each slot in config by name:
+of `audioSource`, `audioSink`, `wake`, `stt`, `tts`, `llm`, `decision`,
+`search`, `secrets`, `service` or `integration`. Built-ins call
+`registerProvider` when they are imported. You select each slot in config by name:
 
 ```json
 { "tts": { "provider": "kokoro", "voice": "bf_emma" } }
@@ -79,14 +82,16 @@ validates it when the provider is created. Core never needs to know that
 Kokoro has a voice or that whisper has a URL.
 
 A name that is not registered is tried as a package with `await import(name)`.
-Its default export is accepted when its `kind` matches. That is the whole
-extension mechanism, and [Writing a provider](/docs/providers) walks you through
-it.
+Its default export is accepted when its `kind` matches, and a package of
+another kind is reported as exactly that rather than as a typo. That is the
+whole extension mechanism, and [Writing a provider](/docs/providers) walks you
+through it.
 
 You don't choose `secrets` and `service` in config. Core picks them by
-platform. It uses the Keychain when `security` is on the PATH and a file
-otherwise. It uses launchd on macOS. Elsewhere it throws an error saying that
-a systemd provider would be a welcome contribution.
+platform. It uses the Keychain on a Mac with `security` on the PATH, and
+otherwise a file per key under `connector-secrets/` in the config directory.
+It uses launchd on macOS. Elsewhere it throws an error saying that a systemd
+provider would be a welcome contribution.
 
 ## Assembly
 
@@ -135,12 +140,13 @@ idle ---wake word---> listening ---silence---> thinking ---answer---> speaking -
   asks every integration's `gate()`. If any says true (the house is muted),
   the wake ends there. Otherwise anything being said is stopped and the
   session starts listening.
-- **listening.** Frames go to the endpointer. It gives up after 2.5 s of
-  leading silence, finishes after `audio.silenceMs` of quiet once speech has
-  started, and caps a request at `audio.maxUtteranceMs`.
+- **listening.** Frames go to the endpointer in `core/endpoint.ts`. It gives
+  up after 2.5 s of leading silence, finishes after `audio.silenceMs` (800 ms)
+  of quiet once speech has started, and caps a request at
+  `audio.maxUtteranceMs` (15 s).
 - **thinking.** The frames become a WAV and the WAV becomes text. Whisper's
-  hallucinations (`[BLANK_AUDIO]`, a lone "Thank you.") are dropped, and the
-  text goes to the router.
+  hallucinations on silence (`[BLANK_AUDIO]`, a lone "Thank you.") are
+  dropped by `core/text.ts`, and the text goes to the router.
 - **speaking.** The sink says the answer. Frames that arrive while it speaks
   reset the wake word instead of being listened to, unless `audio.bargeIn`
   is on. With one box in one room, the microphone hears the speaker.
@@ -150,10 +156,11 @@ with a button or a satellite that did its own wake word. They call
 `utterance(frames)` instead of `push(frame)` and skip the first two states.
 
 Every client has its own session, keyed by a client id, so a follow-up in
-the kitchen cannot pick up something asked in the study. Each session
-forgets its history after four minutes of silence. The id is also the
-client's lane in the queue and its own wake word detector. So it decides
-both what a client can see and how much of the house it can hold up.
+the kitchen cannot pick up something asked in the study. The router forgets a
+session's history after four minutes of quiet, so "turn it off" cannot mean
+a light from an hour ago. The id is also the client's lane in the queue and
+its own wake word detector. So it decides both what a client can see and how
+much of the house it can hold up.
 
 The id comes off the network, so the server trims it to something short and
 printable. When two clients claim the same name at once, the server gives
@@ -198,8 +205,9 @@ in front of it, and it does the first job and claims the second.
 
 `core/triage.ts` reads the request before anything acts on it. It repairs the
 words and resolves pronouns from the conversation and the room. What is left
-becomes a list of tasks. Each is written to stand on its own and marked as
-something to do, something to look up, or small talk. A question triage is
+becomes a list of at most `pipeline.maxTasks` tasks (4 by default). Each is
+written to stand on its own and marked as something to do, something to look
+up, or small talk. A question triage is
 sure needs the clever one is marked so. It skips the local round trip that
 would only have ended in `ask_the_clever_one`.
 
@@ -242,16 +250,20 @@ than an unknown-tool error, so the next round does the job.
 
 You can also add a decision model. `llm.decision` names an on-device model
 that scores each task before the local model takes its turn, and decides
-whether it should stay local or go to the cloud. The built-in one is
-`laya-mlx`, wired up in `core/decision.ts`. It needs Apple silicon and
+whether it should stay local or go to the cloud. `core/decision.ts` asks the
+questions and turns the answers into a plan. The built-in model is
+`laya-mlx` (`providers/decision/laya-mlx.ts`). It needs Apple silicon and
 `pip install laya-mlx`, and it stays warm in a local Python worker, so the
 transcript never leaves your Mac for the decision. The default is
 `provider: "none"`.
 
-- **`shadow` mode** only logs the scores beside whatever the local model did.
-- **`triage` mode** acts on them. A high `needs_cloud` or `needs_web` score
-  skips the local model and hands the task to the cloud. A clear house or
-  timer intent keeps the escalation tool off, so the answer stays on your Mac.
+- **`shadow` mode** (the default) only logs the scores beside whatever the
+  local model did.
+- **`triage` mode** acts on them, when there is a cloud model to hand to. A
+  `needs_cloud` or `needs_web` score at or above `escalateThreshold` (0.85)
+  skips the local model and hands the task to the cloud. A house or timer
+  intent at or above `localConfidence` (0.75) keeps the escalation tool off,
+  so the answer stays on your Mac.
 
 Like triage, it is an optimisation. If the decision model fails, the task
 carries on locally.
@@ -270,7 +282,7 @@ abandoned, rather than spoken ten seconds after everyone has left the room.
 
 | What | Where |
 | --- | --- |
-| `config.json`, `secrets.env`, `connectors.json` | `~/.config/parlour/`, or `$PARLOUR_HOME` |
+| `config.json`, `secrets.env`, `connectors.json`, `skills/` | `~/.config/parlour/`, or `$PARLOUR_HOME` |
 | Just the config file | `$PARLOUR_CONFIG`, or `parlour --config <file>` |
 | Models | `~/Library/Caches/parlour/models/{openwakeword,whisper,llm}` |
 | Logs | `~/Library/Logs/parlour/{agent,whisper,llm}.log` |
@@ -292,8 +304,9 @@ Nothing else about Linux is done yet, and we would be glad of your help.
 ## Events
 
 `parlour start --events` prints one JSON line per state change on stdout:
-`ready`, `state`, `heard`, `reply`, `muted` and `error`, each with an `at`
-timestamp. The desktop app reads these to draw its status instead of
+`ready` (with the tool count and whether a cloud model is up), `state`,
+`heard`, `reply` (with `via` local or cloud and the time taken in `ms`),
+`muted` and `error`, each with an `at` timestamp. The desktop app reads these to draw its status instead of
 scraping log text. Without the flag, stdout is a log for people to read.
 
 ## Why each part was chosen

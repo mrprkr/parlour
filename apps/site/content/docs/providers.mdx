@@ -27,6 +27,8 @@ the work:
    string and whose `create` is a function. It is then registered under the
    name from config, so the next lookup finds it straight away.
 3. It parses the options with the definition's `schema`, if there is one.
+   A slice that fails is reported with the provider's name and one line per
+   problem, path first.
 4. It calls `create(options, context)` and returns the result, awaiting it
    if it is a promise. The context can be a function of the definition
    instead of a plain value. That is how the agent scopes each provider's
@@ -37,11 +39,13 @@ the work:
 Only a missing provider is reported as unknown, with the registered
 alternatives listed so you can spot a typo. A package that exists but fails
 to load (a syntax error, a missing peer, an old Node) is reported as a load
-failure.
+failure, and one whose `kind` is wrong for the slot says which kind it is.
 
 Your provider gets the whole slice from config. For
 `"tts": { "provider": "x", "voice": "y" }` it is handed
-`{ provider: "x", voice: "y", fallback: "macos-say", speed: 1 }`. A
+`{ provider: "x", voice: "y", fallback: "macos-say" }`. Core fills in no
+`voice` or `speed` of its own, because the same slice also goes to the
+fallback voice, so each provider's schema supplies its own defaults. A
 `z.object` schema quietly drops the keys it does not declare, which is what
 you want here.
 
@@ -50,7 +54,7 @@ you want here.
 ```ts
 export type ProviderKind =
   | "audioSource" | "audioSink" | "wake" | "stt" | "tts"
-  | "llm" | "search" | "secrets" | "service" | "integration";
+  | "llm" | "decision" | "search" | "secrets" | "service" | "integration";
 
 export interface ProviderContext {
   paths: Paths;                       // configFile, secretsFile, modelsDir, logsDir...
@@ -128,7 +132,7 @@ becomes a `tts` provider.
   "files": ["dist"],
   "scripts": { "build": "tsc" },
   "peerDependencies": { "parlour": ">=0.1.0" },
-  "dependencies": { "zod": "^3.25.0" },
+  "dependencies": { "zod": "^4.0.0" },
   "devDependencies": { "typescript": "^5.9.0", "@types/node": "^22.0.0" }
 }
 ```
@@ -150,7 +154,8 @@ import { type Check, defineProvider, type ProviderContext, type TextToSpeech } f
 import { z } from "zod";
 
 // Only this provider's own keys. The rest of the tts slice (provider,
-// fallback, speed) is dropped by z.object rather than rejected.
+// fallback, and any voice or speed meant for another engine) is dropped by
+// z.object rather than rejected.
 const schema = z.object({
   /** A voice from https://github.com/rhasspy/piper/blob/master/VOICES.md, without the extension. */
   model: z.string().default("en_GB-alba-medium"),
@@ -313,8 +318,9 @@ The same shape fills any slot. `create` returns the port for its kind:
 | `integration` | `Integration` | `integrations["your-name"]` |
 
 `secrets` and `service` providers are chosen by platform, not named in
-config. To add one (a systemd `ServiceManager`, say), register it in
-`packages/parlour/src/providers/service/index.ts`. That makes it a pull
+config. To add one (a systemd `ServiceManager`, say), choose it by platform
+in `pickServiceManager` in `packages/parlour/src/providers/service/index.ts`,
+or in `pickSecretStore` in `providers/secrets/index.ts` for a secret store. That makes it a pull
 request rather than a package, and one that would be very welcome.
 
 ## An integration
@@ -357,13 +363,15 @@ entity, and a doctor that checks the token, the API and the MCP endpoint.
 ## Testing
 
 `parlour/testing` exports a fake for every port: `FakeChatModel`,
+`FakeDecisionModel` (with `triageAnswers` to build the scores it returns),
 `FakeSpeechToText`, `FakeTextToSpeech`, `FakeAudioSource`, `FakeAudioSink`,
-`FakeWakeWordEngine` (and the `FakeWakeWordDetector` it hands out),
-`FakeSearchProvider`, `FakeSecretStore`, `FakeServiceManager` and
-`FakeIntegration`, plus `silentLogger`. Each one records what it was asked.
-You can run your provider or integration through the same `VoiceSession`
-and `Router` the built-ins are tested against, with no hardware, model or
-network. A `ProviderContext` for a test takes only a few lines:
+`FakeWakeWordEngine` (and the `FakeWakeWordDetector` it hands out, with
+`wakeFrame` to make one fire), `FakeSearchProvider`, `FakeSecretStore`,
+`FakeServiceManager` and `FakeIntegration`, plus `silentLogger`. Each one
+records what it was asked. They are the same fakes Parlour's own session and
+pipeline tests use, so your provider or integration can be tested with no
+hardware, model or network. A `ProviderContext` for a test takes only a few
+lines:
 
 ```ts
 import { resolvePaths, type ProviderContext } from "parlour";

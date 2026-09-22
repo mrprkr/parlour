@@ -46,7 +46,8 @@ added. So `init` checks each answer as you give it:
 4. **The mute entity**, if you want one.
 
 Say no to the first question and the house is left out of the config, so
-`parlour doctor` does not fail on something you do not have. Run `init` again whenever you change your mind. Every answer
+`parlour doctor` does not fail on something you do not have. Run `init` again
+whenever you change your mind. Every answer
 defaults to what is already set, and a token that still works is kept rather
 than asked for twice. To set just the token, `parlour secrets set HA_TOKEN`
 reads one from stdin.
@@ -63,12 +64,12 @@ Tools come from two places, and the model sees them as one list:
   Parlour cannot see a light, expose the light.
 - **Over REST** (`rest: true`). Two general tools cover what the MCP tools
   cannot: `ha_get_state` reads any entity, and `ha_call_service` calls any
-  service. The prompt tells the model to prefer a more specific tool when one
-  fits.
+  service. Its description tells the model to use it only when no more
+  specific tool fits.
 
 Parlour connects to the MCP endpoint at `<url>/mcp_server/sse` with the token.
 If that connection fails, the failure is logged and the REST tools still reach
-the house, more slowly.
+the house.
 
 ## Home Assistant as a client
 
@@ -111,8 +112,11 @@ Here, `parlour_token` in `secrets.yaml` is `Bearer <the token>`. The reply is
 `muteEntity` names an entity that makes Parlour ignore its wake word while it
 is `on`. Parlour checks it over REST after the wake word fires and before it
 acts on anything. So the house enforces the mute, not the machine running
-Parlour, and it covers every client: satellites, phones and the server's own
-microphone. Empty, the default, means no mute.
+Parlour, and it covers every wake word the server hears: its own microphone,
+satellites and `/listen` devices in wake mode. Requests that arrive without
+the server's wake word (the phone page, push mode, a satellite with
+`localWake` on, `/ask` and `/v1`) are not muted. Empty, the default, means no
+mute.
 
 ```json
 { "integrations": { "home-assistant": { "muteEntity": "input_boolean.parlour_muted" } } }
@@ -155,25 +159,3 @@ FAIL  Home Assistant MCP    http://homeassistant.local:8123/mcp_server/sse did n
 
 A failure on the second line usually means the token. A failure on the third,
 with the second fine, means the integration is not installed yet.
-
-## Moving over from the old configuration
-
-Parlour began as `agent/` inside a Home Assistant configuration repository,
-with an `agent.config.json` and a `.env` beside it. If you ran that,
-`parlour init` looks for `agent.config.json` in the working directory. When
-there is nothing at the new path yet, it offers to convert it for you:
-
-| Then | Now |
-| --- | --- |
-| `homeAssistant.baseUrl`, `homeAssistant.useMcp` | `integrations["home-assistant"].url`, `.mcp` |
-| `muteEntity` at the top level | `integrations["home-assistant"].muteEntity`. If the old file never set it, the old default `input_boolean.home_agent_muted` is written out so your mute keeps working. |
-| `mcpServers` | `integrations.mcp.servers` |
-| `search.searxngUrl` | `search.url` |
-| `tts.engine: "say"` | `tts.provider: "macos-say"` |
-| `connectorsFile` | Dropped. `connectors.json` is copied to `~/.config/parlour/`. |
-| `.env` | `~/.config/parlour/secrets.env`, with `AGENT_TOKEN` renamed to `PARLOUR_TOKEN` |
-
-For one release, `AGENT_TOKEN` is still read as a fallback for
-`PARLOUR_TOKEN`, so upgrading does not lock every phone and satellite out of
-the house. The model id reported to Home Assistant's OpenAI Conversation
-integration is now `parlour`, so edit that one field by hand.

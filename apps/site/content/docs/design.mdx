@@ -1,6 +1,6 @@
 ---
 title: "The design system"
-description: "One palette, one type ramp and one set of states, shared by all four interfaces."
+description: "One palette, one type ramp, one set of states and one icon, shared by all four interfaces."
 ---
 
 Parlour has four interfaces: this site, the menu bar app, the phone page the
@@ -14,15 +14,19 @@ so `pnpm check` catches a token change that was not emitted.
 
 ```sh
 pnpm exec nx run design:emit      # after editing packages/design/src/tokens.ts
+pnpm exec nx run design:icons     # after changing the mark, or a colour it uses
 pnpm exec nx run design:test      # contrast, and whether anything is stale
 ```
 
 | Generated file | Read by |
 | --- | --- |
 | `apps/site/app/tokens.css` | This site |
-| `apps/desktop/src/tokens.css` | The menu bar app, under shadcn's token names |
+| `apps/desktop/src/tokens.css` | The menu bar app, which maps it onto shadcn's token names |
 | `packages/parlour/src/server/web/tokens.css` | The phone page |
 | `apps/ios/Parlour/DesignSystem/Tokens.swift` | The iOS app |
+| `apps/ios/.../AccentColor.colorset/Contents.json` | iOS controls the app never styles, in hearth green |
+| `apps/ios/.../AppIcon.appiconset/Contents.json` | The iOS app icon set |
+| `apps/site/app/icon.svg`, `packages/parlour/src/server/web/icon.svg` | The favicon |
 
 ## Ink on a limewashed wall, with one lit thing
 
@@ -51,7 +55,7 @@ than in each app. Each state has a colour, a cadence and a word.
 | State | Drawn as | One breath |
 | --- | --- | --- |
 | `stopped` | An outline in bracken | still |
-| `idle` | A steady hearth mark | still |
+| `idle` | A steady hearth mark, labelled "ready" | still |
 | `listening` | A lit hearth mark | 1100 ms |
 | `thinking` | A lit lamp mark | 700 ms |
 | `speaking` | A lit hearth mark | 500 ms |
@@ -62,10 +66,21 @@ button and the iOS state mark breathe in step, because they read the same
 numbers from the same file. Under Reduce Motion the iOS mark stops breathing
 and the colour carries the state alone.
 
+## The icons
+
+The house mark (a roof, the walls, a dado rail and one lit lamp in the gable)
+is drawn once in `src/icon.ts` from the palette, in four shapes: the favicon
+tile, a full bleed square for iOS and the phone page's home screen, the macOS
+tile on Apple's grid, and a bare template for the menu bar. `design:icons`
+rasterises them into every bitmap a platform wants: the site's favicon, the
+phone page's home screen icons, the iOS app icon, and the menu bar app's
+`icon.png` and `tray.png`. The PNGs are binary, so the drift test cannot
+check them. Regenerate them and look.
+
 ## Changing something
 
 Edit `packages/design/src/tokens.ts`, run the emitter, and commit the generated
-files with your change. A new surface gets a `Target` in `src/emit.ts`. If a
-surface needs a format none of the emitters produce, add another emitter next
-to `css.ts` and `swift.ts` instead of keeping a hand-maintained copy of the
-values.
+files with your change. A new surface gets a `Target` in `src/emit.ts` and a
+line in the list in `emit.test.ts`. If a surface needs a format none of the
+emitters produce, add another emitter next to `css.ts` and `swift.ts` instead
+of keeping a hand-maintained copy of the values.

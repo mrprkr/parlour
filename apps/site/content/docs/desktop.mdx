@@ -30,13 +30,15 @@ not the checkout. See
 A build from your checkout is unsigned, which is fine on the machine that made
 it. Copy `Parlour.app` into `/Applications` and right-click to open it the
 first time. A release dmg is signed with a Developer ID certificate and
-notarised, so it opens normally on any Mac.
+notarised, so it opens normally on any Mac with Apple silicon, which is what
+it is built for.
 
 The app does not bundle Node or the package. It looks for `parlour` on your
-login shell's PATH, or in `/opt/homebrew/bin`, `/usr/local/bin` or
-`~/.npm-global/bin`. If it cannot find one, it offers to run
-`npm install -g parlour` at its own version. One copy of Parlour on the machine
-is better than two that can disagree.
+login shell's PATH, so nvm, fnm and volta installs are found, then in
+`/opt/homebrew/bin`, `/usr/local/bin` and `~/.npm-global/bin`. If it cannot
+find one, it offers to run `npm install -g parlour` at its own version, which
+needs Node 22 or newer. One copy of Parlour on the machine is better than two
+that can disagree.
 
 ## Signing
 
@@ -50,44 +52,68 @@ The release workflow sets the Apple environment variables Tauri reads. Tauri
 creates its own keychain for the certificate, signs the app, notarises
 `Parlour.app` and staples the ticket into it. It signs the dmg but does not
 notarise it, and macOS refuses a disk image without its own ticket. So
-`scripts/notarise.sh` notarises the dmg, then asks Gatekeeper to assess both.
-Run from a checkout, it finds no credentials, says so and stops.
+`scripts/notarise.sh`, at the root of the repository, notarises and staples
+the dmg, then asks Gatekeeper to assess both and checks the app's signature
+carries the hardened runtime and the microphone entitlement. Run on a
+machine with no Apple credentials, it says so and stops.
 
 [`.github/workflows/release.yml`](https://github.com/mrprkr/parlour/blob/main/.github/workflows/release.yml)
 lists the six repository secrets behind it and what each one is.
 
+## Setting up
+
+On a machine that is not set up yet, the app opens on a setup page instead of
+the tabs. It remembers where it got to, so you can close it and come back.
+**Run setup again** in Settings brings it back later. Four steps:
+
+1. **Parlour.** Find the `parlour` command, or install it with one button.
+2. **What is missing.** Whether Node, ffmpeg and the config are in place, and
+   a button that runs `parlour init --porcelain --yes` for the rest (ffmpeg and
+   whisper from Homebrew, the models, the config), showing its output as it
+   goes.
+3. **The things it cannot work out.** The Home Assistant address and token,
+   the Anthropic key, the wake word, the microphone (and asking macOS for
+   permission to use it), and whether to let the rest of the house in with an
+   access token.
+4. **Check it over.** The doctor's list, and a button to start listening.
+
 ## The tabs
+
+The header carries a dot that follows Parlour through idle, listening,
+thinking and speaking, and a Start or Stop button.
 
 | Tab | What you will find there |
 | --- | --- |
-| Onboarding | Opens by itself on a machine that is not set up yet, and from **Run setup again** in Settings after that. Four steps: find or install `parlour`, an Install button that runs `parlour init --porcelain --yes` with live output, the questions, and the doctor. |
-| Status | A dot that follows Parlour through idle, listening, thinking and speaking. The last thing it heard, the last thing it said and which model said it. A Check button that runs `parlour doctor --json`. |
-| Settings | Wake word, sensitivity, microphone, silence timeout, voice, both models, the Home Assistant address and the secrets. It reads `parlour config show --raw` (the file as written, so saving does not freeze every default into it) and writes through `parlour config write` and `parlour secrets set`. |
+| Status | The last thing it heard, the last thing it said and which model said it. How many tools it has and whether cloud escalation is on. The address phones and Home Assistant should use, and **Pair a phone**, which shows the QR code the [iOS app](/docs/ios) scans. A Check button that runs `parlour doctor --json`. |
 | Connectors | What your household has signed in to, and a form to add another. `parlour connectors`, with buttons. |
+| Settings | Where `parlour` is, whether to start listening when the app opens, wake word, sensitivity, microphone, silence timeout, voice, the local and cloud models, the Home Assistant address and the secrets, including the access token. It reads `parlour config show --raw` (the file as written, so saving does not freeze every default into it) and writes through `parlour config write` and `parlour secrets set`. |
 | Logs | Parlour's output, live. |
+
+The tray menu has Open, Start listening, Stop and Quit.
 
 ## How it fits together
 
 ```text
 src/
   App.tsx           the header, the tabs, and the state the panels read
-  panels/           one file per tab, plus the onboarding overlay
+  panels/           one file per tab, plus the setup overlay
   lib/bridge.ts     every Rust command, typed. Nothing else calls invoke()
   components/ui/    shadcn primitives
   |  invoke()
 src-tauri/src/
-  main.rs           the tray, the window, and one generic parlour(args, stdin) command
+  main.rs           the tray, the window, one generic parlour(args, stdin) command, the mic check
   supervisor.rs     parlour start --events as a child process, and its NDJSON events
   setup.rs          parlour init --porcelain, and npm install -g parlour, streamed
   settings.rs       the app's own two facts: where parlour is, and whether to start it
 ```
 
-The Rust side knows the path to the `parlour` binary and nothing else. The
-window asks for config, secrets, the doctor and the connectors through the
+Apart from running ffmpeg to list microphones and raise the permission
+prompt, the Rust side knows the path to the `parlour` binary and nothing else.
+The window asks for config, secrets, the doctor and the connectors through the
 CLI's `--json` and stdin interfaces. The supervisor reads the NDJSON events
 that `parlour start --events` prints (`ready`, `state`, `heard`, `reply`,
-`muted`, `error`) instead of scraping log text. Anything on stdout that is not
-an event is log output, and that is where a failure to start shows up.
+`muted`, `error`) instead of scraping log text. Anything else it prints is log
+output, and that is where a failure to start shows up.
 
 Stopping sends SIGINT, not SIGKILL. Parlour shuts ffmpeg down on SIGINT, and an
 orphaned ffmpeg would keep hold of the microphone.
@@ -107,7 +133,7 @@ changes to `packages/parlour` until you point it there.
 it in either of two ways:
 
 - Put its absolute path in **The parlour command** on the Settings tab (or on
-  the first step of onboarding). This takes effect at once.
+  the first step of setup). This takes effect at once.
 - Write it to the file and restart the app, which reads the file once at
   launch:
 
@@ -125,11 +151,12 @@ app find `parlour` again.
 - **Use the app or the LaunchAgent, not both.** Two copies of Parlour means
   two processes fighting over one microphone and one port. `parlour init` asks
   which you want and sets up only that one. When the app runs `init`, it
-  leaves the agent to the app. `parlour service status` tells you whether a
-  LaunchAgent exists, and `parlour service uninstall` removes it.
+  leaves the agent to the app, and warns if a LaunchAgent is already
+  installed. `parlour service status` tells you whether a LaunchAgent exists,
+  and `parlour service uninstall` removes it.
 - **Microphone permission belongs to whatever starts Parlour.** macOS grants it
   to the process it holds responsible, which for anything the app spawns is
-  the app. Onboarding opens the device for a moment as early as it can, which
+  the app. Setup opens the device for a moment as early as it can, which
   brings up the system prompt. The bundle carries the
   `NSMicrophoneUsageDescription` the prompt needs. Without it, macOS refuses
   instead of asking. The grant is tied to the bundle identifier, so it
@@ -144,8 +171,11 @@ app find `parlour` again.
   Dock icon and no menu bar of its own. The tray is the way back to the
   window. Closing the window leaves Parlour running. Quitting from the tray
   stops it properly.
-- **Generated icons.** `src-tauri/icon.png` is the only icon in git.
-  `pnpm icons` derives the rest into `src-tauri/icons/`, and both `app` and
-  `build` run it first. The source sits outside that directory on purpose.
-  `tauri icon` writes an `icon.png` into its output, so a source kept there
-  would overwrite itself on every build and leave the working tree dirty.
+- **Generated icons.** The mark is drawn once, in `packages/design`, and
+  `pnpm exec nx run design:icons` writes `src-tauri/icon.png` and the menu bar's
+  `src-tauri/tray.png` from it (see [the design system](/docs/design)).
+  `pnpm icons` derives every other size into `src-tauri/icons/`, which is not
+  in git, and both `app` and `build` run it first. The source sits outside
+  that directory on purpose. `tauri icon` writes an `icon.png` into its
+  output, so a source kept there would overwrite itself on every build and
+  leave the working tree dirty.
