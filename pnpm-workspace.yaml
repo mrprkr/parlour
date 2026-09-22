@@ -2,19 +2,22 @@ packages:
   - packages/*
   - apps/*
 
-# These three are native: onnxruntime is the wake word and the voice, sharp and
-# protobufjs come along with them. pnpm blocks install scripts unless they are
+# These all ship a native binary: onnxruntime is the wake word and the voice,
+# sharp and protobufjs come along with them, and nx and esbuild fetch the
+# binary for the platform. pnpm blocks install scripts unless they are
 # named here, and stopped reading the list from package.json in version 10.
 #
 # allowBuilds is the current spelling and onlyBuiltDependencies the older one.
 # Both are listed so that whichever pnpm is on the machine agrees.
 allowBuilds:
+  esbuild: true
   nx: true
   onnxruntime-node: true
   protobufjs: true
   sharp: true
 
 onlyBuiltDependencies:
+  - esbuild
   - nx
   - onnxruntime-node
   - protobufjs

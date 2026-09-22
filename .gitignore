@@ -41,3 +41,19 @@ packages/*/pnpm-lock.yaml
 # Written by `vercel link`; the project is identified by its git connection.
 .vercel/
 .env*.local
+
+# Agent tooling installed into the checkout rather than written by hand: skills,
+# subagent definitions and hook config for Claude Code, Codex and GitHub's agent
+# runner. Tens of megabytes of somebody else's files, and a matter of whichever
+# tools a given machine happens to have, not of how Parlour is built.
+.agents/
+.codex/
+.claude/agents/
+.claude/skills/
+.github/agents/
+.github/hooks/
+.github/skills/
+skills-lock.json
+
+# Screenshots an interface review takes of the site as it goes.
+apps/site/.impeccable/
