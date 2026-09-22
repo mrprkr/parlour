@@ -30,7 +30,7 @@ enum ClientError: LocalizedError {
   var errorDescription: String? {
     switch self {
     case .noServer:
-      return "No server yet. Leave the address empty to look for one, or type it in Settings."
+      return "No server configured. Scan a pairing code or type an address in Settings."
     case .unauthorised:
       return "The server refused the token. Check PARLOUR_TOKEN in Settings."
     case .server(let status):

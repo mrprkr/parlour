@@ -48,17 +48,17 @@ mv ~/Downloads/hey_parlor.onnx ~/Library/Caches/parlour/models/openwakeword/hey_
 The file name, without the `.onnx`, is what goes in the config:
 
 ```json
-{ "wake": { "provider": "openwakeword", "words": ["hey_parlour"], "threshold": 0.5, "refractoryMs": 1500 } }
+{ "wake": { "provider": "openwakeword", "words": ["hey_parlour", "hey_jarvis"], "threshold": 0.5, "refractoryMs": 1500 } }
 ```
 
-`parlour service restart` picks it up. `parlour doctor` confirms it, or names
-the file it cannot find. Keep `hey_jarvis` in the list for the first day. It
+`parlour restart` picks it up. `parlour doctor` confirms it, or names the
+file it cannot find. Keep `hey_jarvis` in the list for the first day, as above. It
 costs a little CPU and gives you a word you know works while you judge the new
 one.
 
 The provider feeds each word the last 16 speech embeddings. Models the
 notebooks train for a phrase of a few syllables expect exactly that. If yours
-stays silent, check its inputs first:
+stays silent, check its inputs first, from a checkout of this repository:
 
 ```bash
 cd packages/parlour && node -e '
