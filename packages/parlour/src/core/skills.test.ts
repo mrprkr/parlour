@@ -47,7 +47,10 @@ test("a skill is frontmatter over a body, and the filename names it when the fro
 });
 
 test("frontmatter still accepts spaces around the colon", () => {
-  const parsed = parseSkill("---\nname : bedtime\ndescription : What goodnight means\n---\nPorch light on.", "/x.md");
+  const parsed = parseSkill(
+    "---\nname : bedtime\ndescription : What goodnight means\n---\nPorch light on.",
+    "/x.md",
+  );
   assert.equal("name" in parsed && parsed.name, "bedtime");
   assert.equal("description" in parsed && parsed.description, "What goodnight means");
 });
