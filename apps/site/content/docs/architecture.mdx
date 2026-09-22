@@ -1,9 +1,9 @@
 ---
 title: Architecture
-description: The ports, the provider registry, the session state machine, and why each part was chosen.
+description: How Parlour's ports, providers, sessions and pipeline fit together, and why.
 ---
 
-How Parlour is put together, for anyone who wants to change it. One npm
+This page shows you how Parlour is put together, so you can change it. One npm
 package, `parlour`, holds a pure core, the built-in providers behind its
 ports, the integrations, the network server and the CLI. The desktop app in `apps/desktop` drives the CLI and knows nothing else.
 
@@ -24,12 +24,12 @@ packages/parlour/src/
 ```
 
 Nothing in `core/` imports from `providers/` except `core/builtins.ts`. That
-file only registers the built-ins, so a program embedding Parlour with
-providers of its own can leave it out.
+file only registers the built-ins. A program that embeds Parlour with its own
+providers can leave it out.
 
 ## Ports
 
-`core/ports.ts` declares the seams between core and everything that touches
+`core/ports.ts` declares the seams between core and anything that touches
 hardware, a model or the network. Each interface is small enough to fake in
 a test and to fill from an npm package.
 
@@ -46,85 +46,83 @@ a test and to fill from an npm package.
 | `ServiceManager` | Keeps Parlour running at login. | `launchd` |
 | `Integration` | A named source of tools, prompt lines and a gate. | `home-assistant`, `mcp`, `connectors` |
 
-Any of them can also expose `doctor(): Promise<Check[]>`. `parlour doctor`
-is every configured part's checks joined together, plus three of core's
-own: the config parses, the network is let in, and something keeps
-Parlour running.
+Any port can also expose `doctor(): Promise<Check[]>`. `parlour doctor`
+joins every configured part's checks together and adds three of core's own.
+The config parses, the network is let in, and something keeps Parlour running.
 
-Two things are composed in core rather than left to a provider:
+Core composes two things itself rather than leaving them to a provider:
 
-- **Speaking.** `Speaker` is a `TextToSpeech` plus an `AudioSink` plus
-  sentence splitting and abort. The reply is rendered and played one
-  sentence at a time, so the first words come out while the rest is still
-  being made. `FallbackTextToSpeech` wraps two voices and uses the second
-  when the first throws, warning once and trying the first again on the next
-  sentence. `tts.fallback` in config names the second; the default is
-  `macos-say`, so a Kokoro that has not finished downloading still speaks.
-- **Timers.** The one tool that has to keep working when the network does
-  not, so it lives in core and announces through the `Speaker`.
+- **Speaking.** `Speaker` is a `TextToSpeech` plus an `AudioSink`, with
+  sentence splitting and abort. It renders and plays the reply one sentence
+  at a time, so the first words come out while the rest is still being made.
+  `FallbackTextToSpeech` wraps two voices. When the first throws, it warns
+  once, uses the second, and tries the first again on the next sentence.
+  `tts.fallback` in config names the second voice. The default is
+  `macos-say`, so Parlour still speaks while Kokoro is downloading.
+- **Timers.** This is the one tool that has to keep working when the network
+  does not. So it lives in core and announces through the `Speaker`.
 
 ## Providers
 
-`core/providers.ts` is a registry keyed by `(kind, name)`, where kind is one
+`core/providers.ts` is a registry keyed by `(kind, name)`. The kind is one
 of `audioSource`, `audioSink`, `wake`, `stt`, `tts`, `llm`, `search`,
 `secrets`, `service` or `integration`. Built-ins call `registerProvider`
-when they are imported. Config selects each slot by name:
+when they are imported. You select each slot in config by name:
 
 ```json
 { "tts": { "provider": "kokoro", "voice": "bf_emma" } }
 ```
 
-Core only knows about the `provider` key of each slice. The rest (`voice`,
-`url`, `model` and so on) passes straight through and is validated by the
-provider's own Zod schema when it is created. Core does not need to know
-that Kokoro has a voice or that whisper has a URL.
+Core only reads the `provider` key of each slice. The rest (`voice`, `url`,
+`model` and so on) passes straight through. The provider's own Zod schema
+validates it when the provider is created. Core never needs to know that
+Kokoro has a voice or that whisper has a URL.
 
-A name that is not registered is tried as a package: `await import(name)`,
-and the default export is accepted when its `kind` matches. That is the
-entire extension mechanism, and [Writing a provider](/docs/providers) walks through
+A name that is not registered is tried as a package with `await import(name)`.
+Its default export is accepted when its `kind` matches. That is the whole
+extension mechanism, and [Writing a provider](/docs/providers) walks you through
 it.
 
-`secrets` and `service` are not chosen in config. Core picks them by
-platform: the Keychain when `security` is on the PATH, a file otherwise;
-launchd on macOS, and elsewhere an error saying that a systemd provider
-would be a welcome contribution.
+You don't choose `secrets` and `service` in config. Core picks them by
+platform. It uses the Keychain when `security` is on the PATH and a file
+otherwise. It uses launchd on macOS. Elsewhere it throws an error saying that
+a systemd provider would be a welcome contribution.
 
 ## Assembly
 
-`buildAgent(config, secrets, paths)` in `core/agent.ts` loads the plugins,
-resolves every provider, wires up the fallback voice, builds the tool
-registry (every integration's tools, the search tool unless
-`search.provider` is `"none"`, the timers, and `read_skill` when the house
-has skills), builds the `Router`, and hands back an `Agent`. The
-microphone loop, the text REPL, the doctor and the network server all take
-one of these rather than building their own, which is why a timer set from
-a phone still sounds in the room and every client shares one tool list.
+`buildAgent(config, secrets, paths)` in `core/agent.ts` does the wiring and
+hands back an `Agent`. It loads the plugins, resolves every provider and
+wires up the fallback voice. Then it builds the tool registry: every
+integration's tools, the search tool unless `search.provider` is `"none"`,
+the timers, and `read_skill` when the house has skills. Finally it builds the
+`Router`. The microphone loop, the text REPL, the doctor and the network
+server all take one `Agent` rather than building their own. That is why a
+timer set from a phone still sounds in the room, and why every client shares
+one tool list.
 
-Plugins come first, before any provider is resolved: a plugin
+Plugins load first, before any provider is resolved. A plugin
 (`core/plugins.ts`) is one package that can bring providers, skills and
-integration config at once, and a provider it registers has to exist by the
-time a slot in config names it. Its `integrations` block is merged
-underneath the one in `config.json`, key by key, so what the person wrote
-wins.
+integration config at once. A provider it registers has to exist by the time
+a config slot names it. Its `integrations` block is merged underneath the one
+in `config.json`, key by key, so what you wrote wins.
 
 Skills (`core/skills.ts`) are markdown files under `~/.config/parlour/skills`
-and in whatever directories the plugins add. Only each skill's name and
-description go in the system prompt; the body is fetched with the
-`read_skill` tool when the model decides the rule applies, because a local
-model with a small context cannot carry every house rule on every turn.
+and in any directories the plugins add. Only each skill's name and
+description go in the system prompt. The model fetches the body with the
+`read_skill` tool when it decides the rule applies. A local model with a
+small context cannot carry every house rule on every turn.
 [Skills, MCP and plugins](/docs/skills) is the guide.
 
-The cloud model, decision triage and web search are the slots the house can run without.
-A provider that cannot start (nearly always a missing key) is reported by
-the doctor and left out. A name that leads nowhere is a mistake in config and
-throws, so a typo cannot quietly leave you with the wrong model.
+The house can run without a cloud model, decision triage or web search. A
+provider that cannot start (nearly always a missing key) is left out, and the
+doctor reports it. A name that leads nowhere is a config mistake and throws,
+so a typo cannot quietly leave you with the wrong model.
 
 ## The session
 
 `core/session.ts` is one state machine over a stream of 80 ms frames. It
-does not know where the frames come from: this machine's
-microphone, a satellite relaying audio, a phone or custom hardware all feed
-the same object.
+doesn't know where the frames come from. This machine's microphone, a
+satellite relaying audio, a phone or custom hardware all feed the same object.
 
 ```text
 idle ---wake word---> listening ---silence---> thinking ---answer---> speaking ---> idle
@@ -133,40 +131,40 @@ idle ---wake word---> listening ---silence---> thinking ---answer---> speaking -
   +-----------------------+------------------------+
 ```
 
-- **idle.** Every frame goes to the wake word detector. When it fires, every
-  integration's `gate()` is asked, and any one saying true (the house is
-  muted) ends the wake right there. Otherwise whatever is being said is
-  stopped and the session starts listening.
-- **listening.** Frames go to the endpointer, which gives up after 2.5 s of
+- **idle.** Every frame goes to the wake word detector. When it fires, core
+  asks every integration's `gate()`. If any says true (the house is muted),
+  the wake ends there. Otherwise anything being said is stopped and the
+  session starts listening.
+- **listening.** Frames go to the endpointer. It gives up after 2.5 s of
   leading silence, finishes after `audio.silenceMs` of quiet once speech has
   started, and caps a request at `audio.maxUtteranceMs`.
-- **thinking.** The frames become a WAV, the WAV becomes text, whisper's
+- **thinking.** The frames become a WAV and the WAV becomes text. Whisper's
   hallucinations (`[BLANK_AUDIO]`, a lone "Thank you.") are dropped, and the
   text goes to the router.
-- **speaking.** The sink says the answer. Frames arriving while the sink is
-  speaking reset the wake word rather than being listened to, unless
-  `audio.bargeIn` is on, because with one box in one room the microphone
-  hears the speaker.
+- **speaking.** The sink says the answer. Frames that arrive while it speaks
+  reset the wake word instead of being listened to, unless `audio.bargeIn`
+  is on. With one box in one room, the microphone hears the speaker.
 
-Clients that already know where a request starts and stops (a phone with a
-button, a satellite that did its own wake word) call `utterance(frames)`
-instead of `push(frame)` and skip the first two states.
+Some clients already know where a request starts and stops, such as a phone
+with a button or a satellite that did its own wake word. They call
+`utterance(frames)` instead of `push(frame)` and skip the first two states.
 
 Every client has its own session, keyed by a client id, so a follow-up in
-the kitchen cannot pick up something asked in the study. Each session's
-history is forgotten after four minutes of silence. The id is also that
-client's lane in the queue and its own wake word detector, so it decides
-both what a client can see and how much of the house it can hold up. It
-comes off the network, so the server trims it to something short and
-printable, and gives an id of their own to two clients that claim one name
-at the same time: a satellite that reconnects should pick its conversation
-back up, but the kitchen and a guest's phone both called "parlour" should
-not be sharing one.
+the kitchen cannot pick up something asked in the study. Each session
+forgets its history after four minutes of silence. The id is also the
+client's lane in the queue and its own wake word detector. So it decides
+both what a client can see and how much of the house it can hold up.
+
+The id comes off the network, so the server trims it to something short and
+printable. When two clients claim the same name at once, the server gives
+one of them an id of its own. A satellite that reconnects should pick its
+conversation back up. The kitchen and a guest's phone, both called
+"parlour", should not share one.
 
 ## The pipeline
 
-Whichever door a request came in by, `core/router.ts` runs it through the
-same stages, and the answer goes back to the client that asked and to
+Every request runs through the same stages in `core/router.ts`, whichever
+way it came in. The answer goes back to the client that asked, and to
 nobody else.
 
 ```text
@@ -175,93 +173,98 @@ ask -> queue -> triage -> tasks -> action agent -> one thing to say
 
 ### The queue
 
-A house has more microphones than it has GPUs. Two satellites that hear
-their wake word at the same moment both want the local model, and letting
-both in at once makes each answer arrive later than if they had taken
-turns: the model is one process and its batch is one request deep.
+A house has more microphones than GPUs. When two satellites hear their wake
+word at once, both want the local model. Letting both in together makes each
+answer arrive later than taking turns would. The model is one process, and
+its batch is one request deep.
 
-`core/queue.ts` gives every client a lane of its own, which is what keeps
-satellites out of each other's way in every sense that matters. One request
-per lane runs at a time, so a conversation stays in order and no client can
-hold more than one slot. Lanes take turns as they finish, so the study
-cannot starve the kitchen however fast it asks. `pipeline.concurrency` caps
-how many run at once across the house. A lane that backs up past
-`pipeline.queueDepth` drops its own oldest waiting request and nobody
-else's: somebody who asks twice wants the second answer, and hearing the
-first one first is worse than not hearing it. The client is told nothing to
-say rather than given a stale one.
+`core/queue.ts` gives every client its own lane, which keeps satellites out
+of each other's way. One request per lane runs at a time, so a conversation
+stays in order and no client holds more than one slot. Lanes take turns as
+they finish, so the study cannot starve the kitchen however fast it asks.
+`pipeline.concurrency` caps how many requests run at once across the house.
+
+A lane that backs up past `pipeline.queueDepth` drops its own oldest waiting
+request, and nobody else's. Someone who asks twice wants the second answer,
+and hearing the first one first is worse than not hearing it. The client is
+told there is nothing to say rather than given a stale answer.
 
 ### Triage
 
-Speech recognition hands over a plausible sentence rather than a correct
-one, people say "it" and "in there" and expect the house to know, and one
-breath is often two jobs. A small model given all of that at once, with
-thirty tools in front of it, does the first job and claims the second.
+Speech recognition hands over a plausible sentence, not always a correct
+one. People say "it" and "in there" and expect the house to know. One breath
+is often two jobs. Give a small model all of that at once, with thirty tools
+in front of it, and it does the first job and claims the second.
 
-`core/triage.ts` reads the request before anything acts on it: the words are
-repaired, the pronouns are resolved from the conversation and the room, and
-what is left becomes a list of tasks, each written to stand on its own and
-each marked as something to do, something to look up, or small talk. A
-question it is sure needs the clever one is marked so, and skips the local
-round trip that would only have ended in `ask_the_clever_one`.
+`core/triage.ts` reads the request before anything acts on it. It repairs the
+words and resolves pronouns from the conversation and the room. What is left
+becomes a list of tasks. Each is written to stand on its own and marked as
+something to do, something to look up, or small talk. A question triage is
+sure needs the clever one is marked so. It skips the local round trip that
+would only have ended in `ask_the_clever_one`.
 
-That costs a round trip, and "lights off" does not need one. In the default
-`auto` mode a request that is plainly one short instruction goes straight
-through, and anything compound, long or ambiguous gets the full pass;
-`always` buys the accuracy on every request and `never` sells it. Triage is
-an optimisation and never a gate: a model that answers with prose, with
-rubbish, or not at all leaves the request exactly as it was said.
+Triage costs a round trip, and "lights off" does not need one. In the default
+`auto` mode, a request that is plainly one short instruction goes straight
+through. Anything compound, long or ambiguous gets the full pass. `always`
+buys the accuracy on every request, and `never` gives it up. Triage is an
+optimisation, never a gate. If the model answers with prose, with rubbish or
+not at all, the request stays exactly as it was said.
 
 ### The task list
 
-`core/tasks.ts` holds what the request turned out to be, and the action
-agent takes one task at a time in the order they were said. Each one is
-asked with what the tasks before it did in front of it, so "turn the lamp on
-and tell me if it worked" has something to work with. The replies are joined
-into one thing to say, and two jobs that both answer "Done." are one "Done."
-rather than a stutter. A task that fails abandons the rest, because the
-person is owed one apology and not three.
+`core/tasks.ts` holds what the request turned out to be. The action agent
+takes one task at a time, in the order they were said. Each task sees what
+the tasks before it did, so "turn the lamp on and tell me if it worked" has
+something to work with. The replies are joined into one thing to say, and
+two jobs that both answer "Done." become one "Done." rather than a stutter.
+A task that fails abandons the rest, because you are owed one apology, not
+three.
 
 ### The action agent
 
 `core/dispatch.ts` is local first. The local model gets the system prompt,
-the tools and one extra tool, `ask_the_clever_one`, which the prompt tells
-it to call whenever a question needs real reasoning, current information or
-knowledge it is unsure of. When it does, the rewritten question and the
+the tools and one extra tool, `ask_the_clever_one`. The prompt tells it to
+call that tool whenever a question needs real reasoning, current information
+or knowledge it is unsure of. When it does, the rewritten question and the
 session's history go to the cloud model, which has server-side web search
 and no house tools. If the local model throws or times out and
 `llm.cloud.onLocalFailure` is true, the cloud model gets the original
-question instead. Small talk is given no tools at all, which is both faster
-and the only reliable way to stop a small model calling one.
+question instead. Small talk gets no tools at all. That is faster, and it is
+the only reliable way to stop a small model calling one.
 
-With no cloud model configured, three things change together, and they have
-to: the escalation tool is not offered, the persona stops naming it, and
-failures are final. A prompt that tells a small model to hand over while
-giving it nothing to hand over to is how a local-only house ends up
-apologising instead of turning the light off. If the model asks for the
-clever one anyway, which small models trained on the pattern do, the loop
-answers the call with "there is nobody to hand this to, use the tools you
-have" rather than with an unknown-tool error, so the next round does the job.
+With no cloud model configured, three things change together. The escalation
+tool is not offered, the persona stops naming it, and failures are final. A
+small model told to hand over, with nobody to hand over to, ends up
+apologising instead of turning the light off. Small models trained on the
+pattern sometimes ask for the clever one anyway. The loop then answers the
+call with "there is nobody to hand this to, use the tools you have" rather
+than an unknown-tool error, so the next round does the job.
 
-Optionally, `llm.decision` names an on-device System One decision model
-(built-in: `laya-mlx`, set up in `core/decision.ts`) that judges
-escalate-versus-local for each task before the local model's turn. In
-`shadow` mode it only logs calibrated scores beside whatever the local model
-did; in `triage` mode a high `needs_cloud` / `needs_web` score skips local
-and hands the task to the cloud, while
-a clear house or timer intent keeps the escalate tool off so the answer
-stays on-box. Default is `provider: "none"`. `laya-mlx` needs Apple Silicon
-and `pip install laya-mlx`; the checkpoint stays warm in a local Python
-worker, so transcripts never leave the machine for the decision.
+You can also add a decision model. `llm.decision` names an on-device model
+that scores each task before the local model takes its turn, and decides
+whether it should stay local or go to the cloud. The built-in one is
+`laya-mlx`, wired up in `core/decision.ts`. It needs Apple silicon and
+`pip install laya-mlx`, and it stays warm in a local Python worker, so the
+transcript never leaves your Mac for the decision. The default is
+`provider: "none"`.
+
+- **`shadow` mode** only logs the scores beside whatever the local model did.
+- **`triage` mode** acts on them. A high `needs_cloud` or `needs_web` score
+  skips the local model and hands the task to the cloud. A clear house or
+  timer intent keeps the escalation tool off, so the answer stays on your Mac.
+
+Like triage, it is an optimisation. If the decision model fails, the task
+carries on locally.
 
 `core/loop.ts` runs the tool rounds for whichever model is answering, up to
-`llm.maxToolRounds`, and stops with an apology rather than looping forever.
-Every tool the model asked for in one round runs at once: it asked for all
-of them before it saw any of the answers, so nothing in the round depends on
-anything else in it, and two lights cost the slower one rather than the sum.
+`llm.maxToolRounds`. It stops with an apology rather than looping forever.
+Every tool the model asked for in one round runs at once. The model asked for
+all of them before seeing any answers, so nothing in the round depends on
+anything else in it. Two lights cost the slower one, not the sum.
+
 `pipeline.timeoutMs` is the ceiling on a whole request, checked between
-rounds and between tasks; what is left of a request that runs past it is
-abandoned rather than spoken ten seconds after everyone has left the room.
+rounds and between tasks. Whatever is left of a request that runs past it is
+abandoned, rather than spoken ten seconds after everyone has left the room.
 
 ## Configuration, secrets and paths
 
@@ -276,33 +279,33 @@ abandoned rather than spoken ten seconds after everyone has left the room.
 | Keychain service for connector tokens | `parlour-connector` |
 | The desktop app's own settings | `~/Library/Application Support/io.parlour.desktop/settings.json` |
 
-`config.json` is a Zod schema in which every key has a default, so an empty
-file is a complete config and `parlour config show` prints what is in force.
+`config.json` is a Zod schema in which every key has a default. An empty
+file is a complete config, and `parlour config show` prints what is in force.
 Secrets (`HA_TOKEN`, `ANTHROPIC_API_KEY`, `PARLOUR_TOKEN`, `BRAVE_API_KEY`,
-`LOG_LEVEL`) stay in `secrets.env` with mode 600, and the process
-environment wins over the file, so a one-off run can override something
-without editing anything.
+`LOG_LEVEL`) stay in `secrets.env` with mode 600. The process environment
+wins over the file, so you can override something for a one-off run without
+editing anything.
 
-On Linux the cache and logs follow `XDG_CACHE_HOME` and `XDG_STATE_HOME`.
-Nothing else about Linux is done yet, and we would be glad of help with it.
+On Linux, the cache and logs follow `XDG_CACHE_HOME` and `XDG_STATE_HOME`.
+Nothing else about Linux is done yet, and we would be glad of your help.
 
 ## Events
 
 `parlour start --events` prints one JSON line per state change on stdout:
 `ready`, `state`, `heard`, `reply`, `muted` and `error`, each with an `at`
-timestamp. The desktop app reads these to draw its status rather than
-scraping log text. Without the flag, stdout is a log for a person.
+timestamp. The desktop app reads these to draw its status instead of
+scraping log text. Without the flag, stdout is a log for people to read.
 
 ## Why each part was chosen
 
 | Stage | Choice | Why |
 | --- | --- | --- |
-| Wake word | openWakeWord, ONNX, in process | Free, offline, and it runs in the same Node process as everything else, which is what makes barge-in possible. |
+| Wake word | openWakeWord, ONNX, in process | Free and offline. It runs in the same Node process as everything else, which makes barge-in possible. |
 | Capture | ffmpeg on avfoundation | Nothing to compile, and the only reliable way to pin one input device on macOS. |
 | Speech to text | whisper.cpp `small.en`, kept warm | Loading the model costs more than transcribing a sentence, so it runs as a server. |
-| Model | llama.cpp with a Qwen2.5 GGUF, kept warm | It comes with Parlour, so a house answers after `init` rather than after somebody installs LM Studio and remembers to press Start Server. It speaks the OpenAI API, so LM Studio, Ollama or anything else can take its place. |
-| Escalation | Claude with server-side web search | The local model is fast and private but wrong more often. Handing over is cheap; being wrong out loud is not. |
-| Speech | Kokoro 82M, ONNX | Close to a cloud voice, runs in process, and has British voices. `say` is the fallback for when it fails. |
+| Model | llama.cpp with a Qwen2.5 GGUF, kept warm | It comes with Parlour, so the house answers straight after `init`, with no LM Studio to install and no server to remember to start. It speaks the OpenAI API, so LM Studio, Ollama or anything else can take its place. |
+| Escalation | Claude with server-side web search | The local model is fast and private but wrong more often. Handing over is cheap. Being wrong out loud is not. |
+| Speech | Kokoro 82M, ONNX | Close to a cloud voice, runs in process, and has British voices. `say` is the fallback when it fails. |
 
-Every stage adds to the wait before an answer, so each is chosen to be fast
-rather than best.
+Every stage adds to the wait before an answer, so each one is chosen to be
+fast rather than best.

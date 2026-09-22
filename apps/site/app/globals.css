@@ -534,6 +534,219 @@ body {
   color: var(--ink-2);
 }
 
+/* The setup: one hub, a stem, a bus, and a satellite hanging off each drop. */
+.topology {
+  --wire: color-mix(in srgb, var(--ink-2) 55%, var(--page));
+  --stem: 2.4rem;
+  --drop: 1.8rem;
+  margin: 2.4rem 0 0;
+  display: grid;
+  justify-items: center;
+}
+
+.topology p {
+  margin: 0;
+}
+
+.device-art {
+  display: block;
+  width: 3.4rem;
+  height: 3.4rem;
+  color: var(--ink);
+}
+
+.hub-art {
+  width: 9rem;
+  height: 3.6rem;
+}
+
+.device-lit {
+  fill: var(--hearth);
+  animation: breathe var(--motion-breath) ease-in-out infinite alternate;
+  animation-duration: 1100ms;
+}
+
+@keyframes breathe {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-lit {
+    animation: none;
+  }
+}
+
+.topology .device-room {
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-top: 0.7rem;
+}
+
+.topology .device-name {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.15rem;
+  line-height: 1.25;
+  margin-top: 0.15rem;
+}
+
+.topology .device-how {
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--ink-2);
+  margin-top: 0.3rem;
+  text-wrap: pretty;
+}
+
+.hub {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  max-width: 22rem;
+  padding-bottom: var(--stem);
+}
+
+.hub::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  height: calc(var(--stem) - 0.9rem);
+  border-left: 1px solid var(--wire);
+}
+
+.rooms {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 1.5rem;
+}
+
+/* The bus runs from the first drop to the last. */
+.rooms::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc((100% - 4.5rem) / 8);
+  right: calc((100% - 4.5rem) / 8);
+  border-top: 1px solid var(--wire);
+}
+
+.rooms li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  text-align: center;
+  padding-top: var(--drop);
+}
+
+.rooms li::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: calc(var(--drop) - 0.4rem);
+  border-left: 1px solid var(--wire);
+}
+
+@media (max-width: 44rem) {
+  /* On a phone the bus turns into a spine, and the rooms hang off it in a column. */
+  .topology {
+    --spine: 1.7rem;
+    justify-items: stretch;
+  }
+
+  .hub {
+    justify-self: center;
+  }
+
+  .rooms {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 0.6rem;
+  }
+
+  .rooms::before {
+    left: var(--spine);
+    right: 50%;
+  }
+
+  .rooms li {
+    grid-template-columns: 3.4rem minmax(0, 1fr);
+    column-gap: 1rem;
+    justify-items: start;
+    text-align: left;
+    padding: 0.8rem 0;
+  }
+
+  .rooms li::before {
+    left: var(--spine);
+    top: -0.6rem;
+    bottom: 0;
+    height: auto;
+  }
+
+  .rooms li:first-child::before {
+    top: -0.6rem;
+  }
+
+  .rooms li:last-child::before {
+    bottom: 50%;
+  }
+
+  .rooms .device-art {
+    grid-row: span 3;
+    position: relative;
+    z-index: 1;
+    background: var(--page);
+    align-self: center;
+  }
+
+  .rooms .device-room {
+    margin-top: 0;
+  }
+}
+
+/* A small label on a heading, for something not out yet. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  vertical-align: middle;
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--corner-full);
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.badge::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: var(--corner-full);
+  background: var(--lamp);
+}
+
 /* ----------------------------------------------------------- utility */
 
 .visually-hidden {

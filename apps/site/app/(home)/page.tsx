@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { InstallButton } from "../install-button";
+import { Topology } from "./topology";
 
 export default function Home() {
   return (
@@ -7,13 +8,13 @@ export default function Home() {
       <section className="opening" aria-labelledby="offer">
         <div className="head">
           <h1 id="offer">
-            Give Home Assistant a voice. <span className="turn-line">And ask it anything else.</span>
+            A voice for your home. <span className="turn-line">Private by design.</span>
           </h1>
           <div className="offer">
             <p className="lede">
-              Parlour is a voice assistant that runs on a Mac you already own. Say the wake word from any room
-              to control your home through Home Assistant, or ask a question and hear the answer where you
-              are. Your voice never leaves the house.
+              Parlour turns the Mac you already own into a voice assistant for the whole house. Control Home
+              Assistant from any room, ask it anything, and hear the answer right where you are. Your voice
+              never leaves home.
             </p>
             <div className="actions">
               <InstallButton />
@@ -26,162 +27,148 @@ export default function Home() {
       </section>
 
       <section className="sheet" aria-labelledby="how-heading">
-        <h2 id="how-heading">How it works</h2>
+        <h2 id="how-heading">Just ask. Parlour does the rest.</h2>
         <ol className="steps">
           <li>
-            <strong>Say the wake word.</strong> Nothing is recorded before that.
+            <strong>Speak from any room.</strong> Say the wake word and ask. Nothing is recorded until you do.
           </li>
           <li>
-            <strong>Your Mac turns what you said into text.</strong> The audio goes no further.
+            <strong>Transcribed on your Mac.</strong> Your words become text right there. The recording never
+            leaves home.
           </li>
           <li>
-            <strong>A small local model answers.</strong> It can use Home Assistant, timers, search and the
-            accounts you have connected.
+            <strong>Answered at home.</strong> A model on your Mac takes care of it, using Home Assistant,
+            timers, search and the accounts you connect.
           </li>
           <li>
-            <strong>Harder questions go to Claude.</strong> Only when the local model decides it needs to, and
-            only that one question, as text.
+            <strong>The cloud, only when it helps.</strong> For the rare question that needs more, just that
+            question goes to the cloud model you choose, as text. Never your voice, and never the keys to your
+            home. Or leave it off and everything stays local.
           </li>
           <li>
-            <strong>The answer plays out loud</strong> in the room you asked from.
+            <strong>Hear the answer</strong> in the room you asked from.
           </li>
         </ol>
       </section>
 
-      <section className="sheet" aria-labelledby="private-heading">
-        <h2 id="private-heading">Your voice stays on your Mac</h2>
+      <section className="sheet" aria-labelledby="rooms-heading">
+        <h2 id="rooms-heading">One hub. A voice in every room.</h2>
         <p>
-          The wake word, the recording, the transcription, the model and the voice all run on your Mac. There
-          is no account to create and no server of ours in between. Claude sees one question at a time, as
-          text, and has no access to your home.
+          A Mac mini on a shelf does the thinking. Everything else is a satellite that listens, passes on what
+          it hears and plays back the answer. Satellites run no models, so almost anything with a microphone
+          will do. Automations can ask too, in plain text.
+        </p>
+        <Topology />
+      </section>
+
+      <section className="sheet" aria-labelledby="private-heading">
+        <h2 id="private-heading">What you say stays at home</h2>
+        <p>
+          The wake word, the transcription, the model and the voice all run on your Mac. No account to create.
+          No server in the middle. When a cloud model helps, it sees a single question as text and nothing of
+          your home.
         </p>
         <ul className="notes">
           <li>
-            <strong>Your house sets the permissions.</strong> Parlour can only control what you have exposed
-            to voice assistants in Home Assistant.
+            <strong>You decide what it can touch.</strong> Parlour controls only what you expose to voice
+            assistants in Home Assistant.
           </li>
           <li>
-            <strong>Off the network until you set a token.</strong> Without one, the server answers only the
-            Mac it runs on.
+            <strong>Closed until you open it.</strong> Until you set a token, only the Mac it runs on can talk
+            to it.
           </li>
           <li>
-            <strong>One household, one identity.</strong> Parlour does not tell voices apart. Everyone gets
-            the same permissions and the same answers.
+            <strong>Everyone is treated the same.</strong> Parlour does not tell voices apart, so the whole
+            household gets the same answers and the same permissions.
           </li>
           <li>
-            <strong>One Mac runs it.</strong> The server needs macOS for now, because the models are built for
-            Apple silicon. If it is off, nothing answers until it is back.
+            <strong>One Mac does the work.</strong> It needs macOS for now, because the models are built for
+            Apple silicon. If that Mac is off, nothing answers until it is back.
           </li>
         </ul>
-      </section>
-
-      <section className="sheet" aria-labelledby="rooms-heading">
-        <h2 id="rooms-heading">Talk to it from any room</h2>
-        <p>
-          One Mac does the answering. Everything else with a microphone is a client, and the Mac's own
-          microphone is just another one.
-        </p>
-        <div className="table-scroll">
-          <table className="schedule">
-            <thead>
-              <tr>
-                <th scope="col" className="col">
-                  Client
-                </th>
-                <th scope="col" className="col">
-                  How it connects
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th scope="row" className="row">
-                  Another Mac
-                </th>
-                <td data-label="How it connects">As a satellite. It finds the server on its own.</td>
-              </tr>
-              <tr>
-                <th scope="row" className="row">
-                  Voice PE
-                </th>
-                <td data-label="How it connects">Through Home Assistant, which keeps doing the wake word.</td>
-              </tr>
-              <tr>
-                <th scope="row" className="row">
-                  A phone
-                </th>
-                <td data-label="How it connects">A web page the server serves. Hold the button and talk.</td>
-              </tr>
-              <tr>
-                <th scope="row" className="row">
-                  Something you built
-                </th>
-                <td data-label="How it connects">A socket that takes raw audio.</td>
-              </tr>
-              <tr>
-                <th scope="row" className="row">
-                  An automation
-                </th>
-                <td data-label="How it connects">Send a question as text, get the answer as text.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
       </section>
 
       <section className="sheet" aria-labelledby="ha-heading">
         <h2 id="ha-heading">Made for Home Assistant</h2>
         <div className="two-col">
           <p>
-            Ask for the lights, the heating, the blinds or anything else you have exposed to voice assistants.
-            Expose more and it can do more, with nothing to change on the Parlour side.
+            Lights, heating, blinds. If you have exposed it to voice assistants, you can ask for it. Expose
+            more and Parlour can do more, with nothing else to set up.
           </p>
           <p>
-            Mute lives in Home Assistant, so an automation can keep Parlour quiet while everyone sleeps. Point
-            the OpenAI Conversation integration at Parlour and the voice satellites you already own answer
-            through it.
+            Mute it from Home Assistant, so an automation can keep it quiet while everyone sleeps. And the
+            voice satellites you already own can answer through Parlour too.
           </p>
         </div>
       </section>
 
-      <section className="sheet" aria-labelledby="parts-heading">
-        <h2 id="parts-heading">Swap any part of it</h2>
+      <section className="sheet" aria-labelledby="ios-heading">
+        <h2 id="ios-heading">
+          Parlour for iPhone <span className="badge">Coming soon</span>
+        </h2>
         <p>
-          The wake word, speech to text, both models, the voice, search and the tools are each chosen by name
-          in one config file. To use something else, publish it as an npm package and name it there. The{" "}
-          <Link href="/docs/providers">provider guide</Link> shows how.
+          Your whole house, in your pocket. The iPhone app talks to the hub at home and brings HomeKit along
+          with it.
+        </p>
+        <ul className="notes">
+          <li>
+            <strong>Ask from anywhere at home.</strong> Hold the button, speak, and hear the answer from the
+            same assistant as every other room.
+          </li>
+          <li>
+            <strong>HomeKit, built in.</strong> See your rooms and accessories, and switch things on and off
+            with a tap. It still works when the Mac at home is off.
+          </li>
+          <li>
+            <strong>Finds your hub on its own.</strong> No addresses to type. It discovers Parlour on your
+            network the moment you open it.
+          </li>
+          <li>
+            <strong>Answers even when home cannot.</strong> With Apple Intelligence, your iPhone can answer by
+            itself, entirely on device.
+          </li>
+        </ul>
+      </section>
+
+      <section className="sheet" aria-labelledby="parts-heading">
+        <h2 id="parts-heading">Make it yours</h2>
+        <p>
+          Pick the wake word, the voice, the models and the search you want, all by name in one config file.
+          Teach it your <Link href="/docs/skills">house rules</Link> in plain markdown. And if you want
+          something that is not built in, plug it in as an npm package. The{" "}
+          <Link href="/docs/providers">provider guide</Link> shows you how.
         </p>
       </section>
 
       <section className="sheet installation" aria-labelledby="install-heading">
-        <h2 id="install-heading">Running in ten minutes</h2>
+        <h2 id="install-heading">Up and running in minutes</h2>
         <div className="two-col">
           <pre>
             <code>
               {"npm install -g parlour\n"}
               {"parlour init          "}
-              <span className="c"># fetches what it needs and asks a few questions</span>
+              <span className="c"># gets what it needs, asks a few questions</span>
               {"\nparlour text          "}
-              <span className="c"># try it in the terminal, no microphone needed</span>
+              <span className="c"># try it by typing, no microphone needed</span>
               {"\nparlour start         "}
               <span className="c"># and now out loud</span>
             </code>
           </pre>
           <p>
-            You need a Mac with Node 22 and Homebrew. Everything else in the house just needs a microphone.
-            Prefer buttons to a terminal? The <Link href="/docs/desktop">menu bar app</Link> does the same. It
-            answers to <code>hey_jarvis</code> out of the box, and training it to answer to{" "}
-            <Link href="/docs/wake-word">a word of your own</Link> takes an afternoon.
+            All you need is a Mac with Node 22 and Homebrew. Every other room just needs a microphone. Rather
+            skip the terminal? The <Link href="/docs/desktop">menu bar app</Link> does it all with buttons.
+            Parlour answers to <code>hey_jarvis</code> out of the box, and you can teach it{" "}
+            <Link href="/docs/wake-word">a name of your own</Link> in an afternoon.
           </p>
         </div>
       </section>
 
       <section className="sheet" aria-labelledby="source-heading">
-        <h2 id="source-heading">Open source</h2>
+        <h2 id="source-heading">Free and open source</h2>
         <p>
-          Parlour is MIT licensed and at version 0.1.0. Bug reports, questions and pull requests are welcome
-          on <a href="https://github.com/mrprkr/parlour">GitHub</a>. The most useful thing to add is a
-          provider: a new voice, a different speech to text engine, or a Linux service manager.
+          Parlour is MIT licensed. Bug reports, questions and pull requests are all welcome on{" "}
+          <a href="https://github.com/mrprkr/parlour">GitHub</a>. The most helpful thing you can add is a
+          provider: a new voice, another speech engine, or a Linux service manager.
         </p>
       </section>
     </main>

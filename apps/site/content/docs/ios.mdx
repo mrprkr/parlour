@@ -1,22 +1,23 @@
 ---
 title: "The iOS app"
-description: "A client in your pocket: HomeKit, the local network, and a model on the phone."
+description: "A client in your pocket, with HomeKit, local discovery and a model on the phone."
 ---
 
-`apps/ios` is a client, in the same sense a satellite is a client: it records,
-it posts, it plays the answer back. Everything that thinks, holds a key or
-touches the house runs on the Mac at home. What the phone adds is that it is
-the one you already carry, that it knows about HomeKit without asking anybody,
-and that it has a small model of its own for when the house cannot be reached.
+The iOS app puts Parlour on the phone you already carry. It records, sends the
+recording home and plays the answer back, just as a satellite does. Everything
+that thinks, holds a key or touches the house still runs on the Mac at home.
+The phone adds HomeKit, which it knows about without any setup, and a small
+model of its own for when the house cannot be reached.
 
-It speaks the routes in [Clients](/docs/clients) and nothing private: `/health`
-to check, `/voice` for a recording, `/ask` for text. Anything you could build
-against those routes, the app is built against too.
+The app lives in `apps/ios` and uses only the public routes in
+[Clients](/docs/clients): `/health` to check, `/voice` for a recording and
+`/ask` for text. Anything the app does, you could build against those routes
+too.
 
 ## Building it
 
-The Xcode project is generated from `apps/ios/project.yml` rather than checked
-in, because a `.pbxproj` is not a thing a person can review.
+The Xcode project is generated from `apps/ios/project.yml` instead of being
+checked in, because nobody can review a `.pbxproj`.
 
 ```sh
 brew install xcodegen
@@ -25,60 +26,62 @@ pnpm exec nx run ios:xcodebuild   # compile for the simulator
 pnpm exec nx run ios:xcodetest    # run ParlourTests
 ```
 
-Signing is left to you: set `PARLOUR_DEVELOPMENT_TEAM` before generating, or
+Signing is up to you. Set `PARLOUR_DEVELOPMENT_TEAM` before generating, or
 pick a team in Xcode once. HomeKit and the local network both need a real
-device rather than the simulator. There is no iOS job in CI yet, so the app is
-built by hand.
+device, not the simulator. There is no iOS job in CI yet, so you build the app
+by hand.
 
 ## The four permissions
 
-A voice assistant that will not say what it is allowed to do is not one
-anybody should install, so the Settings tab lists all four with a mark against
-each, and the reason in every prompt says what the permission buys you.
+You should know what a voice assistant is allowed to do before you trust it.
+So the Settings tab lists all four permissions with a mark against each, and
+every prompt says what the permission gives you.
 
-| Permission | What it buys | Raised by |
+| Permission | What it gives you | Asked for when |
 | --- | --- | --- |
-| Microphone | Recording while the talk button is held | Holding the button |
-| Local network | Finding the server with Bonjour, then talking to it | Opening the app |
-| HomeKit | The rooms and accessories on the House tab | Opening that tab |
-| Speech recognition | Making out a request on the phone when the server cannot be reached | Only when the on-device answer is switched on |
+| Microphone | Recording while you hold the talk button | You hold the button |
+| Local network | Finding the server with Bonjour, then talking to it | The app opens |
+| HomeKit | The rooms and accessories on the House tab | You open that tab |
+| Speech recognition | Understanding a request on the phone when the server cannot be reached | Only when the on-device answer is switched on |
 
-HomeKit and multicast are entitlements as well as prompts. Plain HTTP to the
-house is allowed by `NSAllowsLocalNetworking`, which is scoped to the local
-network and nothing else, because the server is on a private address and
-speaks HTTP. That is the same trade the phone page makes, and the same reason
-a reverse proxy is worth having if you want to reach the house from outside it.
+HomeKit and multicast are entitlements as well as prompts. `NSAllowsLocalNetworking`
+allows plain HTTP to the house, and only on the local network, because the
+server sits on a private address and speaks HTTP. The phone page makes the
+same trade. It is also why a reverse proxy is worth having if you want to
+reach the house from outside.
 
 ## Finding the server
 
-The same way a satellite does. The app browses for `_parlour._tcp`, and
-because Bonjour hands back a service rather than an address, it opens a
-connection to the service and reads the host and port off the resolved path.
-Anything it finds is offered in Settings. An address typed in by hand wins
-over anything found, and from then on that is the only server the app talks
-to, for the same reason a satellite pins the first server it trusts.
+The app finds the server the same way a satellite does. It browses for
+`_parlour._tcp`. Bonjour returns a service rather than an address, so the app
+opens a connection to the service and reads the host and port off the
+resolved path. Anything it finds appears in Settings.
 
-Browsing is also what raises the local network prompt, so it happens as the
-app opens rather than in the middle of someone trying to say something.
+An address you type in by hand wins over anything found. From then on, it is
+the only server the app talks to, just as a satellite pins the first server it
+trusts.
+
+Browsing is also what raises the local network prompt. So the prompt appears
+as the app opens, not while someone is trying to say something.
 
 ## The model on the phone
 
-The app wraps Apple's Foundation Models, which need iOS 26 and Apple
-Intelligence switched on. It is off by default, and it is a fallback rather
-than a first stop: the phone has no tools, so it cannot switch anything on,
-read a sensor or look anything up. The server is local first for a reason, and
-the phone deferring to it is the same reason one step further out.
+The app can answer on its own using Apple's Foundation Models, which need
+iOS 26 and Apple Intelligence switched on. It is off by default, and it is a
+fallback, not a first stop. The phone has no tools, so it cannot switch
+anything on, read a sensor or look anything up. The phone defers to the house
+for the same reason the house tries its local model first.
 
-When it is on and the server cannot be reached, the recording is transcribed
-on the device with on-device speech recognition and answered on the device,
-and the answer is labelled as coming from the phone rather than from home.
-Nothing in that path leaves the handset.
+When it is on and the server cannot be reached, the phone transcribes the
+recording with on-device speech recognition and answers it on the device. The
+answer is labelled as coming from the phone, not from home. Nothing in that
+path leaves the handset.
 
 ## HomeKit
 
-The House tab reads the homes, rooms and accessories HomeKit already knows
-about and can flip anything with a power state. It is deliberately not how
-Parlour controls the house: the agent's tools go through Home Assistant on the
-server, which is the one place that knows what is connected to what. This is
-the second opinion in your pocket, and the screen that still works when the
-Mac at home is switched off.
+The House tab shows the homes, rooms and accessories HomeKit already knows
+about, and can switch anything with a power state. It is deliberately not how
+Parlour controls the house. The agent's tools go through Home Assistant on the
+server, the one place that knows what is connected to what. The House tab is
+a second opinion in your pocket, and a screen that still works when the Mac
+at home is off.

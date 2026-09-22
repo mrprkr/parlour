@@ -1,28 +1,28 @@
 ---
 title: Tuning
-description: Wake sensitivity, how long it waits for you to finish, the voice, model sizes, and what to change when something is wrong.
+description: Adjust wake sensitivity, timing, voice and models, and fix what feels wrong.
 ---
 
 Everything on this page is a key in `~/.config/parlour/config.json`.
-`parlour config edit` opens the file, `parlour config show` prints what is
-in force with the defaults filled in, and `parlour service restart` (or a
-restart from the app) picks up whatever you changed.
+`parlour config edit` opens the file. `parlour config show` prints what is in
+force, with the defaults filled in. `parlour service restart` (or a restart
+from the app) picks up your changes.
 
 ## When something is not quite right
 
 | What you notice | What to try |
 | --- | --- |
 | It wakes up for the television | Raise `wake.threshold` towards 0.7. |
-| It never wakes up | Lower `wake.threshold` towards 0.4, and check `audio.inputDevice` is the microphone you think it is. |
+| It never wakes up | Lower `wake.threshold` towards 0.4, and check that `audio.inputDevice` is the microphone you think it is. |
 | It cuts you off mid-sentence | Raise `audio.silenceMs`, or lower `audio.silenceThreshold`. |
 | It waits too long before answering | Lower `audio.silenceMs` to about 600. |
 | It gives up before you start talking | You have 2.5 s after the wake word to begin. Try saying the wake word and the request in one breath. |
 | It answers slowly | Try a smaller local model, or a smaller whisper model: `parlour models fetch --whisper ggml-base.en.bin`, then `parlour service install` to rewrite the whisper service. It loads the first model file in `~/Library/Caches/parlour/models/whisper/`, and `base` sorts before `small`. |
-| It asks the cloud too often, or not often enough | That is decided by the prompt rather than a threshold. See `packages/parlour/src/core/prompt.ts`. |
-| It says nothing at all | Run `parlour doctor`, or press Check in the app. It will name the part that is down. |
-| It talks over itself | `audio.bargeIn` is off by default because with one box in one room, the microphone hears the speaker. |
+| It asks the cloud too often, or not often enough | The prompt decides this, not a threshold. See `packages/parlour/src/core/prompt.ts`. |
+| It says nothing at all | Run `parlour doctor`, or press Check in the app. It names the part that is down. |
+| It talks over itself | `audio.bargeIn` is off by default, because with one box in one room the microphone hears the speaker. |
 | It fires twice on one wake word | Raise `wake.refractoryMs`. |
-| The voice is not the one you wanted | `tts.voice` and `tts.speed`. Kokoro downloads itself the first time Parlour starts after an install, so that first start is slow and the fallback voice may speak until it is ready. |
+| The voice is not the one you wanted | Set `tts.voice` and `tts.speed`. Kokoro downloads itself the first time Parlour starts after an install, so that first start is slow and the fallback voice may speak until it is ready. |
 | It can see the lights but not the blinds | Expose the blinds. Home Assistant only publishes what is exposed under Settings > Voice assistants > Expose. |
 
 ## Audio
@@ -43,11 +43,11 @@ restart from the app) picks up whatever you changed.
   microphone. `ffmpeg -f avfoundation -list_devices true -i ""` prints the
   list, and `parlour init` shows it to you when it asks.
 - **`silenceMs`** is how much quiet ends a request once you have started
-  talking. **`silenceThreshold`** is the RMS level, from 0 to 1, below which
-  a frame counts as silence. A noisy room wants it higher; a quiet speaker
-  wants it lower.
-- **`maxUtteranceMs`** caps a single request. It is a limit for a microphone
-  that never goes quiet, not a way to allow long questions.
+  talking. **`silenceThreshold`** is the RMS level, from 0 to 1, below which a
+  frame counts as silence. Raise it for a noisy room. Lower it for a quiet
+  speaker.
+- **`maxUtteranceMs`** caps a single request. It guards against a microphone
+  that never goes quiet. It is not a way to allow long questions.
 
 ## The wake word
 
@@ -55,12 +55,12 @@ restart from the app) picks up whatever you changed.
 { "wake": { "provider": "openwakeword", "words": ["hey_jarvis"], "threshold": 0.5, "refractoryMs": 1500 } }
 ```
 
-The stock words are `hey_jarvis`, `alexa` and `hey_mycroft`, and
+The stock words are `hey_jarvis`, `alexa` and `hey_mycroft`.
 `parlour models fetch --wake hey_jarvis,alexa` fetches the ones you name into
-`~/Library/Caches/parlour/models/openwakeword/`. Any openWakeWord model works:
-drop `<word>.onnx` into that directory and add `<word>` to `words`. You can
-have more than one word live at once, for a small cost in CPU. To train a
-word of your own, see [Your own wake word](/docs/wake-word).
+`~/Library/Caches/parlour/models/openwakeword/`. Any openWakeWord model works.
+Drop `<word>.onnx` into that directory and add `<word>` to `words`. You can
+have more than one word live at once, for a small cost in CPU. To train your
+own word, see [Your own wake word](/docs/wake-word).
 
 ## The voice
 
@@ -69,12 +69,13 @@ word of your own, see [Your own wake word](/docs/wake-word).
 ```
 
 Kokoro's British voices are `bf_emma`, `bf_isabella`, `bm_george` and
-`bm_lewis`. If you name a voice it does not have, the reply falls through to
-the fallback and the log lists every voice Kokoro knows. `fallback` names the
-voice used when the first one fails (`null` turns the fallback off).
-`macos-say` ignores a Kokoro voice id and uses the system voice, or you can
-give it a macOS voice name of its own (`"voice": "Daniel"` when `provider`
-is `macos-say`).
+`bm_lewis`. If you name a voice Kokoro does not have, the reply falls through
+to the fallback and the log lists every voice Kokoro knows.
+
+`fallback` names the voice used when the first one fails (`null` turns the
+fallback off). `macos-say` ignores a Kokoro voice id and uses the system
+voice. You can also give it a macOS voice name of its own (`"voice": "Daniel"`
+when `provider` is `macos-say`).
 
 ## The models
 
@@ -88,35 +89,33 @@ is `macos-say`).
 }
 ```
 
-- **`local.managed`** is Parlour running the model itself: llama.cpp from
-  Homebrew, a GGUF from its own catalogue, kept warm by launchd on port 8920
-  exactly as whisper is. `parlour models suggest` lists the catalogue and
-  says which one this Mac should hold; `parlour models fetch --llm <id>`
-  downloads another. Turn it off and Parlour talks to whatever server
-  `baseUrl` names instead, and starts none of its own.
-- **`local.model`** is the id exactly as the server reports it. `parlour
-  doctor` lists what is being served next to what is configured, which is
-  the usual mismatch after loading a different model in LM Studio. A managed
-  server answers to the catalogue id, so the two only differ when the model
-  named was never fetched.
-- **`local.timeoutMs`** applies to each completion. A model that regularly
-  runs past it is too big for the machine, and with `cloud.onLocalFailure`
-  on, every timeout turns into a cloud answer, which is slower and not
-  private.
-- **`cloud.enabled: false`**, or simply no `ANTHROPIC_API_KEY`, keeps
-  everything local. The escalation tool is not offered, the persona stops
-  telling the model to hand over, and it answers everything itself with the
-  house tools still in hand, including the questions it probably should not.
+- **`local.managed`** means Parlour runs the model itself: llama.cpp from
+  Homebrew and a GGUF from its own catalogue, kept warm by launchd on port
+  8920, just like whisper. `parlour models suggest` lists the catalogue and
+  says which model suits this Mac. `parlour models fetch --llm <id>` downloads
+  another. Turn `managed` off and Parlour talks to whatever server `baseUrl`
+  names, and starts none of its own.
+- **`local.model`** is the model id exactly as the server reports it.
+  `parlour doctor` lists what is being served next to what is configured.
+  A mismatch there is common after loading a different model in LM Studio.
+  A managed server answers to the catalogue id, so the two only differ when
+  the named model was never fetched.
+- **`local.timeoutMs`** applies to each completion. A model that often runs
+  past it is too big for the machine. With `cloud.onLocalFailure` on, every
+  timeout becomes a cloud answer, which is slower and not private.
+- **`cloud.enabled: false`**, or no `ANTHROPIC_API_KEY`, keeps everything
+  local. The escalation tool is not offered, and the persona stops telling the
+  model to hand over. The local model answers everything itself, with the
+  house tools still available, including questions it probably should not.
 - **`maxToolRounds`** stops a model that keeps calling tools. Six is enough
   for "turn the kitchen and hall lights off and set a timer".
-- A hosted OpenAI-compatible endpoint works as the local model too: add
+- A hosted OpenAI-compatible endpoint also works as the local model. Add
   `"apiKeyEnv": "SOME_NAME"` naming a variable in `secrets.env`.
 
 ### Through the AI SDK instead
 
-Either slot can be filled by `"provider": "ai-sdk"`, which reaches the same
-two back ends through Vercel's AI SDK rather than through Parlour's own
-clients:
+You can fill either slot with `"provider": "ai-sdk"`. It reaches the same two
+back ends through Vercel's AI SDK instead of Parlour's own clients:
 
 ```json
 {
@@ -127,15 +126,14 @@ clients:
 }
 ```
 
-The loop does not move. Tools are handed to the SDK without an `execute`, so
-it returns the calls rather than running them, and the tool rounds, the
-escalation and the request deadline stay in Parlour. What changes is who
-keeps up with the two APIs.
+The loop does not move. Tools are handed to the SDK without an `execute`,
+so the SDK returns the calls instead of running them. The tool rounds, the
+escalation and the request deadline all stay in Parlour. The only change is
+who keeps up with the two APIs.
 
-The built-in clients remain the default, because they are what a house runs
-with nothing but `fetch` behind them. Reach for this one if you would rather
-track one library than two APIs, or to put the SDK's own middleware in front
-of a model.
+The built-in clients remain the default, because they need nothing but
+`fetch`. Choose the AI SDK if you would rather track one library than two
+APIs, or want to put the SDK's own middleware in front of a model.
 
 ### Decision model (optional)
 
@@ -153,17 +151,19 @@ of a model.
 }
 ```
 
-[Laya MLX](https://github.com/mizorewww/laya-mlx) answers a fixed set of
-Noul and Choice questions about each task on-device, after the pipeline's
-triage has split the request and before the local model runs. Needs Apple
-Silicon and `pip install laya-mlx` (first load downloads the checkpoint into
-the Hugging Face cache). Start with `"mode": "shadow"`: the log shows
-`needs_cloud`, intent and confidence, but `ask_the_clever_one` still
-decides. Switch to `"mode": "triage"` once the scores look right: scores
-above `escalateThreshold` go straight to the cloud model, and a clear house
-or timer intent keeps escalation off so house commands stay local.
-`"provider": "none"` (the default) skips the call entirely. Multilingual
-houses can set `"model": "aac6fef/laya-multilingual-mlx"`.
+[Laya MLX](https://github.com/mizorewww/laya-mlx) scores each task on your
+Mac and decides whether it needs the cloud. It runs after triage has split
+the request and before the local model takes its turn. It needs Apple silicon
+and `pip install laya-mlx`. The first load downloads the checkpoint into the
+Hugging Face cache.
+
+- **Start with `"mode": "shadow"`.** The log shows `needs_cloud`, the intent
+  and the confidence, but `ask_the_clever_one` still decides.
+- **Switch to `"mode": "triage"`** once the scores look right. Scores above
+  `escalateThreshold` go straight to the cloud model. A clear house or timer
+  intent keeps escalation off, so house commands stay local.
+- **`"provider": "none"`**, the default, skips the decision model entirely.
+- **Multilingual house?** Set `"model": "aac6fef/laya-multilingual-mlx"`.
 
 ## The pipeline
 
@@ -179,25 +179,25 @@ houses can set `"model": "aac6fef/laya-multilingual-mlx"`.
 }
 ```
 
-- **`concurrency`** is how many requests are answered at once across the
-  whole house. One request per client either way, so this is how many rooms
-  can be answered at once rather than how hard one room can push. Two suits
-  one machine with one local model; raise it if the model is hosted
-  elsewhere and can take it, and the queue will still keep each room in turn.
+- **`concurrency`** is how many requests are answered at once across the whole
+  house. Each client gets one request at a time either way, so this sets how
+  many rooms can be answered at once, not how hard one room can push. Two
+  suits one machine with one local model. Raise it if the model is hosted
+  elsewhere and can take the load. The queue still keeps each room in turn.
 - **`queueDepth`** is how many requests may wait in one client's lane. Past
-  it, that client's oldest waiting request is dropped and nothing is said
-  for it: somebody who asks twice wants the second answer.
-- **`triage`** is when a request is repaired and split before it is acted
-  on. `auto` reads anything compound, long or ambiguous and lets a plain
-  instruction through at once. `always` costs a local round trip on every
-  request and is worth it in a noisy room or with a small speech model;
-  `never` sends the words to the action agent exactly as they were heard.
-- **`maxTasks`** caps how many things one request may become. Four is "turn
+  that, the client's oldest waiting request is dropped silently. Someone who
+  asks twice wants the second answer.
+- **`triage`** controls when a request is repaired and split before Parlour
+  acts on it. `auto` reads anything compound, long or ambiguous, and lets a
+  plain instruction straight through. `always` costs a local round trip on
+  every request, which is worth it in a noisy room or with a small speech
+  model. `never` sends the words to the action agent exactly as heard.
+- **`maxTasks`** caps how many tasks one request may become. Four covers "turn
   the kitchen and hall lights off, set a timer and tell me the forecast".
 - **`timeoutMs`** is the ceiling on one whole request. It is checked between
-  tool rounds and between tasks rather than mid-request, so nothing already
-  with a model is abandoned; what it stops is a request still going long
-  after the person has left the room.
+  tool rounds and between tasks, not mid-request, so nothing already with a
+  model is abandoned. It stops a request that is still running long after the
+  person has left the room.
 
 ## Search
 
@@ -205,17 +205,16 @@ houses can set `"model": "aac6fef/laya-multilingual-mlx"`.
 { "search": { "provider": "searxng", "url": "http://searxng.local:8080", "maxResults": 5 } }
 ```
 
-Only the local model uses this; the cloud model brings its own search.
+Only the local model uses this. The cloud model brings its own search.
 SearXNG needs `- json` under `search.formats` in its `settings.yml`.
-`"provider": "brave"` with `BRAVE_API_KEY` in `secrets.env` is the hosted
-alternative, and `"provider": "none"` leaves the local model without a search
+For a hosted alternative, use `"provider": "brave"` with `BRAVE_API_KEY` in
+`secrets.env`. `"provider": "none"` leaves the local model without a search
 tool.
 
 ## Logging
 
 Set `LOG_LEVEL` in `secrets.env` (or the environment) to `debug`, `info`,
-`warn` or `error`. `debug` prints every transcription time and every tool
-call with its arguments, which is the level you want when working out why
-the model did what it did. Logs from the service land in
-`~/Library/Logs/parlour/agent.log` and `whisper.log`, and
+`warn` or `error`. `debug` prints every transcription time and every tool call
+with its arguments. Use it when you want to know why the model did what it
+did. Service logs go to `~/Library/Logs/parlour/agent.log` and `whisper.log`.
 `parlour service logs --lines 200` prints the tail of both.

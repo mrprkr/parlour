@@ -1,19 +1,20 @@
 ---
 title: The menu bar app
-description: What the app does, how it drives the CLI, and how to run it against a checkout.
+description: What the app does, how it drives the CLI, and how to run it from a checkout.
 ---
 
-`apps/desktop` is a Tauri app: a Rust shell around the `parlour` command,
-with a window as its only interface. It exists so that the everyday things
-(start, stop, is it listening, what did it just hear, why is it not
-answering) never need a terminal. It is an interface rather than a second
-implementation: everything it knows about Parlour it learns by running the
-CLI, and every setting it writes goes through `parlour config write`, so the
-app and the terminal always see the same configuration.
+The menu bar app handles the everyday things without a terminal: start, stop,
+is it listening, what did it just hear, why is it not answering.
+
+`apps/desktop` is a Tauri app, a Rust shell around the `parlour` command with a
+window as its only interface. It is not a second implementation. It learns
+everything by running the CLI, and writes every setting through
+`parlour config write`, so the app and the terminal always see the same
+configuration.
 
 ## Building it
 
-You will need Node 22, pnpm, and a Rust toolchain (`rustup`).
+You need Node 22, pnpm and a Rust toolchain (`rustup`).
 
 ```sh
 pnpm install
@@ -22,39 +23,35 @@ pnpm -C apps/desktop build      # Parlour.app and a dmg, in apps/desktop/src-tau
 ```
 
 Live reload covers the window. The CLI it drives is whichever `parlour` the
-app's settings point at, which on a fresh machine is the globally installed
-one rather than the checkout: see
+app's settings point at. On a fresh machine that is the globally installed one,
+not the checkout. See
 [Running the app against a checkout](#running-the-app-against-a-checkout).
 
-A build from your own checkout is unsigned, which is fine on the machine
-that made it: copy `Parlour.app` into `/Applications` and, the first time,
-open it with a right click. The dmg on a release is signed with a Developer
-ID certificate and notarised, so that one opens the ordinary way, on a
-machine that has never seen this repository.
+A build from your checkout is unsigned, which is fine on the machine that made
+it. Copy `Parlour.app` into `/Applications` and right-click to open it the
+first time. A release dmg is signed with a Developer ID certificate and
+notarised, so it opens normally on any Mac.
 
-The app does not bundle Node or the package. It expects `parlour` to be on
-your login shell's PATH, or in `/opt/homebrew/bin`, `/usr/local/bin` or
-`~/.npm-global/bin`, and offers to run `npm install -g parlour` at its own
-version when it cannot find one. One copy of Parlour on the machine is
-better than two that can disagree.
+The app does not bundle Node or the package. It looks for `parlour` on your
+login shell's PATH, or in `/opt/homebrew/bin`, `/usr/local/bin` or
+`~/.npm-global/bin`. If it cannot find one, it offers to run
+`npm install -g parlour` at its own version. One copy of Parlour on the machine
+is better than two that can disagree.
 
 ## Signing
 
-Notarising means signing with the hardened runtime, and the hardened runtime
-takes the microphone away from an app that has not asked for it, so
-`src-tauri/Entitlements.plist` asks. `Info.plist` next to it is the sentence
-macOS shows when it puts the question to the person using it. The recording
-happens in ffmpeg rather than in the app, but ffmpeg is a child of the app
-and the system attributes the request to whoever started it, so both files
-belong to the app.
+Notarising requires the hardened runtime, which blocks the microphone unless
+the app asks for it. `src-tauri/Entitlements.plist` asks, and `Info.plist` next
+to it holds the sentence macOS shows the user. ffmpeg does the recording, but
+macOS attributes the request to the app that started it, so both files belong
+to the app.
 
-The release workflow sets the Apple environment variables Tauri reads, and
-Tauri does the rest: a keychain of its own for the certificate, the signature,
-and then notarising `Parlour.app` and stapling the ticket into it. It signs
-the dmg but does not notarise it, and a disk image without a ticket of its
-own is refused before anybody reaches the app inside, so `scripts/notarise.sh`
-does that half and then asks Gatekeeper what it makes of both. That script
-runs from a checkout too, where it finds no credentials, says so and stops.
+The release workflow sets the Apple environment variables Tauri reads. Tauri
+creates its own keychain for the certificate, signs the app, notarises
+`Parlour.app` and staples the ticket into it. It signs the dmg but does not
+notarise it, and macOS refuses a disk image without its own ticket. So
+`scripts/notarise.sh` notarises the dmg, then asks Gatekeeper to assess both.
+Run from a checkout, it finds no credentials, says so and stops.
 
 [`.github/workflows/release.yml`](https://github.com/mrprkr/parlour/blob/main/.github/workflows/release.yml)
 lists the six repository secrets behind it and what each one is.
@@ -63,9 +60,9 @@ lists the six repository secrets behind it and what each one is.
 
 | Tab | What you will find there |
 | --- | --- |
-| Onboarding | Opens itself on a machine that is not set up yet, and from **Run setup again** in Settings after that. Four steps: find or install `parlour`, an Install button that runs `parlour init --porcelain --yes` with its output live, the questions, and the doctor. |
-| Status | A dot that follows Parlour through idle, listening, thinking and speaking, the last thing it heard, the last thing it said and which model said it, and a Check button that runs `parlour doctor --json`. |
-| Settings | Wake word, sensitivity, microphone, silence timeout, voice, both models, the Home Assistant address, and the secrets. It reads `parlour config show --raw` (the file as written, so saving does not freeze every default into it) and writes through `parlour config write` and `parlour secrets set`. |
+| Onboarding | Opens by itself on a machine that is not set up yet, and from **Run setup again** in Settings after that. Four steps: find or install `parlour`, an Install button that runs `parlour init --porcelain --yes` with live output, the questions, and the doctor. |
+| Status | A dot that follows Parlour through idle, listening, thinking and speaking. The last thing it heard, the last thing it said and which model said it. A Check button that runs `parlour doctor --json`. |
+| Settings | Wake word, sensitivity, microphone, silence timeout, voice, both models, the Home Assistant address and the secrets. It reads `parlour config show --raw` (the file as written, so saving does not freeze every default into it) and writes through `parlour config write` and `parlour secrets set`. |
 | Connectors | What your household has signed in to, and a form to add another. `parlour connectors`, with buttons. |
 | Logs | Parlour's output, live. |
 
@@ -87,13 +84,13 @@ src-tauri/src/
 
 The Rust side knows the path to the `parlour` binary and nothing else. The
 window asks for config, secrets, the doctor and the connectors through the
-CLI's `--json` and stdin interfaces, and the supervisor reads the NDJSON that
-`parlour start --events` prints (`ready`, `state`, `heard`, `reply`, `muted`,
-`error`) rather than scraping log text. Anything on stdout that is not an
-event is log output, which is where a failure to start shows up.
+CLI's `--json` and stdin interfaces. The supervisor reads the NDJSON events
+that `parlour start --events` prints (`ready`, `state`, `heard`, `reply`,
+`muted`, `error`) instead of scraping log text. Anything on stdout that is not
+an event is log output, and that is where a failure to start shows up.
 
-Stopping sends SIGINT rather than SIGKILL, because Parlour shuts ffmpeg down
-on it, and an orphaned ffmpeg would keep hold of the microphone.
+Stopping sends SIGINT, not SIGKILL. Parlour shuts ffmpeg down on SIGINT, and an
+orphaned ffmpeg would keep hold of the microphone.
 
 The app's own settings live at
 `~/Library/Application Support/io.parlour.desktop/settings.json`:
@@ -101,53 +98,54 @@ The app's own settings live at
 
 ## Running the app against a checkout
 
-`pnpm -C apps/desktop app` reloads the window from the checkout, but every
-CLI call goes to the `parlourBin` in `settings.json`, which the app fills in
-by asking your login shell for `parlour`. So a change to `packages/parlour`
-is not what the app exercises until you point it there.
-`packages/parlour/bin/parlour-dev` runs the CLI from source for exactly this
-purpose. Put its absolute path in **The parlour command** on the Settings
-tab (or on the onboarding's first step), which takes effect at once, or
-write it to the file and restart the app, which reads the file once at
-launch:
+`pnpm -C apps/desktop app` reloads the window from the checkout, but every CLI
+call goes to the `parlourBin` in `settings.json`. The app fills that in by
+asking your login shell for `parlour`. So the app does not exercise your
+changes to `packages/parlour` until you point it there.
+
+`packages/parlour/bin/parlour-dev` runs the CLI from source. Point the app at
+it in either of two ways:
+
+- Put its absolute path in **The parlour command** on the Settings tab (or on
+  the first step of onboarding). This takes effect at once.
+- Write it to the file and restart the app, which reads the file once at
+  launch:
 
 ```json
 { "parlourBin": "/path/to/parlour/packages/parlour/bin/parlour-dev", "autostart": false }
 ```
 
-The path is kept for as long as it is executable, so the app will not
-replace it with the global copy. The dev build and the installed
-`Parlour.app` share the same settings file, so when you are done, put the
-global path back, or delete the file and let the app find `parlour` again.
+The app keeps the path while it is executable and will not swap in the global
+copy. The dev build and the installed `Parlour.app` share this settings file,
+so when you are done, put the global path back, or delete the file and let the
+app find `parlour` again.
 
-## Two things worth knowing
+## Two things to know
 
-- **The app and the LaunchAgent are alternatives, not a pair.** Two copies
-  of Parlour means two processes fighting over one microphone and one port.
-  `parlour init` asks which you want and sets up only that one; when the app
-  runs `init`, it leaves the agent to the app. `parlour service status`
-  tells you whether a LaunchAgent exists, and `parlour service uninstall`
-  removes it.
-- **Microphone permission belongs to whatever starts it.** macOS grants it
+- **Use the app or the LaunchAgent, not both.** Two copies of Parlour means
+  two processes fighting over one microphone and one port. `parlour init` asks
+  which you want and sets up only that one. When the app runs `init`, it
+  leaves the agent to the app. `parlour service status` tells you whether a
+  LaunchAgent exists, and `parlour service uninstall` removes it.
+- **Microphone permission belongs to whatever starts Parlour.** macOS grants it
   to the process it holds responsible, which for anything the app spawns is
-  the app. Onboarding asks as soon as it can, by opening the device for a
-  fraction of a second, which is what makes the system prompt appear. The
-  bundle carries the `NSMicrophoneUsageDescription` that prompt needs;
-  without it macOS refuses rather than asks. The grant is recorded against
-  the bundle identifier, so it survives rebuilds, and it covers Parlour
-  because Parlour is the app's child. A LaunchAgent is a separate grant, and
-  it asks the first time it runs.
+  the app. Onboarding opens the device for a moment as early as it can, which
+  brings up the system prompt. The bundle carries the
+  `NSMicrophoneUsageDescription` the prompt needs. Without it, macOS refuses
+  instead of asking. The grant is tied to the bundle identifier, so it
+  survives rebuilds, and it covers Parlour as the app's child. A LaunchAgent
+  needs its own grant and asks the first time it runs.
 
 ## Deliberate choices
 
-- **No Tauri plugins.** Everything the app does happens in Rust, where it can
-  be reasoned about, so the window's capability list is just `core:default`.
-- **A menu bar app in the strict sense.** The activation policy is
-  Accessory, so there is no Dock icon and no menu bar of its own, and the
-  tray is the way back to the window. Closing the window leaves Parlour
-  running; quitting from the tray stops it properly.
-- **Icons are generated.** `src-tauri/icon.png` is the only one in git;
+- **No Tauri plugins.** Everything the app does happens in Rust, where it is
+  easy to reason about. The window's capability list is just `core:default`.
+- **A true menu bar app.** The activation policy is Accessory, so there is no
+  Dock icon and no menu bar of its own. The tray is the way back to the
+  window. Closing the window leaves Parlour running. Quitting from the tray
+  stops it properly.
+- **Generated icons.** `src-tauri/icon.png` is the only icon in git.
   `pnpm icons` derives the rest into `src-tauri/icons/`, and both `app` and
-  `build` run it first. The source sits outside that directory on purpose:
+  `build` run it first. The source sits outside that directory on purpose.
   `tauri icon` writes an `icon.png` into its output, so a source kept there
-  would rewrite itself on every build and leave the working tree dirty.
+  would overwrite itself on every build and leave the working tree dirty.
