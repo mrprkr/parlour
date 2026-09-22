@@ -10,7 +10,8 @@ import Observation
 @Observable
 @MainActor
 final class AppSettings {
-  /// Empty means "find it with Bonjour", the same as a satellite's serverUrl.
+  /// The server address, set by pairing or typed manually. Empty means no
+  /// server is configured: discovered servers are never used automatically.
   var serverURL: String {
     didSet { defaults.set(serverURL, forKey: Key.serverURL) }
   }
@@ -76,11 +77,13 @@ final class AppSettings {
     pairedWith = link.name
   }
 
-  /// What the client should talk to, if anything. `found` is what Bonjour
-  /// turned up, which is only used while serverURL is empty.
+  /// What the client should talk to, if anything. Bonjour discoveries are
+  /// never used automatically: a server must be paired (QR code) or typed
+  /// manually to prevent an attacker from advertising a rogue service and
+  /// capturing the bearer token.
   func endpoint(found: URL?) -> URL? {
     let typed = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
-    if typed.isEmpty { return found }
+    if typed.isEmpty { return nil }
     // A bare host is the common thing to type, so fill in the rest.
     let text = typed.contains("://") ? typed : "http://\(typed)"
     return URL(string: text)

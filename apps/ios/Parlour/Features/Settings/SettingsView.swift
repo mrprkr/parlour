@@ -138,6 +138,11 @@ struct SettingsView: View {
           .font(Ramp.small)
           .foregroundStyle(Palette.bracken)
           .padding(.vertical, Space.sm)
+      } else {
+        Text("Tap a server to use it. Pairing with a QR code is safer: it sets the address and token together.")
+          .font(Ramp.micro)
+          .foregroundStyle(Palette.bracken)
+          .padding(.vertical, Space.sm)
       }
       ForEach(discovery.found) { server in
         Button {
@@ -259,7 +264,7 @@ struct SettingsView: View {
     defer { checking = false }
     health = nil
     probe = nil
-    guard let base = settings.endpoint(found: discovery.found.first?.url) else {
+    guard let base = settings.endpoint(found: nil) else {
       probe = ClientError.noServer.localizedDescription
       return
     }
