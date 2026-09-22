@@ -1,6 +1,6 @@
 ---
 title: Home Assistant
-description: Control your house through Home Assistant, use Parlour as its voice, and mute it.
+description: Control your house through Home Assistant, reach its Assist, use Parlour as its voice, and mute it.
 ---
 
 Home Assistant gives Parlour tools for your house, a line in the system
@@ -14,6 +14,8 @@ prompt, and a mute switch. It is on by default and lives under
       "url": "http://homeassistant.local:8123",
       "mcp": true,
       "rest": true,
+      "assist": false,
+      "language": "",
       "muteEntity": ""
     }
   }
@@ -54,7 +56,7 @@ reads one from stdin.
 
 ## What Parlour can do with it
 
-Tools come from two places, and the model sees them as one list:
+Tools come from three places, and the model sees them as one list:
 
 - **Over MCP** (`mcp: true`). Home Assistant's **Model Context Protocol
   Server** integration publishes everything exposed under **Settings > Voice
@@ -67,9 +69,48 @@ Tools come from two places, and the model sees them as one list:
   service. Its description tells the model to use it only when no more
   specific tool fits.
 
+- **Through Assist** (`assist: true`, off by default). `ha_assist` passes a
+  command, word for word, to
+  [Assist](https://www.home-assistant.io/voice_control/), Home Assistant's own
+  voice assistant, and returns what it said. See below.
+
 Parlour connects to the MCP endpoint at `<url>/mcp_server/sse` with the token.
 If that connection fails, the failure is logged and the REST tools still reach
 the house.
+
+## Assist
+
+Assist is Home Assistant's built-in conversation agent. It is off by default,
+because the MCP tools are the better way to control the house: the model sees
+each entity and action and picks the right one, where Assist has to match the
+words. Turn it on when you have set up Assist for things MCP cannot reach, and
+it keeps working when Parlour is the one listening:
+
+```json
+{ "integrations": { "home-assistant": { "assist": true } } }
+```
+
+- **Custom sentences.** An automation with a sentence trigger, such as
+  "good night" or "movie time", only fires when Assist hears the sentence.
+  Parlour's own microphone, satellites and phones hear it instead, so the
+  model passes it on through `ha_assist` and the automation runs.
+- **Its languages.** Assist parses commands in over 50 languages. `language`
+  picks one, such as `en` or `de`; empty uses the default set in Home
+  Assistant under **Settings > Voice assistants**.
+- **What it answers.** Whatever Assist says back, such as "Turned on the
+  lights" or a sentence trigger's own response, becomes the tool's result. If
+  Assist cannot handle the command, the model is told why and can try
+  another tool.
+
+Parlour always asks the built-in agent, `conversation.home_assistant`, not the
+one your pipeline uses. So a house that also uses Parlour as its conversation
+agent (below) cannot send a command round in a circle. Assist only sees
+entities exposed under **Settings > Voice assistants > Expose**, the same list
+the MCP Server integration publishes.
+
+To make an announcement on a Home Assistant voice satellite, such as a Voice
+PE, the model can call `assist_satellite.announce` with `ha_call_service`,
+with a `message` in its data. That needs only the REST tools, not `assist`.
 
 ## Home Assistant as a client
 

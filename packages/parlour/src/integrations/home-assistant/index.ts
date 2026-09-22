@@ -11,6 +11,15 @@ export const HomeAssistantOptions = z.object({
   mcp: z.boolean().default(true),
   /** Add `ha_get_state` and `ha_call_service` for what intents cannot say. */
   rest: z.boolean().default(true),
+  /**
+   * Add `ha_assist`, which hands a command to Home Assistant's own Assist, so
+   * its custom sentences and sentence-triggered automations still fire. Off by
+   * default: the MCP tools control the house better, and a second way to do
+   * the same thing only gives the model a worse choice to make.
+   */
+  assist: z.boolean().default(false),
+  /** The language Assist parses in. Empty means Home Assistant's own default. */
+  language: z.string().default(""),
   /** An entity that, when on, makes the agent ignore its wake word. Empty means never. */
   muteEntity: z.string().default(""),
 });
@@ -57,6 +66,27 @@ export class HomeAssistant {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Ask Assist, Home Assistant's built-in conversation agent. The agent id is
+   * pinned so that a house whose pipeline points back at Parlour does not send
+   * the command round in a circle.
+   */
+  async assist(text: string, language = ""): Promise<string> {
+    const result = (await this.#api("conversation/process", {
+      method: "POST",
+      body: JSON.stringify({
+        text,
+        agent_id: "conversation.home_assistant",
+        ...(language ? { language } : {}),
+      }),
+    })) as AssistResult;
+    const speech = result.response?.speech?.plain?.speech?.trim() ?? "";
+    if (result.response?.response_type === "error") {
+      throw new Error(speech || `Assist could not handle "${text}"`);
+    }
+    return speech || "Done.";
   }
 
   tools(): Tool[] {
@@ -108,6 +138,28 @@ export class HomeAssistant {
   }
 }
 
+interface AssistResult {
+  response?: {
+    response_type?: string;
+    speech?: { plain?: { speech?: string } };
+  };
+}
+
+function assistTool(ha: HomeAssistant, language: string): Tool {
+  return defineTool(
+    "ha_assist",
+    "Pass a spoken command, word for word, to Home Assistant's Assist. Use it for the house's own custom commands and routines, such as good night or movie time, when no other tool fits.",
+    {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "The command as the person said it" },
+      },
+      required: ["text"],
+    },
+    async (args) => ha.assist(String(args.text), language),
+  );
+}
+
 /** Whether a URL answers at all, within a few seconds, with the token attached. */
 async function reachable(fetchImpl: typeof fetch, url: string, token: string): Promise<boolean> {
   // The MCP endpoint is an event stream that never ends, so this must not
@@ -142,7 +194,7 @@ export function createHomeAssistant(
   context: ProviderContext,
   fetchImpl: typeof fetch = globalThis.fetch,
 ): Integration {
-  const { url, mcp, rest, muteEntity } = HomeAssistantOptions.parse(options);
+  const { url, mcp, rest, assist, language, muteEntity } = HomeAssistantOptions.parse(options);
   const base = url.replace(/\/+$/, "");
   const token = context.secrets.haToken;
   const log: Logger = context.log;
@@ -174,6 +226,7 @@ export function createHomeAssistant(
         }
       }
       if (rest) tools.push(...ha.tools());
+      if (assist) tools.push(assistTool(ha, language));
       return tools;
     },
 
@@ -226,7 +279,7 @@ export function createHomeAssistant(
 export const homeAssistant = defineProvider<Integration>({
   kind: "integration",
   name: "home-assistant",
-  description: "Home Assistant: its MCP tools, two REST tools, and a mute entity",
+  description: "Home Assistant: its MCP tools, two REST tools, Assist, and a mute entity",
   schema: HomeAssistantOptions,
   create: (options, context) => createHomeAssistant(options as HomeAssistantOptionsInput, context),
 });
