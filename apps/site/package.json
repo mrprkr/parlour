@@ -12,6 +12,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@twinkleplop/bash": "^0.1.4",
+    "@twinkleplop/json": "^0.1.4",
+    "@twinkleplop/markdown": "^0.1.4",
+    "@twinkleplop/rehype": "^0.1.4",
+    "@twinkleplop/theme-github": "^0.2.1",
+    "@twinkleplop/typescript": "^0.1.4",
+    "@twinkleplop/yaml": "^0.1.4",
     "@vercel/analytics": "^2.0.1",
     "fumadocs-core": "16.15.12",
     "fumadocs-mdx": "15.4.2",

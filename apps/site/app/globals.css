@@ -14,6 +14,8 @@
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
 @import "./tokens.css";
+/* Syntax colours for the docs' code blocks, light on :root and dark under .dark. */
+@import "@twinkleplop/theme-github";
 
 :root {
   /* The names this stylesheet uses, over the shared tokens. Dark mode comes with them. */
@@ -1636,4 +1638,13 @@ body {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/* Twinkleplop's lines, padded as Fumadocs pads Shiki's, with room on the right for the copy button. */
+.twinkleplop code .l {
+  padding-inline: calc(var(--spacing) * 4) var(--padding-right, calc(var(--spacing) * 4));
+}
+
+.twinkleplop code .l:empty {
+  height: 1lh;
 }
