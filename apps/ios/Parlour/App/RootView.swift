@@ -32,7 +32,17 @@ struct RootView: View {
       }
     }
     .tint(Palette.hearth)
+    .fullScreenCover(
+      isPresented: Binding(get: { !settings.onboarded }, set: { if !$0 { settings.onboarded = true } })
+    ) {
+      // The first run opens on the setup rather than on a talk button with no
+      // server behind it. Finishing it, or putting it off, is remembered.
+      OnboardingView { tab = .talk }
+    }
     .onOpenURL { url in
+      // While the setup is up it asks about the link itself, since a dialog
+      // from underneath it would never be seen.
+      guard !settings.inSetup else { return }
       // The Camera app found a pairing code and opened it here. So can any
       // web page or message with a parlour:// link in it, so nothing is
       // taken until the person has seen which server it names and agreed:

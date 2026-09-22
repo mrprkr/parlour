@@ -62,20 +62,23 @@ lists the six repository secrets behind it and what each one is.
 
 ## Setting up
 
-On a machine that is not set up yet, the app opens on a setup page instead of
-the tabs. It remembers where it got to, so you can close it and come back.
-**Run setup again** in Settings brings it back later. Four steps:
+On a machine that is not set up yet, the app opens on setup instead of the
+tabs, and walks you through it one step at a time. Anything optional stays
+folded away until you ask for it. **Run setup again** in Settings brings it
+back later, skipping the welcome.
 
-1. **Parlour.** Find the `parlour` command, or install it with one button.
-2. **What is missing.** Whether Node, ffmpeg and the config are in place, and
-   a button that runs `parlour init --porcelain --yes` for the rest (ffmpeg and
-   whisper from Homebrew, the models, the config), showing its output as it
-   goes.
-3. **The things it cannot work out.** The Home Assistant address and token,
-   the Anthropic key, the wake word, the microphone (and asking macOS for
-   permission to use it), and whether to let the rest of the house in with an
-   access token.
-4. **Check it over.** The doctor's list, and a button to start listening.
+1. **Install.** One button installs `parlour` from npm if it is missing, then
+   runs `parlour init --porcelain --yes` for the rest (ffmpeg and whisper from
+   Homebrew, the models, the config). The log stays folded away unless you ask
+   for it or something fails. **Already have parlour somewhere else?** takes a
+   path instead.
+2. **Voice.** Allow the microphone, choose the wake word, and optionally a
+   different microphone.
+3. **Home.** The Home Assistant address and token. Skip it and timers,
+   questions and search still work.
+4. **Extras.** Cloud help (the Anthropic key) and letting other devices in with
+   an access token, each behind its own switch.
+5. **Finish.** The doctor's checks, and a button to start listening.
 
 ## The tabs
 
@@ -96,7 +99,7 @@ The tray menu has Open, Start listening, Stop and Quit.
 ```text
 src/
   App.tsx           the header, the tabs, and the state the panels read
-  panels/           one file per tab, plus the setup overlay
+  panels/           one file per tab, plus the setup overlay and its parts in onboarding/
   lib/bridge.ts     every Rust command, typed. Nothing else calls invoke()
   components/ui/    shadcn primitives
   |  invoke()
@@ -132,8 +135,9 @@ changes to `packages/parlour` until you point it there.
 `packages/parlour/bin/parlour-dev` runs the CLI from source. Point the app at
 it in either of two ways:
 
-- Put its absolute path in **The parlour command** on the Settings tab (or on
-  the first step of setup). This takes effect at once.
+- Put its absolute path in **The parlour command** on the Settings tab (or
+  under **Already have parlour somewhere else?** on the Install step of
+  setup). This takes effect at once.
 - Write it to the file and restart the app, which reads the file once at
   launch:
 

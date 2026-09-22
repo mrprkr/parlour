@@ -14,8 +14,8 @@ The app has three tabs: **Talk**, where you hold the button and speak;
 which room and what the app is allowed to do.
 
 The app lives in `apps/ios` and uses only the public routes in
-[Clients](/docs/clients): `/health` to check, `/voice` for a recording and
-`/ask` for text. Anything the app does, you could build against those routes
+[Clients](/docs/clients): `/health` to check, `/v1/models` to confirm the
+token, `/voice` for a recording and `/ask` for text. Anything the app does, you could build against those routes
 too.
 
 ## Building it
@@ -36,6 +36,25 @@ before generating, or pick a team in Xcode once. HomeKit and the local network
 both need a real device, not the simulator. There is no iOS job in CI yet, so
 you build the app by hand.
 
+## The first run
+
+A fresh install walks you through setup before it shows the talk button, in
+the same order and words as the menu bar app, so it takes about a minute with
+the Mac nearby:
+
+1. **Connect.** Scan the pairing code. The servers Bonjour found, and typing an
+   address and token by hand, are folded away until you ask. The app checks
+   the server there and then, so a wrong token shows up now rather than on
+   your first question.
+2. **Voice.** Allow the microphone, and say which room the phone usually lives
+   in, so "lights off" means the lights in there.
+3. **Extras.** Answering on the phone when home is out of reach. A phone that
+   cannot run the on-device model skips this step.
+4. **Finish.** What was set.
+
+Settings has **Run setup again** at the bottom. A phone that was already
+paired before setup existed counts as set up.
+
 ## What it asks for
 
 You should know what a voice assistant is allowed to do before you trust it.
@@ -45,11 +64,11 @@ what the permission gives you.
 
 | Permission | What it gives you | Asked for when |
 | --- | --- | --- |
-| Microphone | Recording while you hold the talk button | You first hold the button |
+| Microphone | Recording while you hold the talk button | The Voice step of setup, or the first time you hold the button |
 | Local network | Finding the server with Bonjour, then talking to it | The app opens |
 | HomeKit | The rooms and accessories on the House tab | You open that tab |
 | Speech recognition | Understanding a request on the phone when the server cannot be reached | The phone first has to answer by itself, with the on-device answer switched on |
-| Camera | Scanning the pairing code on the Mac | You tap **Scan pairing code** |
+| Camera | Scanning the pairing code on the Mac | You tap **Scan pairing code**, in setup or in Settings |
 
 HomeKit is an entitlement as well as a prompt. `NSAllowsLocalNetworking`
 allows plain HTTP to the house, and only on the local network, because the

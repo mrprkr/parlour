@@ -56,6 +56,18 @@ the service and reads the host and port off the resolved path. Anything it
 finds is offered in Settings; typing an address in wins over anything found,
 and the address the app keeps is the only server it talks to.
 
+## The first run
+
+A fresh install opens on a setup rather than on the talk button, in the same
+order as the one in the menu bar app: Connect (scan the pairing code, with the
+servers Bonjour found and the address and token folded under Set it up by
+hand), Voice (the microphone and the room), Extras (the model on the phone,
+left out on a phone that cannot run it) and a Finish page that says what was
+set. Connect checks `/health` and then `/v1/models`, so a wrong token shows up
+there rather than on the first question. Finishing or putting it off is
+remembered; Settings has Run setup again. A phone that already had an address
+or a token before the setup existed counts as set up.
+
 ## Pairing
 
 `parlour pair` on the Mac draws a QR code holding one link,
