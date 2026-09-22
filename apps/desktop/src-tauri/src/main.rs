@@ -390,8 +390,10 @@ fn main() {
                 }
             }
 
+            // The bare house mark rather than the app icon, which as a template
+            // would come out as a solid rounded square.
             TrayIconBuilder::with_id("main")
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(tauri::include_image!("tray.png"))
                 .icon_as_template(true)
                 .tooltip("Parlour")
                 .menu(&menu)

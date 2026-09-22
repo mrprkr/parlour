@@ -5,6 +5,7 @@
   "sourceRoot": "packages/design/src",
   "targets": {
     "emit": { "command": "pnpm run emit", "options": { "cwd": "packages/design" } },
+    "icons": { "command": "pnpm run icons", "options": { "cwd": "packages/design" } },
     "typecheck": { "command": "pnpm run typecheck", "options": { "cwd": "packages/design" } },
     "lint": { "command": "pnpm exec biome check .", "options": { "cwd": "packages/design" } },
     "test": { "command": "pnpm run test", "options": { "cwd": "packages/design" } }

@@ -5,6 +5,7 @@ every surface Parlour has. Nothing else in the repository declares a colour.
 
 ```sh
 pnpm exec nx run design:emit      # after editing src/tokens.ts
+pnpm exec nx run design:icons     # after changing the mark, or a colour it uses
 pnpm exec nx run design:test      # contrast, and whether anything is stale
 ```
 
@@ -17,6 +18,8 @@ pnpm exec nx run design:test      # contrast, and whether anything is stale
 | `packages/parlour/src/server/web/tokens.css` | The phone page the CLI serves |
 | `apps/ios/Parlour/DesignSystem/Tokens.swift` | The iOS app |
 | `apps/ios/.../AccentColor.colorset/Contents.json` | iOS controls the app never styles |
+| `apps/ios/.../AppIcon.appiconset/Contents.json` | The iOS app icon set |
+| `apps/site/app/icon.svg`, `packages/parlour/src/server/web/icon.svg` | The favicon |
 
 The generated files are checked in, so a checkout builds without running the
 emitter first. `design:test` fails when one of them has drifted, which means
@@ -35,6 +38,24 @@ each one has a colour, a cadence and a word here. The cadence quickens as the
 turn approaches its answer: 1100 ms listening, 700 ms thinking, 500 ms
 speaking. The menu bar dot, the site's lamp, the phone page's talk button and
 the iOS state mark all breathe in step because they read the same numbers.
+
+## Icons
+
+`src/icon.ts` draws the house mark as SVG in four shapes: the favicon tile, a
+full bleed square (iOS, the phone page's home screen icon, the web manifest),
+the macOS tile on Apple's 824 in 1024 grid, and a bare template for the menu
+bar. `design:icons` rasterises them with resvg:
+
+| File | Used as |
+| --- | --- |
+| `apps/site/app/favicon.ico`, `apple-icon.png` | The site's favicon and home screen icon |
+| `packages/parlour/src/server/web/*.png` | The phone page's home screen and manifest icons |
+| `apps/ios/.../AppIcon.appiconset/AppIcon.png` | The iOS app icon, opaque RGB as the App Store wants |
+| `apps/desktop/src-tauri/icon.png` | The source `tauri icon` makes the .icns and every size from |
+| `apps/desktop/src-tauri/tray.png` | The menu bar icon |
+
+The PNGs are binary, so they are not drift checked; regenerate and look at them.
+The site's `wordmark.tsx` draws the same geometry and has to be kept in step by hand.
 
 ## Adding a surface
 
