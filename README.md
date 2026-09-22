@@ -163,7 +163,7 @@ in `apps/site/content/docs` in this repository.
 | [Writing a provider](https://heyparlour.app/docs/providers) | Writing a provider or an integration as an npm package, with a worked example. |
 | [Skills, MCP and plugins](https://heyparlour.app/docs/skills) | House rules as markdown, somebody else's tools over MCP, and one package that brings both. |
 | [Clients](https://heyparlour.app/docs/clients) | Satellites, the phone page, custom hardware, `/ask`, and Bonjour. |
-| [Home Assistant](https://heyparlour.app/docs/home-assistant) | The MCP Server integration, the OpenAI Conversation integration, muting, and moving over from the old config. |
+| [Home Assistant](https://heyparlour.app/docs/home-assistant) | The MCP Server integration, Assist, the OpenAI Conversation integration, muting, and moving over from the old config. |
 | [The menu bar app](https://heyparlour.app/docs/desktop) | What the app does, how it drives the CLI, and running it against a checkout. |
 | [The iOS app](https://heyparlour.app/docs/ios) | A client in your pocket, with HomeKit, local discovery and a model on the phone. |
 | [The design system](https://heyparlour.app/docs/design) | One palette, one type ramp and one set of states, shared by all four interfaces. |

@@ -77,11 +77,70 @@ test("without a token there are no tools and no throw", async () => {
 });
 
 test("rest tools are named ha_get_state and ha_call_service", async () => {
-  const i = await createHomeAssistant({ rest: true, mcp: false }, ctxWith({ haToken: "t" }), fetchNever);
+  const i = await createHomeAssistant(
+    { rest: true, mcp: false, assist: false },
+    ctxWith({ haToken: "t" }),
+    fetchNever,
+  );
   assert.deepEqual(
     (await i.tools()).map((tool) => tool.name),
     ["ha_get_state", "ha_call_service"],
   );
+});
+
+test("assist adds ha_assist after the rest tools", async () => {
+  const i = await createHomeAssistant({ mcp: false }, ctxWith({ haToken: "t" }), fetchNever);
+  assert.deepEqual(
+    (await i.tools()).map((tool) => tool.name),
+    ["ha_get_state", "ha_call_service", "ha_assist"],
+  );
+});
+
+const assistAnswers = (response: unknown, calls: { url: string; body: unknown }[] = []): typeof fetch => {
+  return async (input, init) => {
+    calls.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+    return new Response(JSON.stringify({ response }));
+  };
+};
+
+test("ha_assist asks the built-in agent and returns what it said", async () => {
+  const calls: { url: string; body: unknown }[] = [];
+  const i = await createHomeAssistant(
+    { url: "http://h:8123", mcp: false, rest: false, language: "en" },
+    ctxWith({ haToken: "t" }),
+    assistAnswers({ response_type: "action_done", speech: { plain: { speech: "Good night" } } }, calls),
+  );
+  const tool = (await i.tools()).find((t) => t.name === "ha_assist");
+  assert.equal(await tool!.run({ text: "good night" }), "Good night");
+  assert.deepEqual(calls, [
+    {
+      url: "http://h:8123/api/conversation/process",
+      body: { text: "good night", agent_id: "conversation.home_assistant", language: "en" },
+    },
+  ]);
+});
+
+test("ha_assist leaves the language to Home Assistant when none is set", async () => {
+  const calls: { url: string; body: unknown }[] = [];
+  const i = await createHomeAssistant(
+    { mcp: false, rest: false },
+    ctxWith({ haToken: "t" }),
+    assistAnswers({ response_type: "action_done" }, calls),
+  );
+  assert.equal(await (await i.tools())[0]!.run({ text: "movie time" }), "Done.");
+  assert.deepEqual(calls[0]!.body, { text: "movie time", agent_id: "conversation.home_assistant" });
+});
+
+test("ha_assist throws what Assist said when it could not handle the command", async () => {
+  const i = await createHomeAssistant(
+    { mcp: false, rest: false },
+    ctxWith({ haToken: "t" }),
+    assistAnswers({
+      response_type: "error",
+      speech: { plain: { speech: "Sorry, I am not aware of any area called attic" } },
+    }),
+  );
+  await assert.rejects((await i.tools())[0]!.run({ text: "attic lights on" }), /attic/);
 });
 
 test("ha_get_state reads the entity with the token", async () => {
@@ -146,6 +205,8 @@ test("the definition registers as an integration with defaults", () => {
     url: "http://homeassistant.local:8123",
     mcp: true,
     rest: true,
+    assist: true,
+    language: "",
     muteEntity: "",
   });
 });
