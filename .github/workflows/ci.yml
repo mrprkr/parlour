@@ -113,11 +113,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Verify Cargo.lock is in sync. This catches dependency drift before the
+      # release, where an out-of-date lock would fail the build with secrets.
+      - name: Check Cargo.lock is in sync
+        run: cargo check --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+
       # The same one step the release runs: icons, frontend, binary, .app, dmg.
       # No Apple variables here, so it signs nothing, which is the point: the
       # bundle has to build without a certificate as well as with one.
       - name: Build the app
-        run: pnpm -C apps/desktop build
+        run: pnpm -C apps/desktop build:locked
 
       # With no credentials this notarises nothing and says so. It runs anyway,
       # because finding exactly one dmg where the release expects one is worth
