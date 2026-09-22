@@ -57,3 +57,7 @@ skills-lock.json
 
 # Screenshots an interface review takes of the site as it goes.
 apps/site/.impeccable/
+
+# graphify's interactive view of the graph, rebuilt from graph.json by every
+# `graphify update`. Over a megabyte a time, and nothing reads it but a browser.
+graphify-out/graph.html
