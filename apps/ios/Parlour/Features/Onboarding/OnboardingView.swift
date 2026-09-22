@@ -555,7 +555,7 @@ struct OnboardingView: View {
 
   private var serverName: String {
     settings.pairedWith
-      ?? settings.endpoint(found: discovery.found.first?.url)?.host()
+      ?? settings.endpoint(found: nil)?.host()
       ?? "your Mac"
   }
 
@@ -585,7 +585,7 @@ struct OnboardingView: View {
   }
 
   private func check() async {
-    guard let base = settings.endpoint(found: discovery.found.first?.url) else {
+    guard let base = settings.endpoint(found: nil) else {
       connection = .failed(ClientError.noServer.localizedDescription)
       byHand = true
       return
