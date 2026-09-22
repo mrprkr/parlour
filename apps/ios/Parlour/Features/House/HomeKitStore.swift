@@ -47,7 +47,7 @@ final class HomeKitStore: NSObject, HMHomeManagerDelegate {
 
   /// Flip an accessory's power state. Anything without one is left alone.
   func toggle(_ accessory: Accessory) async {
-    guard let home = manager?.primaryHome ?? manager?.homes.first else { return }
+    guard let home = manager?.homes.first else { return }
     guard let target = home.accessories.first(where: { $0.uniqueIdentifier == accessory.id }) else { return }
     guard let characteristic = power(of: target) else { return }
     let wanted = !((characteristic.value as? Bool) ?? false)
@@ -73,7 +73,7 @@ final class HomeKitStore: NSObject, HMHomeManagerDelegate {
     ready = true
     authorised = manager.authorizationStatus.contains(.authorized)
 
-    let home = manager.primaryHome ?? manager.homes.first
+    let home = manager.homes.first
     homeName = home?.name
 
     accessories = (home?.accessories ?? [])

@@ -54,7 +54,7 @@ export function RoomScene() {
         {/* The side table, with a Voice PE on it. */}
         <path d="M712 280h92M724 280v70M792 280v70" {...line} />
         <rect x="738" y="262" width="40" height="18" rx="6" {...line} />
-        <path d="M790 258c8-8 8-22 0-30M800 264c14-14 14-38 0-52" {...line} opacity="0.6" />
+        <path className="waves" d="M790 258c8-8 8-22 0-30M800 264c14-14 14-38 0-52" {...line} opacity="0.6" />
 
         {/* The sideboard, and the hub on it. */}
         <rect x="860" y="260" width="250" height="72" rx="3" {...line} />
@@ -191,6 +191,37 @@ export function PhoneHouse() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** The same choices as the Settings tab, as they sit in config.json. */
+export function ConfigFile() {
+  return (
+    <div className="config-file" aria-hidden="true">
+      <p className="file-name">~/.config/parlour/config.json</p>
+      <pre>
+        <code>
+          {"{\n"}
+          {'  "wake": { "words": ['}
+          <span className="v">"hey_jarvis"</span>
+          {"] },\n"}
+          {'  "tts": { "provider": '}
+          <span className="v">"kokoro"</span>
+          {', "voice": '}
+          <span className="v">"bf_emma"</span>
+          {" },\n"}
+          {'  "llm": {\n    "local": { "model": '}
+          <span className="v">"qwen3-8b-mlx"</span>
+          {" },\n"}
+          {'    "cloud": { "enabled": '}
+          <span className="v">true</span>
+          {" }\n  },\n"}
+          {'  "search": { "provider": '}
+          <span className="v">"searxng"</span>
+          {" }\n}"}
+        </code>
+      </pre>
     </div>
   );
 }

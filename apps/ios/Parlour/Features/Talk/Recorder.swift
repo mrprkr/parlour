@@ -99,7 +99,11 @@ final class Recorder {
     self.converter = converter
     samples.removeAll(keepingCapacity: true)
 
-    input.installTap(onBus: 0, bufferSize: 4096, format: hardware) { [weak self] buffer, _ in
+    // The tap runs on the engine's own audio queue, never the main actor.
+    // Left to inference the closure would inherit this method's @MainActor
+    // isolation and the runtime traps the moment the first buffer arrives, so
+    // it is @Sendable to stay nonisolated.
+    input.installTap(onBus: 0, bufferSize: 4096, format: hardware) { @Sendable [weak self] buffer, _ in
       guard let self else { return }
       let converted = Self.convert(buffer, with: converter, to: wanted)
       guard let converted else { return }
@@ -136,19 +140,17 @@ final class Recorder {
     SharedAudioSession.deactivate()
   }
 
-  private func append(_ buffer: AVAudioPCMBuffer) {
-    guard let channel = buffer.int16ChannelData else { return }
-    let count = Int(buffer.frameLength)
-    channel[0].withMemoryRebound(to: UInt8.self, capacity: count * 2) { bytes in
-      samples.append(bytes, count: count * 2)
-    }
+  private func append(_ chunk: Data) {
+    samples.append(chunk)
   }
 
+  /// Converts on the tap's queue and returns plain bytes, because Data can
+  /// cross to the main actor and a buffer cannot.
   private nonisolated static func convert(
     _ buffer: AVAudioPCMBuffer,
     with converter: AVAudioConverter,
     to format: AVAudioFormat
-  ) -> AVAudioPCMBuffer? {
+  ) -> Data? {
     let ratio = format.sampleRate / buffer.format.sampleRate
     let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1024
     guard let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return nil }
@@ -164,8 +166,8 @@ final class Recorder {
       status.pointee = .haveData
       return buffer
     }
-    guard error == nil, output.frameLength > 0 else { return nil }
-    return output
+    guard error == nil, output.frameLength > 0, let channel = output.int16ChannelData else { return nil }
+    return Data(bytes: channel[0], count: Int(output.frameLength) * 2)
   }
 
 }

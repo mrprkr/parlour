@@ -85,6 +85,8 @@ body {
 
 .site {
   padding: 0 var(--gutter);
+  /* The full-bleed band measures from 100vw, which counts a scrollbar where there is one. */
+  overflow-x: clip;
 }
 
 ::selection {
@@ -307,44 +309,119 @@ body {
   font-weight: 500;
 }
 
-/* -------------------------------------------------------------- steps */
+/* ----------------------------------------------------------- pipeline */
 
-.steps {
+/*
+ * The five things that happen to a question, left to right along one rail.
+ * The rail goes dashed across the cloud step, because that step is optional.
+ */
+.pipeline {
   list-style: none;
-  margin: 0;
+  margin: 2.2rem 0 0;
   padding: 0;
   counter-reset: step;
-  max-width: var(--measure);
+  display: grid;
+  gap: 0 1.6rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
-.steps li {
+.pipeline li {
   counter-increment: step;
   position: relative;
-  padding: 0.9rem 0 0.9rem 2.2rem;
-  border-top: 1px solid var(--rule);
+  padding-top: 3.4rem;
   color: var(--ink-2);
+  font-size: 0.95rem;
+  line-height: 1.5;
   text-wrap: pretty;
 }
 
-.steps li:last-child {
-  border-bottom: 1px solid var(--rule);
+/* The rail: each step draws its own length, reaching into the gap after it. */
+.pipeline li::after {
+  content: "";
+  position: absolute;
+  top: 1.05rem;
+  left: 2.6rem;
+  right: -1.6rem;
+  border-top: 1px solid var(--rule);
 }
 
-.steps li::before {
+.pipeline li:last-child::after {
+  display: none;
+}
+
+.pipeline li.optional::after,
+.pipeline li:has(+ .optional)::after {
+  border-top-style: dashed;
+  border-top-color: var(--ink-2);
+}
+
+.pipeline li::before {
   content: counter(step);
   position: absolute;
+  top: 0;
   left: 0;
-  top: 0.85rem;
+  width: 2.1rem;
+  height: 2.1rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ink);
+  border-radius: var(--corner-full);
   font-family: var(--serif);
-  font-size: 1.25rem;
-  line-height: 1.2;
-  color: var(--ink-2);
+  font-size: 1.05rem;
+  color: var(--ink);
+  background: var(--page);
   font-variant-numeric: tabular-nums;
 }
 
-.steps strong {
-  font-weight: 600;
+.pipeline li.optional::before {
+  border-style: dashed;
+  border-color: var(--ink-2);
+  color: var(--ink-2);
+}
+
+/* The last step is the answer coming back, so it is the one lit in green. */
+.pipeline li:last-child::before {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--hearth-ink);
+}
+
+.pipeline strong {
+  display: block;
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.15rem;
+  line-height: 1.25;
   color: var(--ink);
+  margin-bottom: 0.35rem;
+}
+
+@media (max-width: 60rem) {
+  /* Narrower, the rail turns and runs down the left. */
+  .pipeline {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    max-width: var(--measure);
+  }
+
+  .pipeline li {
+    padding: 0 0 1.6rem 3.4rem;
+  }
+
+  .pipeline li::after {
+    top: 2.1rem;
+    left: 1.05rem;
+    right: auto;
+    bottom: 0;
+    border-top: 0;
+    border-left: 1px solid var(--rule);
+  }
+
+  .pipeline li.optional::after,
+  .pipeline li:has(+ .optional)::after {
+    border-left-style: dashed;
+    border-left-color: var(--ink-2);
+  }
 }
 
 /* ------------------------------------------------------------ sheets */
@@ -1107,23 +1184,6 @@ body {
   border: 1px solid var(--ink-2);
 }
 
-/* The iOS section: what it does beside what it looks like. */
-.ios-grid {
-  display: grid;
-  gap: 2.5rem 4rem;
-  align-items: center;
-}
-
-.ios-grid .notes {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-@media (min-width: 56rem) {
-  .ios-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-  }
-}
-
 @media (max-width: 30rem) {
   .phones {
     gap: 0.7rem;
@@ -1141,6 +1201,355 @@ body {
 
   .phone .reply {
     font-size: 0.95rem;
+  }
+}
+
+/* ------------------------------------------------------------ layouts */
+
+/* Headings and prose that sit inside a composition rather than straight in a sheet. */
+.privacy-text > h2,
+.ios-text > h2,
+.band-inner > h2 {
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  max-width: 28ch;
+  margin-bottom: 1.1rem;
+}
+
+.privacy-text > p,
+.ios-text > p,
+.band-inner > p {
+  max-width: var(--measure);
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+/* The rooms sit on the one tinted plate on the page, edge to edge. */
+.sheet.band {
+  border-top: 0;
+  padding-top: 0;
+  /* Out of the book to the edges of the window. */
+  margin-inline: calc(50% - 50vw);
+  background: var(--plate);
+  border-block: 1px solid var(--rule);
+}
+
+.band-inner {
+  max-width: var(--book);
+  margin: 0 auto;
+  padding: clamp(2.5rem, 5vw, 4rem) 0;
+  width: calc(100vw - 2 * var(--gutter));
+}
+
+/* The band is edge enough; the sheet after it needs no rule of its own. */
+.band + .sheet {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.band .rooms .device-art {
+  background: var(--plate);
+}
+
+/* The house first, big, and the words beside it. */
+.privacy {
+  display: grid;
+  gap: 2rem 4rem;
+  align-items: center;
+}
+
+@media (min-width: 56rem) {
+  .privacy {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  }
+
+  .privacy .privacy-art svg {
+    max-width: none;
+  }
+}
+
+/* The limits, four across, stated as plainly as the features. */
+.limits {
+  list-style: none;
+  margin: 2.8rem 0 0;
+  padding: 1.4rem 0 0;
+  border-top: 1px solid var(--rule);
+  display: grid;
+  gap: 1.3rem 2.2rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  font-size: 0.95rem;
+}
+
+.limits li {
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.limits strong {
+  display: block;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 60rem) {
+  .limits {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 36rem) {
+  .limits {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* What people say to it, set large, the way it is said. */
+.asked {
+  list-style: none;
+  margin: 1.6rem 0 2.4rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 2.2rem;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: clamp(1.4rem, 3.2vw, 2.4rem);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.asked li {
+  padding-bottom: 0.15em;
+}
+
+.asked li:nth-child(even) {
+  color: var(--ink-2);
+}
+
+/* Phones on the left, the words on the right. */
+.ios {
+  display: grid;
+  gap: 3rem 5rem;
+  align-items: center;
+}
+
+@media (min-width: 56rem) {
+  .ios {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.ios .notes {
+  margin-top: 1.4rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The second phone sits lower, the way two phones lie on a table. */
+@media (min-width: 30rem) {
+  .phones .phone:nth-child(2) {
+    translate: 0 2.5rem;
+  }
+
+  .phones {
+    padding-bottom: 2.5rem;
+  }
+}
+
+/* The config file underneath, the app window on top of it. */
+.layered {
+  margin-top: 2.4rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+@media (min-width: 56rem) {
+  .layered {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 0;
+    align-items: start;
+  }
+
+  .layered .config-file {
+    grid-column: 1 / span 7;
+    grid-row: 1;
+  }
+
+  .layered .window {
+    grid-column: 6 / span 7;
+    grid-row: 1;
+    margin-top: 5rem;
+    max-width: none;
+    position: relative;
+  }
+}
+
+.config-file {
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 1rem 1.2rem 1.4rem;
+}
+
+.config-file .file-name {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  margin: 0 0 0.9rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.config-file pre {
+  margin: 0;
+  line-height: 1.7;
+  overflow-x: auto;
+}
+
+.config-file pre code {
+  font-size: 0.86rem;
+}
+
+@media (max-width: 36rem) {
+  .config-file pre code {
+    font-size: 0.74rem;
+  }
+}
+
+.config-file .v {
+  color: var(--accent);
+}
+
+/* The install: the one plate with a hard ink edge, because it is the thing to do. */
+.installation {
+  border-top: 0;
+}
+
+.terminal-plate {
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  background: var(--plate);
+  padding: clamp(1.5rem, 4vw, 3rem);
+  display: grid;
+  gap: 1.4rem 3.5rem;
+}
+
+.terminal-plate h2 {
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+}
+
+.terminal-plate p {
+  margin: 0;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+@media (min-width: 56rem) {
+  .terminal-plate {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+
+  .terminal-plate h2 {
+    grid-column: 1 / -1;
+  }
+}
+
+.installation .terminal-plate pre {
+  background: var(--page);
+}
+
+.source {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.source > p {
+  max-width: 52ch;
+}
+
+@media (max-width: 30rem) {
+  .phones .phone:nth-child(2) {
+    translate: none;
+  }
+}
+
+/* ------------------------------------------------------------- motion */
+
+/*
+ * Things arrive as they are reached, so a section reads in the order it is
+ * written. Scroll-driven where the browser has it; everywhere else, and for
+ * anyone who asks for less motion, everything is simply there.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .reveal {
+      animation: arrive linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+  }
+
+  /* The scene plays once: the question, the answer, and then the lamp does as it was asked. */
+  .scene .said {
+    animation: say 600ms cubic-bezier(0.16, 1, 0.3, 1) 400ms both;
+  }
+
+  .scene .waves {
+    animation: say 400ms ease-out 1700ms both;
+  }
+
+  .scene .answer {
+    animation: say 600ms cubic-bezier(0.16, 1, 0.3, 1) 2000ms both;
+  }
+
+  .scene .glow {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: dim 1400ms cubic-bezier(0.16, 1, 0.3, 1) 2500ms both;
+  }
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    translate: 0 1.2rem;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes say {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes dim {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0.55;
+    scale: 0.82;
+  }
+}
+
+/* Reduced motion lands on the same final frame: the lamp already dimmed. */
+@media (prefers-reduced-motion: reduce) {
+  .scene .glow {
+    opacity: 0.55;
   }
 }
 
