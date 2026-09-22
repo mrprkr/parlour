@@ -1,11 +1,12 @@
-// The first run. Everything here writes through the same CLI the Settings tab
-// uses, and the installing is Parlour's own `init`, so nothing in this file is
-// a second way of doing something.
+// The first run, one question at a time. Everything here writes through the
+// same CLI the Settings tab uses, and the installing is Parlour's own `init`,
+// so nothing in this file is a second way of doing something. What it adds is
+// the order: the one thing that has to happen first is all the page shows, and
+// anything optional or only sometimes needed stays folded away until asked for.
 
-import { Check as CheckIcon, TriangleAlert, X } from "lucide-react";
-import { type JSX, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowLeft, Copy, House, Mic, Sparkles, Wifi } from "lucide-react";
+import { type JSX, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,16 +34,43 @@ import {
   writeConfig,
 } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
+import {
+  Disclosure,
+  Heading,
+  Mark,
+  Note,
+  Optional,
+  Row,
+  type StepMeta,
+  Stepper,
+  type Tone,
+} from "@/panels/onboarding/parts";
 
 const HA_DEFAULT = "http://homeassistant.local:8123";
 const WAKE_DEFAULT = "hey_jarvis";
 const DEVICE_DEFAULT = ":0";
+const NODE_INSTALL = "brew install node";
 
 const WAKE_WORDS: { value: string; label: string }[] = [
   { value: "hey_jarvis", label: "hey jarvis" },
   { value: "alexa", label: "alexa" },
   { value: "hey_mycroft", label: "hey mycroft" },
 ];
+
+type StepName = "install" | "voice" | "home" | "extras" | "finish";
+
+/** The welcome is not a step: it asks nothing, so it has no place in the row along the top. */
+type Screen = "welcome" | StepName;
+
+const STEPS: StepMeta<StepName>[] = [
+  { name: "install", label: "Install" },
+  { name: "voice", label: "Voice" },
+  { name: "home", label: "Home" },
+  { name: "extras", label: "Extras" },
+  { name: "finish", label: "Finish" },
+];
+
+const indexOf = (name: StepName) => STEPS.findIndex((step) => step.name === name);
 
 /**
  * `parlour init --porcelain` reports what it is doing rather than printing a
@@ -56,92 +84,20 @@ const PREFIX: Partial<Record<SetupEvent["kind"], string>> = {
   ok: "  ✓ ",
 };
 
-type Tone = "ok" | "warn" | "bad";
-
-function Mark({ tone }: { tone: Tone }): JSX.Element {
-  const Icon = tone === "ok" ? CheckIcon : tone === "bad" ? X : TriangleAlert;
-  return (
-    <Icon
-      aria-hidden
-      className={cn(
-        "mt-0.5 size-4 shrink-0",
-        tone === "ok" && "text-primary",
-        tone === "warn" && "text-warn",
-        tone === "bad" && "text-destructive",
-      )}
-    />
-  );
-}
-
-function CheckRow({ tone, name, detail }: { tone: Tone; name: string; detail: string }): JSX.Element {
-  return (
-    <li className="grid grid-cols-[1rem_8rem_1fr] items-start gap-2.5 rounded-lg border bg-card px-3 py-2">
-      <Mark tone={tone} />
-      <span className="font-medium">{name}</span>
-      <span className="text-muted-foreground">{detail}</span>
-    </li>
-  );
-}
-
-function Note({ children }: { children: ReactNode }): JSX.Element {
-  return <p className="mt-2 text-muted-foreground">{children}</p>;
-}
-
-function Step({
-  index,
-  title,
-  done,
-  children,
-}: {
-  index: number;
-  title: string;
-  done: boolean;
-  children: ReactNode;
-}): JSX.Element {
-  return (
-    <li className="rounded-xl border bg-card px-4 py-4">
-      <h2 className="mb-3 flex items-center gap-2.5 text-[15px] font-semibold">
-        <span
-          className={cn(
-            "grid size-5 shrink-0 place-items-center rounded-full text-[11px] tabular-nums",
-            done ? "bg-primary text-primary-foreground" : "bg-border text-foreground",
-          )}
-        >
-          {done ? <CheckIcon className="size-3" /> : index}
-        </span>
-        {title}
-      </h2>
-      {children}
-    </li>
-  );
-}
-
 /** The doctor's three states as the marks this page draws. */
 function toneOf(status: Check["status"]): Tone {
   return status === "ok" ? "ok" : status === "fail" ? "bad" : "warn";
 }
 
-/** The sentence under step one, which is the whole diagnosis of a missing piece. */
-function whereNote(readiness: Readiness): string {
-  if (readiness.parlourOk) {
-    if (readiness.nodeOk)
-      return `Found parlour ${readiness.parlourVersion}, and node ${readiness.nodeVersion}.`;
-    if (readiness.nodeVersion) {
-      return `Found parlour, but node ${readiness.nodeVersion} is too old. It needs 22 or newer.`;
-    }
-    return "Found parlour, but no node answered. It needs node 22 or newer on the PATH.";
-  }
-  if (readiness.nodeOk) {
-    return readiness.parlourBin
-      ? "That does not run. Install Parlour below, or give the path to a copy that does."
-      : "No parlour found. Install it below, or give the path to one.";
-  }
-  // A node that answered but is too old is a different fix from no node at all.
-  if (readiness.nodeVersion) {
-    return `Found node ${readiness.nodeVersion}, but it is too old. It needs 22 or newer before Parlour can be installed below.`;
-  }
-  return "No node found. Install Node 22 or newer first, with brew install node, then install Parlour below.";
+/** What went wrong with node, which is the one piece this page cannot install. */
+function nodeDetail(readiness: Readiness): string {
+  if (readiness.nodeOk) return `node ${readiness.nodeVersion}`;
+  if (readiness.nodeVersion) return `node ${readiness.nodeVersion} is too old. Parlour needs 22 or newer.`;
+  return "Parlour runs on Node 22 or newer, and none was found.";
 }
+
+/** Which of the install's own jobs is running, so its row can spin. */
+type Job = "cli" | "setup" | null;
 
 export function Onboarding({
   open,
@@ -154,39 +110,43 @@ export function Onboarding({
 }): JSX.Element | null {
   /** Opened by itself because there is something still to do, rather than asked for. */
   const [selfOpen, setSelfOpen] = useState(false);
+  const [screen, setScreen] = useState<Screen>("welcome");
+  /** The furthest step shown so far, which is how far back and forth the row along the top allows. */
+  const [reached, setReached] = useState(0);
+
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [present, setPresent] = useState<SecretsStatus | null>(null);
+  /** Drawn instead of the install rows when the Rust side would not answer at all. */
+  const [whereError, setWhereError] = useState<string | null>(null);
 
   const [bin, setBin] = useState("");
-  const [installingCli, setInstallingCli] = useState(false);
-  const [cliNote, setCliNote] = useState("");
+  const [job, setJob] = useState<Job>(null);
+  const [failed, setFailed] = useState<Job>(null);
+  const [activity, setActivity] = useState("");
+  const [log, setLog] = useState("");
+  const [logOpen, setLogOpen] = useState(false);
 
   const [haUrl, setHaUrl] = useState(HA_DEFAULT);
   const [haToken, setHaToken] = useState("");
+  const [cloud, setCloud] = useState(false);
   const [anthropic, setAnthropic] = useState("");
+  const [network, setNetwork] = useState(false);
   const [wake, setWake] = useState(WAKE_DEFAULT);
   const [mic, setMic] = useState(DEVICE_DEFAULT);
   const [mics, setMics] = useState<{ value: string; label: string }[]>([]);
-  const [network, setNetwork] = useState(false);
-  const [saveNote, setSaveNote] = useState("");
 
-  const [installing, setInstalling] = useState(false);
-  const [runNote, setRunNote] = useState("");
-  const [log, setLog] = useState("");
-  /** Which step's job the log is showing, or none yet. Both jobs report the same way. */
-  const [logUnder, setLogUnder] = useState<1 | 2 | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [stepNote, setStepNote] = useState("");
 
-  const [checks, setChecks] = useState<Check[]>([]);
-  const [doctorNote, setDoctorNote] = useState<string | null>("Not checked yet.");
+  const [checks, setChecks] = useState<Check[] | null>(null);
+  const [doctorNote, setDoctorNote] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
 
   const [asking, setAsking] = useState(false);
-  const [micAsked, setMicAsked] = useState(false);
-  const [micDetail, setMicDetail] = useState("Not asked for yet.");
+  const [micDetail, setMicDetail] = useState("");
   /** Undefined until it has been asked, because asking is what shows the prompt. */
   const [micGranted, setMicGranted] = useState<boolean | undefined>(undefined);
 
-  // Read inside callbacks that must not be rebuilt when the answer changes.
-  const micGrantedRef = useRef<boolean | undefined>(undefined);
   const askingRef = useRef(false);
   /** A microphone chosen while an ask was still up, waiting its turn. */
   const queuedRef = useRef<string | null>(null);
@@ -194,10 +154,6 @@ export function Onboarding({
   const atBottomRef = useRef(true);
   const startedRef = useRef(false);
   const wasOpenRef = useRef(open);
-  const binRef = useRef<HTMLInputElement>(null);
-
-  /** Drawn instead of the diagnosis when the Rust side would not answer at all. */
-  const [whereError, setWhereError] = useState<string | null>(null);
 
   const visible = open || selfOpen;
 
@@ -214,19 +170,15 @@ export function Onboarding({
     }
     askingRef.current = true;
     setAsking(true);
-    setMicAsked(false);
-    setMicDetail("Asking. Answer the prompt macOS puts up.");
+    setMicDetail("Answer the prompt macOS puts up.");
     try {
       const result = await microphoneCheck(device);
-      micGrantedRef.current = result.granted;
       setMicGranted(result.granted);
       setMicDetail(result.detail);
     } catch (error) {
-      micGrantedRef.current = false;
       setMicGranted(false);
       setMicDetail(String(error));
     } finally {
-      setMicAsked(true);
       askingRef.current = false;
       setAsking(false);
       const queued = queuedRef.current;
@@ -236,11 +188,11 @@ export function Onboarding({
   }, []);
 
   /**
-   * Fills the answers from whatever is already configured, and says which
-   * microphone. Everything comes through the CLI, so with no parlour yet the
-   * answers stay at their defaults, which is the normal first run state.
+   * Fills the answers from whatever is already configured. Everything comes
+   * through the CLI, so with no parlour yet the answers stay at their
+   * defaults, which is the normal first run state.
    */
-  const loadAnswers = useCallback(async (parlourOk: boolean): Promise<string> => {
+  const loadAnswers = useCallback(async (parlourOk: boolean) => {
     let current = DEVICE_DEFAULT;
     if (parlourOk) {
       try {
@@ -254,8 +206,9 @@ export function Onboarding({
         const secrets = await secretsStatus();
         setPresent(secrets);
         setNetwork(secrets.PARLOUR_TOKEN);
+        setCloud(secrets.ANTHROPIC_API_KEY && config.llm?.cloud?.enabled !== false);
       } catch {
-        // A CLI that will not answer is reported under step one, not here.
+        // A CLI that will not answer is reported on the install step, not here.
       }
     }
 
@@ -281,7 +234,6 @@ export function Onboarding({
       }),
     );
     setMic(current);
-    return current;
   }, []);
 
   /** Asks the Rust side what is in place, and redraws around the answer. */
@@ -289,26 +241,25 @@ export function Onboarding({
     const next = await setupStatus();
     setReadiness(next);
     setBin(next.parlourBin ?? "");
-
-    const device = await loadAnswers(next.parlourOk);
-
-    // Nobody should have to know to press a button for this. ffmpeg is what
-    // opens the device, so there is nothing to ask with until it is installed,
-    // and after the first yes this is a silent quarter of a second. It is not
-    // awaited: the system prompt stays up until a person answers it.
-    if (next.ffmpeg && micGrantedRef.current === undefined) void ask(device);
-
+    setWhereError(null);
+    await loadAnswers(next.parlourOk);
     return next;
-  }, [ask, loadAnswers]);
+  }, [loadAnswers]);
+
+  const go = useCallback((next: Screen) => {
+    setScreen(next);
+    setStepNote("");
+    if (next !== "welcome") setReached((far) => Math.max(far, indexOf(next)));
+  }, []);
 
   useEffect(() => {
-    // Guarded because a second run would ask for the microphone twice.
+    // Guarded because a second run would read everything twice over.
     if (startedRef.current) return;
     startedRef.current = true;
     void refresh()
       .then((next) => {
         // Opens itself when there is something still to do, which on a fresh
-        // machine is everything.
+        // machine is everything, and starts at the welcome.
         if (!next.installed) setSelfOpen(true);
       })
       // Nothing here draws without an answer, and a packaged app has no console
@@ -317,9 +268,20 @@ export function Onboarding({
   }, [refresh]);
 
   useEffect(() => {
-    // Asked for from Settings, so catch up on what has changed since.
+    // Asked for from Settings, so catch up on what has changed since, and skip
+    // the welcome: someone running setup again knows what Parlour is. On a
+    // machine that is already installed every step is open to jump to.
     if (open && !wasOpenRef.current) {
-      void refresh().catch((error: unknown) => setWhereError(String(error)));
+      void refresh()
+        .then((next) => {
+          setScreen("install");
+          setStepNote("");
+          setReached(next.installed ? STEPS.length - 1 : 0);
+        })
+        .catch((error: unknown) => {
+          setWhereError(String(error));
+          setScreen("install");
+        });
     }
     wasOpenRef.current = open;
   }, [open, refresh]);
@@ -327,14 +289,13 @@ export function Onboarding({
   useEffect(() => {
     const pending = onSetupEvent((event) => {
       // `done` carries the verdict as "0" or "1", which is the exit status the
-      // Rust side reads, not a line for a person. The note by the button says
-      // how the job ended, so logging it would only leave a bare digit behind.
+      // Rust side reads, not a line for a person.
       if (event.kind === "done") return;
       const element = logRef.current;
       atBottomRef.current = !element || element.scrollTop + element.clientHeight >= element.scrollHeight - 20;
       setLog((previous) => `${previous}${PREFIX[event.kind] ?? "    "}${event.text}\n`);
-      // Only the install has steps worth naming; npm is one job from start to end.
-      if (event.kind === "step") setRunNote(event.text);
+      // The step names are the progress a person can follow without the log.
+      if (event.kind === "step") setActivity(event.text);
     });
     return () => {
       void pending.then((unlisten) => unlisten());
@@ -347,142 +308,178 @@ export function Onboarding({
     // Only follow the tail while the reader is already at it.
     const element = logRef.current;
     if (element && atBottomRef.current) element.scrollTop = element.scrollHeight;
-  }, [log]);
+  }, [log, logOpen]);
 
   const dismiss = useCallback(() => {
     setSelfOpen(false);
     onClose();
   }, [onClose]);
 
-  // ---------------------------------------------------------------- step one
+  // ----------------------------------------------------------------- install
 
-  // Retyping a path should say straight away whether it was the right one.
-  // That is the native change event, which React does not surface: its
-  // onChange is the input event, and that fires on every keystroke. The box
-  // only exists while the page is showing, so the listener is put back when
-  // it appears, which is what `visible` is doing in the list.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: visible is when the box mounts
-  useEffect(() => {
-    const box = binRef.current;
-    if (!box) return;
-
-    const commit = () => {
-      // The box is read rather than the state this listener closed over,
-      // since it outlives the render that installed it. The other setting is
-      // read back first so that changing the path cannot reset it.
-      void getSettings()
-        .then((current) => setSettings({ ...current, parlourBin: box.value.trim() }))
-        .then(() => refresh())
-        .then(() => setWhereError(null))
-        .catch((error: unknown) => setWhereError(String(error)));
-    };
-
-    box.addEventListener("change", commit);
-    return () => box.removeEventListener("change", commit);
-  }, [refresh, visible]);
-
-  const installParlour = async () => {
-    setInstallingCli(true);
-    setLog("");
-    setLogUnder(1);
-    setCliNote("Installing with npm.");
+  /** A path typed by hand, taken when the box is left or Enter is pressed rather than per keystroke. */
+  const commitBin = async () => {
     try {
-      const ok = await installCli();
-      setCliNote(ok ? "Installed." : "npm did not finish. The log says why.");
+      // The other setting is read back first so that changing the path cannot reset it.
+      const current = await getSettings();
+      if (current.parlourBin === bin.trim()) return;
+      await setSettings({ ...current, parlourBin: bin.trim() });
+      await refresh();
     } catch (error) {
-      setCliNote(String(error));
-    } finally {
-      setInstallingCli(false);
-      // In the finally so it runs either way, and caught so that a Rust side
-      // that has stopped answering does not throw past the note above.
-      await refresh().catch((error: unknown) => setWhereError(String(error)));
+      setWhereError(String(error));
     }
   };
 
-  // ---------------------------------------------------------------- step two
-
+  /**
+   * The one button: the CLI from npm if it is missing, then `parlour init` for
+   * everything behind it. Each half says how it went on its own row, and the
+   * log opens by itself if either of them fails.
+   */
   const install = async () => {
-    setInstalling(true);
     setLog("");
-    setLogUnder(2);
-    setRunNote("Working. The models are a few hundred megabytes, so this takes a while.");
+    setFailed(null);
+    let current = readiness;
+    let running: Job = null;
     try {
+      if (!current?.parlourOk) {
+        running = "cli";
+        setJob(running);
+        setActivity("Installing the parlour command with npm");
+        const ok = await installCli();
+        current = await refresh();
+        if (!ok || !current.parlourOk) {
+          setFailed("cli");
+          setLogOpen(true);
+          setActivity("npm did not finish. The details say why.");
+          return;
+        }
+      }
+      running = "setup";
+      setJob(running);
+      setActivity("Getting started. The models are large, so this takes a while.");
       const ok = await runSetup(true);
-      setRunNote(ok ? "Done." : "Finished, with the failures above still to fix.");
+      current = await refresh();
+      if (!ok || !current.installed) {
+        setFailed("setup");
+        setLogOpen(true);
+        setActivity("Finished, with something still to fix. The details say what.");
+        return;
+      }
+      setActivity("");
     } catch (error) {
-      setRunNote(String(error));
+      setFailed(running ?? "setup");
+      setLogOpen(true);
+      setActivity(String(error));
     } finally {
-      setInstalling(false);
-      await refresh().catch((error: unknown) => setRunNote(String(error)));
+      setJob(null);
     }
   };
 
-  // -------------------------------------------------------------- step three
+  // ------------------------------------------------------------------- saves
 
-  const save = async () => {
+  /** Reads the file, lets `change` edit it, and writes it back, so a step only touches its own keys. */
+  const saveStep = async (
+    change: (config: Awaited<ReturnType<typeof readConfig>>) => void | Promise<void>,
+  ) => {
+    setSaving(true);
+    setStepNote("");
     try {
       const config = await readConfig();
-      config.integrations ??= {};
-      config.integrations["home-assistant"] ??= {};
+      await change(config);
+      await writeConfig(config);
+      onSaved();
+      return true;
+    } catch (error) {
+      setStepNote(String(error));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveVoice = async () => {
+    const ok = await saveStep((config) => {
       config.audio ??= {};
       config.wake ??= {};
-      config.llm ??= {};
-      config.llm.cloud ??= {};
+      config.audio.inputDevice = mic;
+      config.wake.words = [wake];
+    });
+    if (ok) go("home");
+  };
 
+  const saveHome = async () => {
+    const ok = await saveStep(async (config) => {
+      config.integrations ??= {};
+      config.integrations["home-assistant"] ??= {};
       // A cleared box means "not set", not the empty string: `config write`
       // would accept "" and the house would then be asked for at no address.
       // Leaving the key out lets the integration's own default apply.
       const url = haUrl.trim();
       if (url) config.integrations["home-assistant"].url = url;
       else delete config.integrations["home-assistant"].url;
-      config.audio.inputDevice = mic;
-      config.wake.words = [wake];
-      // Nothing to escalate to without a key, and a cloud model that cannot be
-      // reached is a slow way to fail.
-      if (anthropic) config.llm.cloud.enabled = true;
-
-      await writeConfig(config);
       if (haToken) await setSecret("HA_TOKEN", haToken);
-      if (anthropic) await setSecret("ANTHROPIC_API_KEY", anthropic);
-      // Ticking the box mints a token once: a second one would lock out every
-      // phone and satellite already holding the first. Unticking it takes the
-      // house back off the network.
-      if (network && !hasToken) await setSecret("PARLOUR_TOKEN", mintToken());
-      if (!network && hasToken) await setSecret("PARLOUR_TOKEN", "");
-
+    });
+    if (ok) {
       setHaToken("");
-      setAnthropic("");
-      setSaveNote("Saved.");
-      onSaved();
-      await refresh();
-    } catch (error) {
-      setSaveNote(String(error));
+      await refresh().catch(() => undefined);
+      go("extras");
     }
   };
 
-  // --------------------------------------------------------------- step four
+  const saveExtras = async () => {
+    if (cloud && !anthropic && !present?.ANTHROPIC_API_KEY) {
+      setStepNote("Paste an Anthropic key, or switch cloud help off.");
+      return;
+    }
+    const ok = await saveStep(async (config) => {
+      config.llm ??= {};
+      config.llm.cloud ??= {};
+      // Nothing to escalate to without a key, and a cloud model that cannot be
+      // reached is a slow way to fail. The key itself is kept when switched
+      // off, so switching back on does not mean finding it again.
+      config.llm.cloud.enabled = cloud;
+      if (cloud && anthropic) await setSecret("ANTHROPIC_API_KEY", anthropic);
+      // Switching this on mints a token once: a second one would lock out every
+      // phone and satellite already holding the first. Switching it off takes
+      // the house back off the network.
+      if (network && !hasToken) await setSecret("PARLOUR_TOKEN", mintToken());
+      if (!network && hasToken) await setSecret("PARLOUR_TOKEN", "");
+    });
+    if (ok) {
+      setAnthropic("");
+      await refresh().catch(() => undefined);
+      go("finish");
+    }
+  };
 
-  const doctor = async () => {
-    setChecks([]);
-    setDoctorNote("Checking...");
+  // ------------------------------------------------------------------ finish
+
+  const doctor = useCallback(async () => {
+    setChecks(null);
+    setDoctorNote(null);
     try {
-      const result = await runDoctor();
-      setChecks(result);
-      setDoctorNote(null);
+      setChecks(await runDoctor());
     } catch (error) {
       setChecks([]);
       setDoctorNote(`Could not run the check: ${error}`);
     }
-  };
+  }, []);
+
+  // Arriving at the end is when to look everything over, without a button for it.
+  useEffect(() => {
+    if (visible && screen === "finish") void doctor();
+  }, [visible, screen, doctor]);
 
   const start = async () => {
+    setStarting(true);
     try {
       await startAgent();
       dismiss();
     } catch (error) {
       // A house that will not start is a thing to read, not to throw.
-      setChecks([]);
       setDoctorNote(String(error));
+    } finally {
+      setStarting(false);
     }
   };
 
@@ -490,181 +487,272 @@ export function Onboarding({
 
   if (!visible) return null;
 
-  // A wake word written into the config by hand is still the wake word, so it
-  // joins the list rather than leaving the control looking empty.
-  const wakeWords = WAKE_WORDS.some((word) => word.value === wake)
-    ? WAKE_WORDS
-    : [{ value: wake, label: `${wake} (from the config)` }, ...WAKE_WORDS];
+  const wakeLabel = (
+    WAKE_WORDS.find((word) => word.value === wake)?.label ?? wake.replaceAll("_", " ")
+  ).replace(/^./, (first) => first.toUpperCase());
 
-  const micTone: Tone = asking ? "warn" : micGranted ? "ok" : micAsked ? "bad" : "warn";
-  const busy = installing || installingCli;
+  const busy = job !== null;
+
   const logBox = (
     <pre
       ref={logRef}
-      className="mt-2 max-h-[190px] overflow-y-auto rounded-lg border bg-background px-3 py-2.5 font-mono text-[11px] leading-normal break-words whitespace-pre-wrap"
+      className="max-h-[200px] overflow-y-auto rounded-lg border bg-background px-3 py-2.5 font-mono text-[11px] leading-normal break-words whitespace-pre-wrap"
     >
-      {log}
+      {log || "Nothing yet."}
     </pre>
   );
-  const rows: [string, boolean, string][] = readiness
-    ? [
-        ["Parlour", readiness.parlourOk, readiness.parlourVersion ?? "not installed"],
-        ["Node", readiness.nodeOk, readiness.nodeVersion ?? "not found"],
-        ["ffmpeg", readiness.ffmpeg, readiness.ffmpeg ? "installed" : "no ffmpeg means no microphone"],
-        ["Config", readiness.config, readiness.config ? "written" : "written by the install below"],
-      ]
-    : [];
 
-  return (
-    <div className="fixed inset-0 z-10 overflow-y-auto bg-background p-5">
-      <div className="mx-auto max-w-[640px]">
-        <div className="mb-1 flex items-center justify-between">
-          <h1 className="text-[17px] font-semibold">Setting up Parlour</h1>
-          <Button variant="ghost" size="sm" onClick={dismiss}>
-            Close
-          </Button>
+  let body: JSX.Element;
+  let primary: JSX.Element | null = null;
+  let secondary: JSX.Element | null = null;
+
+  switch (screen) {
+    case "welcome": {
+      body = (
+        <div className="flex flex-col items-center pt-6 text-center">
+          <span className="mb-4 grid size-14 place-items-center rounded-2xl bg-primary text-primary-foreground">
+            <Mic className="size-7" aria-hidden />
+          </span>
+          <h2 className="text-[20px] font-semibold">Welcome to Parlour</h2>
+          <p className="mt-2 max-w-[380px] text-muted-foreground">
+            A voice assistant for the house that runs on this Mac. Say the wake word, ask for what you want,
+            and it answers out loud.
+          </p>
+          <ol className="mt-6 grid w-full max-w-[380px] gap-2 text-left">
+            {[
+              ["Install", "The parlour command, speech tools and a local model."],
+              ["Voice", "Which microphone to listen on, and the word that wakes it."],
+              ["Home", "Your Home Assistant, if you have one."],
+              ["Extras", "Cloud help and other devices, both optional."],
+            ].map(([name, what], index) => (
+              <li key={name} className="flex gap-3 rounded-lg border bg-card px-3 py-2.5">
+                <span className="grid size-5 shrink-0 place-items-center rounded-full bg-border text-[11px] tabular-nums">
+                  {index + 1}
+                </span>
+                <span>
+                  <span className="font-medium">{name}</span>
+                  <span className="block text-muted-foreground">{what}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-4 text-[13px] text-muted-foreground">
+            About ten minutes, most of it downloading. You can stop and come back.
+          </p>
         </div>
-        <p className="text-muted-foreground">
-          Four steps. It remembers where it got to, so this can be closed and come back to.
-        </p>
+      );
+      primary = <Button onClick={() => go("install")}>Get started</Button>;
+      break;
+    }
 
-        <ol className="mt-4 grid gap-3.5">
-          <Step index={1} title="Parlour" done={Boolean(readiness?.parlourOk && readiness.nodeOk)}>
-            <p className="text-muted-foreground">
-              The <code className="font-mono">parlour</code> command, which this app starts and asks questions
-              of. It is an npm package, so it needs node 22 or newer.
+    case "install": {
+      const cliTone: Tone = readiness?.parlourOk
+        ? "ok"
+        : job === "cli"
+          ? "busy"
+          : failed === "cli"
+            ? "bad"
+            : "todo";
+      const setupTone: Tone = readiness?.installed
+        ? "ok"
+        : job === "setup"
+          ? "busy"
+          : failed === "setup"
+            ? "bad"
+            : "todo";
+      const missing = readiness
+        ? [!readiness.ffmpeg && "ffmpeg", !readiness.config && "the config"].filter(Boolean).join(" and ")
+        : "";
+
+      body = (
+        <>
+          <Heading title="Install Parlour">
+            Everything runs on this Mac. The speech tools come from Homebrew and the models are downloaded
+            once.
+          </Heading>
+
+          {whereError !== null ? (
+            <Row tone="bad" name="Could not look" detail={whereError} />
+          ) : !readiness ? (
+            <p className="text-muted-foreground">Looking at what is already here...</p>
+          ) : (
+            <ul className="grid gap-2">
+              <Row tone={readiness.nodeOk ? "ok" : "bad"} name="Node.js" detail={nodeDetail(readiness)}>
+                {readiness.nodeOk ? null : (
+                  <div className="mt-2 grid gap-2">
+                    <p className="text-muted-foreground">Install it in Terminal, then check again:</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 rounded-md border bg-background px-2.5 py-1.5 font-mono text-[12px]">
+                        {NODE_INSTALL}
+                      </code>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Copy the command"
+                        onClick={() => void navigator.clipboard?.writeText(NODE_INSTALL)}
+                      >
+                        <Copy />
+                      </Button>
+                    </div>
+                    <div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void refresh().catch(() => undefined)}
+                      >
+                        Check again
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </Row>
+              <Row
+                tone={cliTone}
+                name="The parlour command"
+                detail={
+                  readiness.parlourOk
+                    ? `parlour ${readiness.parlourVersion}`
+                    : "From npm, at this app's version."
+                }
+              />
+              <Row
+                tone={setupTone}
+                name="Speech and models"
+                detail={
+                  readiness.installed
+                    ? "ffmpeg, whisper and the models are in place."
+                    : missing
+                      ? `ffmpeg, whisper, a local model and its config. Still to do: ${missing}.`
+                      : "ffmpeg, whisper, a local model and its config."
+                }
+              />
+            </ul>
+          )}
+
+          {activity ? (
+            <p className="mt-3 flex items-start gap-2 text-muted-foreground" aria-live="polite">
+              {busy ? <Mark tone="busy" /> : null}
+              {activity}
             </p>
+          ) : null}
 
-            <div className="mt-2.5 grid gap-1">
+          <Disclosure label="Show details" open={logOpen} onOpenChange={setLogOpen}>
+            {logBox}
+          </Disclosure>
+
+          <Disclosure label="Already have parlour somewhere else?">
+            <div className="grid gap-1">
               <Label className="text-xs text-muted-foreground" htmlFor="ob-bin">
-                Where it is
+                Path to the parlour command
               </Label>
               <Input
-                ref={binRef}
                 id="ob-bin"
                 spellCheck={false}
                 placeholder="/opt/homebrew/bin/parlour"
                 value={bin}
+                disabled={busy}
                 onChange={(event) => setBin(event.target.value)}
+                onBlur={() => void commitBin()}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void commitBin();
+                }}
               />
             </div>
+            <Note>Only needed when it is not on the PATH a login shell has.</Note>
+          </Disclosure>
+        </>
+      );
 
-            {whereError !== null ? (
-              <Note>{whereError}</Note>
-            ) : readiness ? (
-              <Note>{whereNote(readiness)}</Note>
-            ) : null}
+      primary = readiness?.installed ? (
+        <Button onClick={() => go("voice")}>Continue</Button>
+      ) : (
+        <Button disabled={busy || !readiness?.nodeOk} onClick={() => void install()}>
+          {busy ? "Installing..." : failed ? "Try again" : "Install"}
+        </Button>
+      );
+      secondary = <BackButton onClick={() => go("welcome")} disabled={busy} />;
+      break;
+    }
 
-            {readiness && !readiness.parlourOk ? (
-              <div className="mt-2.5 flex items-center gap-2.5">
-                <Button disabled={busy || !readiness.nodeOk} onClick={() => void installParlour()}>
-                  Install Parlour
+    case "voice": {
+      // A wake word written into the config by hand is still the wake word, so it
+      // joins the list rather than leaving the choice looking empty.
+      const wakeWords = WAKE_WORDS.some((word) => word.value === wake)
+        ? WAKE_WORDS
+        : [{ value: wake, label: `${wake} (from the config)` }, ...WAKE_WORDS];
+      const micTone: Tone = asking ? "busy" : micGranted ? "ok" : "bad";
+
+      body = (
+        <>
+          <Heading title="How it hears you">
+            Parlour listens through this app, all the time, for the wake word only. Nothing leaves the Mac
+            until it hears it.
+          </Heading>
+
+          <div className="grid gap-2">
+            {micGranted === undefined && !asking ? (
+              <div className="rounded-xl border bg-card px-4 py-4">
+                <p className="font-medium">Allow the microphone</p>
+                <p className="mt-1 text-muted-foreground">
+                  macOS asks once. Saying no here means silence later, though it can be changed in System
+                  Settings.
+                </p>
+                <Button className="mt-3" onClick={() => void ask(mic)}>
+                  <Mic />
+                  Allow microphone
                 </Button>
-                <span className="text-muted-foreground">{cliNote || "npm install -g parlour"}</span>
               </div>
-            ) : null}
+            ) : (
+              <ul>
+                <Row
+                  tone={micTone}
+                  name={
+                    asking ? "Asking for the microphone" : micGranted ? "Microphone allowed" : "No microphone"
+                  }
+                  detail={micDetail}
+                >
+                  {!asking && !micGranted ? (
+                    <div className="mt-2 flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => void openPrivacySettings()}>
+                        Open System Settings
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => void ask(mic)}>
+                        Ask again
+                      </Button>
+                    </div>
+                  ) : null}
+                </Row>
+              </ul>
+            )}
+          </div>
 
-            {logUnder === 1 ? logBox : null}
-          </Step>
-
-          <Step index={2} title="What is missing" done={Boolean(readiness?.installed)}>
-            <ul className="grid gap-1.5">
-              {readiness ? (
-                rows.map(([name, ok, detail]) => (
-                  <CheckRow key={name} tone={ok ? "ok" : "warn"} name={name} detail={detail} />
-                ))
-              ) : (
-                <li className="text-muted-foreground">Looking...</li>
-              )}
-            </ul>
-
-            <div className="mt-2.5 flex items-center gap-2.5">
-              <Button disabled={busy || !readiness?.parlourOk} onClick={() => void install()}>
-                Install what is missing
-              </Button>
-              <span className="text-muted-foreground">{runNote}</span>
+          <fieldset className="mt-5">
+            <legend className="mb-2 font-medium">Wake word</legend>
+            <div className="grid grid-cols-3 gap-2">
+              {wakeWords.map((word) => (
+                <label
+                  key={word.value}
+                  className={cn(
+                    "cursor-pointer rounded-lg border bg-card px-3 py-2.5 text-center has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50",
+                    wake === word.value && "border-primary bg-primary/10 font-medium",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="ob-wake"
+                    value={word.value}
+                    checked={wake === word.value}
+                    onChange={() => setWake(word.value)}
+                    className="sr-only"
+                  />
+                  {word.label}
+                </label>
+              ))}
             </div>
+          </fieldset>
 
-            <Note>
-              Runs <code className="font-mono">parlour init</code>: ffmpeg and whisper from Homebrew, the
-              models, and whisper kept warm at login.
-            </Note>
-
-            {logUnder === 2 ? logBox : null}
-          </Step>
-
-          <Step
-            index={3}
-            title="The things it cannot work out"
-            done={Boolean(present?.HA_TOKEN) && micGranted === true}
-          >
-            <div className="grid gap-2.5">
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground" htmlFor="ob-ha-url">
-                  Home Assistant
-                </Label>
-                <Input
-                  id="ob-ha-url"
-                  spellCheck={false}
-                  placeholder={HA_DEFAULT}
-                  value={haUrl}
-                  onChange={(event) => setHaUrl(event.target.value)}
-                />
-              </div>
-
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground" htmlFor="ob-ha-token">
-                  Home Assistant token
-                </Label>
-                <Input
-                  id="ob-ha-token"
-                  type="password"
-                  autoComplete="off"
-                  placeholder={present?.HA_TOKEN ? "set, leave blank to keep" : "not set"}
-                  value={haToken}
-                  onChange={(event) => setHaToken(event.target.value)}
-                />
-              </div>
-            </div>
-
-            <Note>
-              Your profile page in Home Assistant, Security tab, right at the bottom. It is the whole house,
-              so it goes in secrets.env and never into git.
-            </Note>
-
-            <div className="mt-2.5 grid gap-1">
-              <Label className="text-xs text-muted-foreground" htmlFor="ob-anthropic">
-                Anthropic key, for the questions the local model hands over
-              </Label>
-              <Input
-                id="ob-anthropic"
-                type="password"
-                autoComplete="off"
-                placeholder={present?.ANTHROPIC_API_KEY ? "set, leave blank to keep" : "not set"}
-                value={anthropic}
-                onChange={(event) => setAnthropic(event.target.value)}
-              />
-            </div>
-
-            <div className="mt-2.5 grid gap-1">
-              <Label className="text-xs text-muted-foreground" htmlFor="ob-wake">
-                Wake word
-              </Label>
-              <Select value={wake} onValueChange={setWake}>
-                <SelectTrigger id="ob-wake" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {wakeWords.map((word) => (
-                    <SelectItem key={word.value} value={word.value}>
-                      {word.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="mt-2.5 grid gap-1">
+          <Disclosure label="Use a different microphone">
+            <div className="grid gap-1">
               <Label className="text-xs text-muted-foreground" htmlFor="ob-mic">
                 Microphone
               </Label>
@@ -674,7 +762,7 @@ export function Onboarding({
                   setMic(value);
                   // A different microphone is a different question only in so far
                   // as the device has to open; the permission itself is the app's.
-                  void ask(value);
+                  if (micGranted !== undefined) void ask(value);
                 }}
               >
                 <SelectTrigger id="ob-mic" className="w-full">
@@ -689,74 +777,259 @@ export function Onboarding({
                 </SelectContent>
               </Select>
             </div>
+          </Disclosure>
+        </>
+      );
 
-            <ul className="mt-2.5 grid gap-1.5">
-              <CheckRow tone={micTone} name="Permission" detail={micDetail} />
-            </ul>
+      primary = (
+        <Button disabled={saving || asking} onClick={() => void saveVoice()}>
+          {micGranted === false ? "Continue anyway" : "Continue"}
+        </Button>
+      );
+      secondary = <BackButton onClick={() => go("install")} disabled={saving} />;
+      break;
+    }
 
-            <div className="mt-2.5 flex items-center gap-2.5">
-              <Button variant="ghost" size="sm" disabled={asking} onClick={() => void ask(mic)}>
-                Ask again
-              </Button>
-              {micAsked && !asking && micGranted !== true ? (
-                <Button variant="ghost" size="sm" onClick={() => void openPrivacySettings()}>
-                  Open System Settings
-                </Button>
-              ) : null}
-            </div>
+    case "home": {
+      body = (
+        <>
+          <Heading title="Connect your home">
+            Parlour runs the lights, heating and everything else through Home Assistant. No Home Assistant?
+            Skip this: timers, questions and search still work.
+          </Heading>
 
-            <Note>
-              macOS asks once, for this app, and it is asked as soon as this page can ask it. Parlour hears
-              through this app, so a no here is silence later.
-            </Note>
-
-            <div className="mt-2.5 flex items-center gap-2">
-              <Checkbox
-                id="ob-network"
-                checked={network}
-                onCheckedChange={(state) => setNetwork(state === true)}
+          <div className="grid gap-3">
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground" htmlFor="ob-ha-url">
+                Home Assistant address
+              </Label>
+              <Input
+                id="ob-ha-url"
+                spellCheck={false}
+                placeholder={HA_DEFAULT}
+                value={haUrl}
+                onChange={(event) => setHaUrl(event.target.value)}
               />
-              <Label htmlFor="ob-network">Let the rest of the house in</Label>
             </div>
 
-            <Note>
-              Phones, satellites and Home Assistant all send one shared token. Without it Parlour answers this
-              machine only.
-            </Note>
-
-            <div className="mt-2.5 flex items-center gap-2.5">
-              <Button disabled={!readiness?.parlourOk} onClick={() => void save()}>
-                Save
-              </Button>
-              <span className="text-muted-foreground">{saveNote}</span>
+            <div className="grid gap-1">
+              <Label className="text-xs text-muted-foreground" htmlFor="ob-ha-token">
+                Long-lived access token
+              </Label>
+              <Input
+                id="ob-ha-token"
+                type="password"
+                autoComplete="off"
+                placeholder={present?.HA_TOKEN ? "Already set. Leave blank to keep it." : "Paste the token"}
+                value={haToken}
+                onChange={(event) => setHaToken(event.target.value)}
+              />
             </div>
-          </Step>
+          </div>
 
-          <Step index={4} title="Check it over" done={false}>
-            <ul className="grid gap-1.5">
-              {doctorNote ? (
-                <li className="text-muted-foreground">{doctorNote}</li>
-              ) : (
-                checks.map((check) => (
-                  <CheckRow
-                    key={check.name}
-                    tone={toneOf(check.status)}
-                    name={check.name}
-                    detail={check.detail}
-                  />
-                ))
-              )}
-            </ul>
+          <Disclosure label="Where do I find a token?">
+            <ol className="grid list-decimal gap-1 pl-5 text-muted-foreground">
+              <li>Open Home Assistant and click your name at the bottom of the sidebar.</li>
+              <li>Go to the Security tab and scroll right to the bottom.</li>
+              <li>Under Long-lived access tokens, create one called Parlour and copy it.</li>
+            </ol>
+            <Note>It opens the whole house, so it is kept in secrets.env and never in the config.</Note>
+          </Disclosure>
+        </>
+      );
 
-            <div className="mt-2.5 flex items-center gap-2.5">
-              <Button variant="ghost" size="sm" onClick={() => void doctor()}>
-                Check
-              </Button>
-              <Button onClick={() => void start()}>Start listening</Button>
-            </div>
-          </Step>
-        </ol>
-      </div>
+      const ready = Boolean(haToken || present?.HA_TOKEN);
+      primary = (
+        <Button disabled={saving || !ready} onClick={() => void saveHome()}>
+          Continue
+        </Button>
+      );
+      secondary = (
+        <>
+          <BackButton onClick={() => go("voice")} disabled={saving} />
+          <Button variant="ghost" disabled={saving} onClick={() => go("extras")}>
+            Skip for now
+          </Button>
+        </>
+      );
+      break;
+    }
+
+    case "extras": {
+      body = (
+        <>
+          <Heading title="Extras">Both optional, and both can be changed later in Settings.</Heading>
+
+          <div className="grid gap-2.5">
+            <Optional
+              icon={<Sparkles />}
+              title="Cloud help"
+              summary="Questions the local model cannot answer go to Claude. Only the words, never the audio."
+              on={cloud}
+              onChange={setCloud}
+            >
+              <div className="grid gap-1">
+                <Label className="text-xs text-muted-foreground" htmlFor="ob-anthropic">
+                  Anthropic API key
+                </Label>
+                <Input
+                  id="ob-anthropic"
+                  type="password"
+                  autoComplete="off"
+                  placeholder={
+                    present?.ANTHROPIC_API_KEY ? "Already set. Leave blank to keep it." : "sk-ant-..."
+                  }
+                  value={anthropic}
+                  onChange={(event) => setAnthropic(event.target.value)}
+                />
+              </div>
+            </Optional>
+
+            <Optional
+              icon={<Wifi />}
+              title="Other devices"
+              summary="Let phones, satellites and Home Assistant talk to Parlour over the network."
+              on={network}
+              onChange={setNetwork}
+            >
+              <p className="text-muted-foreground">
+                {hasToken
+                  ? "A shared token is already set. Devices holding it keep working."
+                  : "A shared token is made for you. The Status tab shows it, with a code to pair the iPhone app."}
+              </p>
+            </Optional>
+          </div>
+        </>
+      );
+
+      primary = (
+        <Button disabled={saving} onClick={() => void saveExtras()}>
+          Continue
+        </Button>
+      );
+      secondary = <BackButton onClick={() => go("home")} disabled={saving} />;
+      break;
+    }
+
+    case "finish": {
+      const problems = checks?.filter((check) => check.status !== "ok") ?? [];
+      const passed = checks?.filter((check) => check.status === "ok") ?? [];
+      const failing = problems.some((check) => check.status === "fail");
+
+      body = (
+        <>
+          <Heading
+            title={checks === null ? "Checking everything over" : failing ? "Nearly there" : "All set"}
+          >
+            {checks === null
+              ? "Running parlour doctor."
+              : failing
+                ? "Something below still needs fixing. Parlour can start without it, but may not work."
+                : `Start Parlour, then try "${wakeLabel}, what time is it?"`}
+          </Heading>
+
+          {checks === null ? (
+            <p className="flex items-center gap-2 text-muted-foreground">
+              <Mark tone="busy" />
+              Checking...
+            </p>
+          ) : (
+            <>
+              {problems.length ? (
+                <ul className="grid gap-2">
+                  {problems.map((check) => (
+                    <Row
+                      key={check.name}
+                      tone={toneOf(check.status)}
+                      name={check.name}
+                      detail={check.detail}
+                    />
+                  ))}
+                </ul>
+              ) : null}
+              {passed.length ? (
+                <Disclosure label={`${passed.length} ${passed.length === 1 ? "check" : "checks"} passed`}>
+                  <ul className="grid gap-1.5">
+                    {passed.map((check) => (
+                      <Row key={check.name} tone="ok" name={check.name} detail={check.detail} />
+                    ))}
+                  </ul>
+                </Disclosure>
+              ) : null}
+            </>
+          )}
+
+          {doctorNote ? <Note className="text-destructive">{doctorNote}</Note> : null}
+
+          <div className="mt-5 flex items-start gap-3 rounded-xl border bg-card px-4 py-3">
+            <House className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <p className="text-muted-foreground">
+              Parlour lives in the menu bar. Settings has everything asked here and more, and Connectors signs
+              in to the services it can use.
+            </p>
+          </div>
+        </>
+      );
+
+      primary = (
+        <Button disabled={checks === null || starting} onClick={() => void start()}>
+          {starting ? "Starting..." : "Start Parlour"}
+        </Button>
+      );
+      secondary = (
+        <>
+          <BackButton onClick={() => go("extras")} disabled={starting} />
+          <Button variant="ghost" disabled={checks === null} onClick={() => void doctor()}>
+            Check again
+          </Button>
+        </>
+      );
+      break;
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-10 flex flex-col bg-background">
+      <header className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
+        <h1 className="text-[15px] font-semibold">Set up Parlour</h1>
+        <Button variant="ghost" size="sm" disabled={busy} onClick={dismiss}>
+          {screen === "welcome" ? "Not now" : "Finish later"}
+        </Button>
+      </header>
+
+      {screen !== "welcome" ? (
+        <nav className="border-b px-4 pb-3">
+          <Stepper steps={STEPS} current={screen} reached={busy ? -1 : reached} onPick={go} />
+        </nav>
+      ) : null}
+
+      <main className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+        {/* Keyed by step, so what one step had folded open does not carry to the next. */}
+        <div key={screen} className="mx-auto max-w-[520px]">
+          {body}
+        </div>
+      </main>
+
+      <footer className="border-t px-5 py-3">
+        {stepNote ? (
+          <p className="mx-auto mb-2 max-w-[520px] text-right text-destructive" role="alert">
+            {stepNote}
+          </p>
+        ) : null}
+        <div className="mx-auto flex max-w-[520px] items-center justify-between gap-2">
+          <div className="flex items-center gap-1">{secondary}</div>
+          {primary}
+        </div>
+      </footer>
     </div>
+  );
+}
+
+function BackButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }): JSX.Element {
+  return (
+    <Button variant="ghost" disabled={disabled} onClick={onClick}>
+      <ArrowLeft />
+      Back
+    </Button>
   );
 }

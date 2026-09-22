@@ -59,6 +59,16 @@ struct ParlourClient: Sendable {
     try await decode(request(path: "/health", method: "GET"))
   }
 
+  /// `/health`, then `/v1/models`, the cheapest route behind the token. The
+  /// first says there is a server at the address; the second that it lets
+  /// this phone in, which the health check alone never would.
+  func connect() async throws -> Health {
+    let health = try await health()
+    struct Models: Decodable {}
+    let _: Models = try await decode(request(path: "/v1/models", method: "GET"))
+    return health
+  }
+
   /// Text in, text out. The same route automations and scripts use.
   func ask(_ text: String, room: String) async throws -> Answer {
     var body: [String: String] = ["text": text, "client": "ios"]

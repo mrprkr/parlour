@@ -18,6 +18,7 @@ struct SettingsView: View {
   @State private var probe: String?
   @State private var checking = false
   @State private var scanning = false
+  @State private var setupAgain = false
   @State private var microphone = Recorder.permission
   @State private var speech = SFSpeechRecognizer.authorizationStatus()
 
@@ -31,6 +32,13 @@ struct SettingsView: View {
           found
           onDevice
           permissions
+
+          Button {
+            setupAgain = true
+          } label: {
+            Label("Run setup again", systemImage: "wand.and.stars")
+              .font(Ramp.body)
+          }
         }
         .padding(.horizontal, Space.xl)
         .padding(.vertical, Space.lg)
@@ -47,6 +55,9 @@ struct SettingsView: View {
     }
     .sheet(isPresented: $scanning) {
       PairingScanner { link in settings.pair(with: link) }
+    }
+    .fullScreenCover(isPresented: $setupAgain) {
+      OnboardingView(again: true) { setupAgain = false }
     }
   }
 
