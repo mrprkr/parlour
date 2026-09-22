@@ -17,6 +17,7 @@ struct SettingsView: View {
   @State private var health: Health?
   @State private var probe: String?
   @State private var checking = false
+  @State private var scanning = false
   @State private var microphone = Recorder.permission
   @State private var speech = SFSpeechRecognizer.authorizationStatus()
 
@@ -39,6 +40,14 @@ struct SettingsView: View {
       microphone = Recorder.permission
       speech = SFSpeechRecognizer.authorizationStatus()
     }
+    .task(id: settings.pairedWith) {
+      // A code was just scanned, here or by the Camera app: say whether the
+      // server it named answers, without waiting to be asked.
+      if settings.pairedWith != nil { await check() }
+    }
+    .sheet(isPresented: $scanning) {
+      PairingScanner { link in settings.pair(with: link) }
+    }
   }
 
   // MARK: - The server
@@ -47,6 +56,21 @@ struct SettingsView: View {
     @Bindable var settings = settings
     return Panel {
       VStack(alignment: .leading, spacing: Space.md) {
+        VStack(alignment: .leading, spacing: Space.xs) {
+          Button {
+            scanning = true
+          } label: {
+            Label("Scan pairing code", systemImage: "qrcode.viewfinder")
+              .font(Ramp.body)
+          }
+          Text(
+            settings.pairedWith.map { "Paired with \($0)." }
+              ?? "Run parlour pair on the Mac and scan the code it shows, or fill these in by hand."
+          )
+          .font(Ramp.micro)
+          .foregroundStyle(Palette.bracken)
+        }
+
         field("Address", placeholder: "found with Bonjour", text: $settings.serverURL)
           .textInputAutocapitalization(.never)
           .autocorrectionDisabled()

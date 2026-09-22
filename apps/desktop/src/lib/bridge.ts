@@ -47,6 +47,16 @@ export interface Network {
   /** Without a token Parlour answers loopback only. */
   tokenSet: boolean;
   port: number;
+  /** This machine's name, as the url above has it. */
+  host: string;
+}
+
+/** What `parlour pair --json` prints: the link the iPhone app scans, drawn as an SVG. */
+export interface Pairing {
+  url: string;
+  name: string;
+  link: string;
+  svg: string;
 }
 
 export interface Microphone {
@@ -210,8 +220,15 @@ export const connectorRemove = async (name: string): Promise<void> => {
 export const getNetwork = async (): Promise<Network> => {
   const [config, secrets, host] = await Promise.all([readConfig(), secretsStatus(), hostName()]);
   const port = config.server?.port ?? 8765;
-  return { url: `http://${host}:${port}`, tokenSet: secrets.PARLOUR_TOKEN, port };
+  return { url: `http://${host}:${port}`, tokenSet: secrets.PARLOUR_TOKEN, port, host };
 };
+
+/**
+ * The code for the iPhone app. Given the host this window already shows, so
+ * the address in the code and the one printed beside it are the same.
+ */
+export const pairingCode = async (host: string): Promise<Pairing> =>
+  JSON.parse(await parlour(["pair", "--json", "--host", host])) as Pairing;
 
 // ------------------------------------------------------------------- events
 

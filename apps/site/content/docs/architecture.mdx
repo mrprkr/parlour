@@ -303,7 +303,7 @@ scraping log text. Without the flag, stdout is a log for people to read.
 | Wake word | openWakeWord, ONNX, in process | Free and offline. It runs in the same Node process as everything else, which makes barge-in possible. |
 | Capture | ffmpeg on avfoundation | Nothing to compile, and the only reliable way to pin one input device on macOS. |
 | Speech to text | whisper.cpp `small.en`, kept warm | Loading the model costs more than transcribing a sentence, so it runs as a server. |
-| Model | llama.cpp with a Qwen2.5 GGUF, kept warm | It comes with Parlour, so the house answers straight after `init`, with no LM Studio to install and no server to remember to start. It speaks the OpenAI API, so LM Studio, Ollama or anything else can take its place. |
+| Model | llama.cpp with a Qwen3.5 or Gemma 4 GGUF, kept warm | It comes with Parlour, so the house answers straight after `init`, with no LM Studio to install and no server to remember to start. It speaks the OpenAI API, so LM Studio, Ollama or anything else can take its place. |
 | Escalation | Claude with server-side web search | The local model is fast and private but wrong more often. Handing over is cheap. Being wrong out loud is not. |
 | Speech | Kokoro 82M, ONNX | Close to a cloud voice, runs in process, and has British voices. `say` is the fallback when it fails. |
 

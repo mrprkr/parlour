@@ -3,7 +3,14 @@ import { type JSX, type ReactNode, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { type Check as DoctorCheck, getNetwork, runDoctor, type Status } from "@/lib/bridge";
+import {
+  type Check as DoctorCheck,
+  getNetwork,
+  type Pairing,
+  pairingCode,
+  runDoctor,
+  type Status,
+} from "@/lib/bridge";
 import { cn } from "@/lib/utils";
 
 interface StatusPanelProps {
@@ -13,7 +20,13 @@ interface StatusPanelProps {
 }
 
 /** What the network card is showing. An error takes the url's place, as before. */
-type NetworkView = { url: string; note: string | null };
+type NetworkView = { url: string; note: string | null; host?: string; tokenSet?: boolean };
+
+type PairingView =
+  | { kind: "hidden" }
+  | { kind: "loading" }
+  | { kind: "shown"; code: Pairing }
+  | { kind: "failed"; message: string };
 
 type DoctorView =
   | { kind: "idle" }
@@ -32,6 +45,7 @@ export function StatusPanel({ status, reloadKey }: StatusPanelProps): JSX.Elemen
   const [reply, setReply] = useState<string | null>(null);
   const [network, setNetwork] = useState<NetworkView | null>(null);
   const [doctor, setDoctor] = useState<DoctorView>({ kind: "idle" });
+  const [pairing, setPairing] = useState<PairingView>({ kind: "hidden" });
 
   useEffect(() => {
     if (status.lastHeard) setHeard(status.lastHeard);
@@ -49,8 +63,12 @@ export function StatusPanel({ status, reloadKey }: StatusPanelProps): JSX.Elemen
     void getNetwork()
       .then((net) => {
         if (!live) return;
+        // A new token makes an old code useless, so it is put away rather than left showing.
+        setPairing({ kind: "hidden" });
         setNetwork({
           url: net.url,
+          host: net.host,
+          tokenSet: net.tokenSet,
           note: net.tokenSet
             ? "Phones open that address. Home Assistant points at it with /v1 on the end."
             : "No PARLOUR_TOKEN is set, so Parlour only answers this machine. Add one in Settings to let the house in.",
@@ -64,6 +82,19 @@ export function StatusPanel({ status, reloadKey }: StatusPanelProps): JSX.Elemen
       live = false;
     };
   }, [reloadKey]);
+
+  async function togglePairing(): Promise<void> {
+    if (pairing.kind !== "hidden" || !network?.host) {
+      setPairing({ kind: "hidden" });
+      return;
+    }
+    setPairing({ kind: "loading" });
+    try {
+      setPairing({ kind: "shown", code: await pairingCode(network.host) });
+    } catch (error) {
+      setPairing({ kind: "failed", message: String(error) });
+    }
+  }
 
   async function check(): Promise<void> {
     setDoctor({ kind: "checking" });
@@ -112,12 +143,37 @@ export function StatusPanel({ status, reloadKey }: StatusPanelProps): JSX.Elemen
       </dl>
 
       <Card className={CARD}>
-        <CardHeader className={CARD_PAD}>
+        <CardHeader className={cn(CARD_PAD, "flex items-center justify-between")}>
           <CardTitle className={HEADING}>On the network</CardTitle>
+          {network?.tokenSet ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={() => void togglePairing()}
+              disabled={pairing.kind === "loading"}
+            >
+              {pairing.kind === "hidden" ? "Pair a phone" : "Hide code"}
+            </Button>
+          ) : null}
         </CardHeader>
         <CardContent className={cn(CARD_PAD, "space-y-1")}>
           <p className="break-all font-mono text-[13px]">{network ? network.url : "-"}</p>
           {network?.note ? <p className="text-muted-foreground">{network.note}</p> : null}
+          {pairing.kind === "shown" ? (
+            <div className="flex items-center gap-4 pt-2">
+              <img
+                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(pairing.code.svg)}`}
+                alt={`Pairing code for ${pairing.code.name}`}
+                className="size-44 shrink-0 rounded-sm"
+              />
+              <p className="text-muted-foreground">
+                In the Parlour app on the iPhone, open Settings and scan this, or point the Camera at it. It
+                carries the access token, so show it only to phones you mean to let in.
+              </p>
+            </div>
+          ) : null}
+          {pairing.kind === "failed" ? <p className="text-destructive">{pairing.message}</p> : null}
         </CardContent>
       </Card>
 

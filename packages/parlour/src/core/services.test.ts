@@ -29,7 +29,7 @@ function withWhisperModel(name = "ggml-small.en.bin"): string {
   return join(dir, name);
 }
 
-function withLocalModel(name = "Qwen2.5-7B-Instruct-Q4_K_M.gguf"): string {
+function withLocalModel(name = "Qwen3.5-9B-Q4_K_M.gguf"): string {
   const dir = join(paths.modelsDir, "llm");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, name), "");
@@ -37,7 +37,7 @@ function withLocalModel(name = "Qwen2.5-7B-Instruct-Q4_K_M.gguf"): string {
 }
 
 /** A server that has asked Parlour to run the model itself. */
-const managed = { llm: { local: { managed: true, model: "qwen2.5-7b-instruct" } } };
+const managed = { llm: { local: { managed: true, model: "qwen3.5-9b" } } };
 
 test("the agent spec runs parlour start with its home and a spelled out PATH", async () => {
   const specs = await serviceSpecs(parseConfig({}), paths, ["/opt/homebrew/bin/parlour"], {
@@ -174,11 +174,12 @@ test("the local model spec serves the fetched GGUF under the id config names", a
   const arg = (flag: string) => llm.program[llm.program.indexOf(flag) + 1];
   assert.equal(llm.program[0], "/opt/homebrew/bin/llama-server");
   assert.equal(arg("--model"), file);
-  assert.equal(arg("--alias"), "qwen2.5-7b-instruct");
+  assert.equal(arg("--alias"), "qwen3.5-9b");
   assert.equal(arg("--port"), "8920");
   // Without the chat template the model never emits a tool call, which is the
   // whole job: a house that talks and cannot turn a light off.
   assert.ok(llm.program.includes("--jinja"), "the chat template is on");
+  assert.deepEqual(JSON.parse(arg("--chat-template-kwargs") ?? "{}"), { enable_thinking: false });
   assert.equal(llm.logPath, join(paths.logsDir, "llm.log"));
 });
 
@@ -196,7 +197,7 @@ test("no local model spec without the binary, the file, or the managed switch", 
 test("the local model server follows the port the config gives it", async () => {
   withLocalModel();
   const config = parseConfig({
-    llm: { local: { managed: true, model: "qwen2.5-7b-instruct", baseUrl: "http://127.0.0.1:9123/v1" } },
+    llm: { local: { managed: true, model: "qwen3.5-9b", baseUrl: "http://127.0.0.1:9123/v1" } },
   });
   const specs = await serviceSpecs(config, paths, ["/x/p"], {
     which: whichOf({ "llama-server": "/opt/homebrew/bin/llama-server" }),

@@ -43,26 +43,35 @@ test("the catalogue is in size order and every entry is fetchable", () => {
 });
 
 test("the suggestion is the largest model the machine can hold", () => {
-  assert.equal(suggestLocalModel({ memoryGb: 8, arch: "arm64" }).id, "qwen2.5-3b-instruct");
-  assert.equal(suggestLocalModel({ memoryGb: 16, arch: "arm64" }).id, "qwen2.5-7b-instruct");
-  assert.equal(suggestLocalModel({ memoryGb: 64, arch: "arm64" }).id, "qwen2.5-14b-instruct");
+  assert.equal(suggestLocalModel({ memoryGb: 8, arch: "arm64" }).id, "qwen3.5-4b");
+  assert.equal(suggestLocalModel({ memoryGb: 16, arch: "arm64" }).id, "qwen3.5-9b");
+  assert.equal(suggestLocalModel({ memoryGb: 32, arch: "arm64" }).id, "gemma-4-26b-a4b");
+  assert.equal(suggestLocalModel({ memoryGb: 128, arch: "arm64" }).id, "qwen3.6-35b-a3b");
   // An Intel Mac runs these on the CPU, where the same model takes long
   // enough that a person stops asking, so it is given one size down.
-  assert.equal(suggestLocalModel({ memoryGb: 16, arch: "x64" }).id, "qwen2.5-3b-instruct");
+  assert.equal(suggestLocalModel({ memoryGb: 16, arch: "x64" }).id, "qwen3.5-4b");
   // Too small for anything on the list still gets something: the alternative
   // is a house with no local model at all.
   assert.equal(suggestLocalModel({ memoryGb: 2, arch: "arm64" }).id, LOCAL_MODELS[0]?.id);
 });
 
-test("the installed model is the one config names, and otherwise whatever is there", () => {
-  assert.equal(installedLocalModel(models, "qwen2.5-7b-instruct"), null, "nothing fetched yet");
+test("a retired model is still known by its id and its file, but never suggested", () => {
+  const retired = localModel("qwen2.5-7b-instruct");
+  assert.equal(retired?.file, "Qwen2.5-7B-Instruct-Q4_K_M.gguf");
+  assert.ok(!LOCAL_MODELS.some((model) => model.id === retired?.id));
+  const file = withFile("Qwen2.5-7B-Instruct-Q4_K_M.gguf");
+  assert.deepEqual(installedLocalModel(models, "qwen3.5-9b"), { id: "qwen2.5-7b-instruct", file });
+});
 
-  const file = withFile("Qwen2.5-3B-Instruct-Q4_K_M.gguf");
-  // Config names 7B and only 3B was fetched: the server is started under the
+test("the installed model is the one config names, and otherwise whatever is there", () => {
+  assert.equal(installedLocalModel(models, "qwen3.5-9b"), null, "nothing fetched yet");
+
+  const file = withFile("Qwen3.5-4B-Q4_K_M.gguf");
+  // Config names 9B and only 4B was fetched: the server is started under the
   // id of the file it is actually holding, so the mismatch shows up in
   // parlour doctor rather than as a server lying about what it serves.
-  assert.deepEqual(installedLocalModel(models, "qwen2.5-7b-instruct"), {
-    id: "qwen2.5-3b-instruct",
+  assert.deepEqual(installedLocalModel(models, "qwen3.5-9b"), {
+    id: "qwen3.5-4b",
     file,
   });
 

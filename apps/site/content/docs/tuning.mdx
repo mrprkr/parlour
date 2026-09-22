@@ -101,7 +101,7 @@ to check yap is found.
 ```json
 {
   "llm": {
-    "local": { "provider": "openai-compatible", "managed": true, "baseUrl": "http://127.0.0.1:8920/v1", "model": "qwen2.5-7b-instruct", "temperature": 0.3, "timeoutMs": 30000 },
+    "local": { "provider": "openai-compatible", "managed": true, "baseUrl": "http://127.0.0.1:8920/v1", "model": "qwen3.5-9b", "temperature": 0.3, "timeoutMs": 30000 },
     "cloud": { "provider": "anthropic", "enabled": true, "model": "claude-opus-5", "maxTokens": 1024, "onLocalFailure": true },
     "maxToolRounds": 6
   }
@@ -139,7 +139,7 @@ back ends through Vercel's AI SDK instead of Parlour's own clients:
 ```json
 {
   "llm": {
-    "local": { "provider": "ai-sdk", "backend": "openai-compatible", "baseUrl": "http://127.0.0.1:8920/v1", "model": "qwen2.5-7b-instruct" },
+    "local": { "provider": "ai-sdk", "backend": "openai-compatible", "baseUrl": "http://127.0.0.1:8920/v1", "model": "qwen3.5-9b" },
     "cloud": { "provider": "ai-sdk", "backend": "anthropic", "model": "claude-opus-5", "effort": "low", "webSearch": true }
   }
 }

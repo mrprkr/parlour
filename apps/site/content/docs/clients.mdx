@@ -96,6 +96,23 @@ reply. Only the thinking moves to Parlour. The full setup is in
 Conversation integration at `http://<the server>:8765/v1`, with model
 `parlour` and your token as the API key.
 
+## The iPhone app
+
+The Parlour app talks to `/health`, `/voice` and `/ask` on the server. Rather
+than typing the address and a 48 character token on a phone, run this on the
+server:
+
+```sh
+parlour pair
+```
+
+It draws a QR code in the terminal. In the app, open Settings and tap Scan
+pairing code, or point the Camera at it; either way the app takes the address
+and the token together and checks the server there and then. The desktop app
+shows the same code under On the network. The code carries the token, so show
+it only to phones you mean to let in. If the phone cannot reach the Mac by its
+name, give the address it can: `parlour pair --host 192.168.1.20`.
+
 ## A phone
 
 Open `http://<the server>:8765` and add it to your home screen. Hold the
