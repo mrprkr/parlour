@@ -22,7 +22,7 @@ const geist = Geist({
 });
 
 const description =
-  "Parlour is a voice assistant for Home Assistant that runs on a Mac you already own. Talk to it from any room. The wake word, the transcription, the model and the voice all stay on that machine. Open source, MIT.";
+  "Parlour turns the Mac you already own into a private voice assistant for Home Assistant. Talk to it from any room. The wake word, the transcription, the model and the voice all stay on your Mac. Free and open source.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://heyparlour.app"),
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   description,
   openGraph: {
     title: "Parlour",
-    description: "Give Home Assistant a voice, and ask it anything else.",
+    description: "A voice for your home. Private by design.",
     type: "website",
     url: "https://heyparlour.app/",
   },

@@ -1,10 +1,10 @@
 ---
 title: Home Assistant
-description: The MCP Server integration, the OpenAI Conversation integration, muting, and moving over from the old config.
+description: Control your house through Home Assistant, use Parlour as its voice, and mute it.
 ---
 
-Home Assistant is Parlour's first integration: a source of tools, a line in
-the system prompt, and a mute switch. It is on by default and lives under
+Home Assistant gives Parlour tools for your house, a line in the system
+prompt, and a mute switch. It is on by default and lives under
 `integrations["home-assistant"]` in your config:
 
 ```json
@@ -20,77 +20,76 @@ the system prompt, and a mute switch. It is on by default and lives under
 }
 ```
 
-The token is `HA_TOKEN` in `secrets.env`. It is a long-lived access token
-from your profile page in Home Assistant, on the Security tab, right at the
-bottom. That token controls the whole house, so it stays in `secrets.env`
-with mode 600 and never goes into git.
+The token is `HA_TOKEN` in `secrets.env`. It is a long-lived access token from
+your profile page in Home Assistant, at the bottom of the Security tab. That
+token controls the whole house, so it stays in `secrets.env` with mode 600
+and never goes into git.
 
-## Setting it up
+## Set it up
 
-`parlour init` has a part of its own for this, because there are four ways
-for it to go wrong and all four look identical from the outside: the wrong
-address, no token, a token for something else, and the MCP Server
-integration never added. So each one is checked as it is answered:
+`parlour init` has a section just for Home Assistant. Four things can go
+wrong, and they all look the same from the outside: the wrong address, no
+token, a token for something else, or the MCP Server integration not yet
+added. So `init` checks each answer as you give it:
 
 1. **The address.** It tries the one in your config, then
-   `homeassistant.local:8123`, `homeassistant:8123` and `localhost:8123`,
-   and takes the first that answers the way a Home Assistant does: `401`
-   from `/api/` without a token, which a router's own login page does not.
-   Nothing found means typing it, and a wrong one is not accepted quietly.
-2. **The token.** It prints the exact page to make one on
-   (`<your url>/profile/security`), reads it without echoing it, and checks
-   it against `/api/` before moving on. Three goes: a pasted token is easy
-   to truncate.
-3. **The MCP Server integration.** If `<url>/mcp_server/sse` does not
-   answer, it says where to add it and offers to look again once you have.
+   `homeassistant.local:8123`, `homeassistant:8123` and `localhost:8123`. It
+   takes the first that answers the way Home Assistant does: `401` from
+   `/api/` without a token, which a router's login page does not. If nothing
+   is found, you type it in, and a wrong one is not quietly accepted.
+2. **The token.** It prints the page to make one on
+   (`<your url>/profile/security`), reads it without echoing it, and checks it
+   against `/api/` before moving on. You get three tries, because a pasted
+   token is easy to truncate.
+3. **The MCP Server integration.** If `<url>/mcp_server/sse` does not answer,
+   it tells you where to add it and offers to look again once you have.
 4. **The mute entity**, if you want one.
 
-Say no to the first question and the house is left out of the config
-entirely, rather than left in it and failing every `parlour doctor` run for
-something you do not have. Run `init` again whenever you change your mind:
-every answer defaults to what is already set, and a token that still works
-is kept rather than asked for twice. `parlour secrets set HA_TOKEN` takes
-one on stdin if you would rather not run the whole thing.
+Say no to the first question and the house is left out of the config, so
+`parlour doctor` does not fail on something you do not have. Run `init` again whenever you change your mind. Every answer
+defaults to what is already set, and a token that still works is kept rather
+than asked for twice. To set just the token, `parlour secrets set HA_TOKEN`
+reads one from stdin.
 
 ## What Parlour can do with it
 
 Tools come from two places, and the model sees them as one list:
 
 - **Over MCP** (`mcp: true`). Home Assistant's **Model Context Protocol
-  Server** integration publishes whatever is exposed under **Settings >
-  Voice assistants > Expose** as tools, so Parlour inherits it all. Expose
-  more and it can do more, with nothing to change on the Parlour side. Add
-  the integration under **Settings > Devices & services**; it has no
-  options. If Parlour cannot see a light, expose the light.
-- **Over REST** (`rest: true`). Two general tools for what the MCP tools
-  cannot express: `ha_get_state` reads any entity, and `ha_call_service`
-  calls any service. The prompt tells the model to prefer a more specific tool when one
+  Server** integration publishes everything exposed under **Settings > Voice
+  assistants > Expose** as tools, and Parlour inherits them all. Expose more
+  and Parlour can do more, with nothing to change on the Parlour side. Add the
+  integration under **Settings > Devices & services**. It has no options. If
+  Parlour cannot see a light, expose the light.
+- **Over REST** (`rest: true`). Two general tools cover what the MCP tools
+  cannot: `ha_get_state` reads any entity, and `ha_call_service` calls any
+  service. The prompt tells the model to prefer a more specific tool when one
   fits.
 
-Parlour connects to the MCP endpoint at `<url>/mcp_server/sse` with the
-token. If that connection fails, the failure is logged and the REST tools
-still reach the house, more slowly.
+Parlour connects to the MCP endpoint at `<url>/mcp_server/sse` with the token.
+If that connection fails, the failure is logged and the REST tools still reach
+the house, more slowly.
 
 ## Home Assistant as a client
 
 It works the other way round too. Home Assistant, and every Voice PE
 satellite through it, can use Parlour as its conversation agent. Home
-Assistant keeps doing the wake word, the speech to text and the speech back;
-only the thinking moves.
+Assistant keeps handling the wake word, speech to text and the spoken reply.
+Only the thinking moves.
 
 1. **Settings > Devices & services > Add integration > OpenAI Conversation**.
 2. Base URL `http://<the server>:8765/v1`, and your `PARLOUR_TOKEN` as the
    API key.
-3. Model `parlour`. The prompt and the temperature on that page are ignored,
-   because Parlour brings its own persona and its own tools.
+3. Model `parlour`. The prompt and temperature on that page are ignored,
+   because Parlour brings its own persona and tools.
 4. **Settings > Voice assistants**, and set the pipeline's conversation agent
    to it.
 
-Your satellites then answer with the local model for house control and hand
-harder questions to the cloud, exactly as the server's own microphone does.
-Each Home Assistant user gets a conversation of their own.
+Your satellites then use the local model for house control and hand harder
+questions to the cloud, just as the server's own microphone does. Each Home
+Assistant user gets a conversation of their own.
 
-For an automation that wants an answer as text, `POST /ask` through a
+For an automation that wants a text answer, call `POST /ask` through a
 `rest_command`, with the token kept in `secrets.yaml`:
 
 ```yaml
@@ -104,23 +103,23 @@ rest_command:
     payload: '{"text": "{{ text }}", "room": "{{ room }}"}'
 ```
 
-where `parlour_token` in `secrets.yaml` is `Bearer <the token>`. The reply is
+Here, `parlour_token` in `secrets.yaml` is `Bearer <the token>`. The reply is
 `{"reply": "...", "via": "local"}`.
 
 ## Muting
 
-`muteEntity` names an entity that, when it is `on`, makes Parlour ignore its
-wake word. Parlour asks over REST after the wake word fires and before it
-acts on anything, so the mute is enforced by the house rather than by the
-machine running Parlour, and it covers every client: satellites, phones and
-the server's own microphone alike. Empty, the default, means no mute.
+`muteEntity` names an entity that makes Parlour ignore its wake word while it
+is `on`. Parlour checks it over REST after the wake word fires and before it
+acts on anything. So the house enforces the mute, not the machine running
+Parlour, and it covers every client: satellites, phones and the server's own
+microphone. Empty, the default, means no mute.
 
 ```json
 { "integrations": { "home-assistant": { "muteEntity": "input_boolean.parlour_muted" } } }
 ```
 
-To follow a sleeping mode, define the boolean and an automation that
-tracks it:
+To follow a sleeping mode, define the boolean and an automation that tracks
+it:
 
 ```yaml
 input_boolean:
@@ -140,8 +139,8 @@ automation:
           entity_id: input_boolean.parlour_muted
 ```
 
-You can then override it by hand for one night from the dashboard. If Home
-Assistant cannot be reached, the mute reads as off: Parlour should still hear
+You can still override it by hand for one night from the dashboard. If Home
+Assistant cannot be reached, the mute reads as off. Parlour should still hear
 you, and the model will report the outage when you ask. A muted wake emits a
 `muted` event on the `--events` stream, which is how the desktop app can tell
 you why nothing happened.
@@ -154,28 +153,27 @@ ok    Home Assistant        http://homeassistant.local:8123
 FAIL  Home Assistant MCP    http://homeassistant.local:8123/mcp_server/sse did not answer. Add the Model Context Protocol Server integration in Home Assistant.
 ```
 
-A failure on the second line is usually the token. A failure on the third,
+A failure on the second line usually means the token. A failure on the third,
 with the second fine, means the integration is not installed yet.
 
 ## Moving over from the old configuration
 
-Parlour began life as `agent/` inside a Home Assistant configuration
-repository, with an `agent.config.json` and a `.env` beside it. If you were
-running that, `parlour init` looks for `agent.config.json` in the working
-directory and, when there is nothing at the new path yet, offers to convert
-it for you:
+Parlour began as `agent/` inside a Home Assistant configuration repository,
+with an `agent.config.json` and a `.env` beside it. If you ran that,
+`parlour init` looks for `agent.config.json` in the working directory. When
+there is nothing at the new path yet, it offers to convert it for you:
 
 | Then | Now |
 | --- | --- |
 | `homeAssistant.baseUrl`, `homeAssistant.useMcp` | `integrations["home-assistant"].url`, `.mcp` |
-| `muteEntity` at the top level | `integrations["home-assistant"].muteEntity`; if the old file never set it, the old default `input_boolean.home_agent_muted` is written out so your mute keeps working |
+| `muteEntity` at the top level | `integrations["home-assistant"].muteEntity`. If the old file never set it, the old default `input_boolean.home_agent_muted` is written out so your mute keeps working. |
 | `mcpServers` | `integrations.mcp.servers` |
 | `search.searxngUrl` | `search.url` |
 | `tts.engine: "say"` | `tts.provider: "macos-say"` |
-| `connectorsFile` | dropped; `connectors.json` is copied to `~/.config/parlour/` |
+| `connectorsFile` | Dropped. `connectors.json` is copied to `~/.config/parlour/`. |
 | `.env` | `~/.config/parlour/secrets.env`, with `AGENT_TOKEN` renamed to `PARLOUR_TOKEN` |
 
-`AGENT_TOKEN` is still read as a fallback for `PARLOUR_TOKEN` for one
-release, so upgrading does not lock every phone and satellite out of the
-house. The model id reported to Home Assistant's OpenAI Conversation
-integration changed to `parlour`, so that one field wants editing by hand.
+For one release, `AGENT_TOKEN` is still read as a fallback for
+`PARLOUR_TOKEN`, so upgrading does not lock every phone and satellite out of
+the house. The model id reported to Home Assistant's OpenAI Conversation
+integration is now `parlour`, so edit that one field by hand.

@@ -1,13 +1,13 @@
 ---
 title: Clients
-description: Satellites, the phone page, custom hardware, the ask endpoint, and Bonjour.
+description: Connect satellites, phones, custom hardware and scripts to your server.
 ---
 
-One machine in your house runs the models, holds the tokens and does the
-answering. Everything else with a microphone is a client: it sends what it
-hears, plays back what it is sent, and runs no models of its own. No client
-needs to be given an address: the server advertises itself with Bonjour and
-the clients find it.
+One machine in your house runs the models, holds the tokens and answers.
+Everything else with a microphone is a client. It sends what it hears, plays
+back what it is sent, and runs no models of its own. You never need to give a
+client an address. The server advertises itself with Bonjour and the clients
+find it.
 
 ```text
                         finds it with Bonjour
@@ -19,39 +19,37 @@ custom hardware    ->/
 its own microphone ->/
 ```
 
-The server's own microphone is one client among these, with no special
+The server's own microphone is just another client, with no special
 privileges. Every client keeps its own conversation, so a follow-up in the
-kitchen cannot pick up something asked in the study, and every client can
+kitchen cannot pick up something asked in the study. Every client can also
 say which room it is in.
 
 ## The token
 
-Every client needs `PARLOUR_TOKEN`. `parlour init` offers to generate one
-for you, and `parlour secrets set PARLOUR_TOKEN` sets it by hand. It reads
-the value from stdin, so it never ends up in your shell history:
+Every client needs `PARLOUR_TOKEN`. `parlour init` offers to generate one for
+you, or you can set it by hand with `parlour secrets set PARLOUR_TOKEN`. It
+reads the value from stdin, so it never ends up in your shell history:
 
 ```sh
 openssl rand -hex 24 | parlour secrets set PARLOUR_TOKEN
 parlour service restart
 ```
 
-Without a token the server only listens on loopback, answers the machine it
-runs on, and does not advertise itself at all. A voice assistant on an open
-port can turn the heating on and read your shopping list, so closed is the
-safe default. Note that the browser on that same machine counts as
-"somewhere else": a request addressed to a name other than `localhost`, or
-sent by a page that was not served from `localhost`, is refused. `parlour
-doctor` tells you which of the two states you are in.
+Without a token, the server listens only on loopback, answers only the machine
+it runs on, and does not advertise itself. An open voice assistant can turn on the
+heating and read your shopping list, so closed is the safe default. Even the browser on that same machine counts as somewhere else. A
+request addressed to any name other than `localhost`, or sent by a page not
+served from `localhost`, is refused. `parlour doctor` tells you which state
+you are in.
 
-Clients send the token as `Authorization: Bearer <token>`, or as `?token=`
-on the URL for the socket and the phone page. `/health` needs no token and
+Clients send the token as `Authorization: Bearer <token>`, or as `?token=` on
+the URL for the socket and the phone page. `/health` needs no token and
 reports `{ "ok": true, "tools": 14, "cloud": true }`.
 
 ## A satellite
 
-Any Mac with a microphone can be a satellite. It needs Node, ffmpeg and the
-`parlour` package, and that is all: no models, no keys, no GPU, nothing to
-keep warm.
+Any Mac with a microphone can be a satellite. All it needs is Node, ffmpeg and
+the `parlour` package. No models, no keys, no GPU, nothing to keep warm.
 
 ```sh
 npm install -g parlour
@@ -59,9 +57,9 @@ parlour init          # answer "satellite", name the room, paste the token
 ```
 
 That writes `role: "satellite"` and installs the service (a satellite has no
-app to own it). From then on it finds the server by name, reconnects for as
-long as it is switched on, and waits longer between attempts while the
-server is down, doubling up to `satellite.retryMs`.
+app to own it). From then on, it finds the server by name and reconnects for
+as long as it is switched on. While the server is down, it waits longer
+between attempts, doubling up to `satellite.retryMs`.
 
 ```json
 {
@@ -71,32 +69,30 @@ server is down, doubling up to `satellite.retryMs`.
 ```
 
 - **`serverUrl` empty** means "find it with Bonjour, once". `parlour init`
-  looks while you watch, and a satellite that starts with the key empty
-  keeps looking until a server lets it in. Either way the address it found
-  is written here, and from then on the satellite talks to that server and
-  no other. That is deliberate: anything on the network can advertise
+  looks while you watch. A satellite that starts with the key empty keeps
+  looking until a server lets it in. Either way, the address it finds is
+  written here, and the satellite talks only to that server from then on. This is deliberate. Anything on the network can advertise
   `_parlour._tcp`, and the satellite hands its token to whatever it connects
-  to, so the first server it trusts is the only one it trusts. If your
-  server genuinely moves, clear the key. If the pinned server is down and
-  something else is advertising, the log says so and the satellite stays
-  put. You can also fill the key in by hand
-  (`http://study-mac.local:8765`) when your network drops multicast, which
-  some mesh systems and most guest VLANs do. `parlour doctor` on the
-  satellite tells you whether it can see a server.
+  to, so the first server it trusts is the only one it trusts. If your server
+  really moves, clear the key. If the pinned server is down and something else
+  is advertising, the log says so and the satellite stays put. You can also
+  fill in the key by hand (`http://study-mac.local:8765`) if your network
+  drops multicast, as some mesh systems and most guest VLANs do. Run
+  `parlour doctor` on the satellite to see whether it can find a server.
 - **`localWake`** runs the wake word on the satellite and streams only what
-  follows it. It costs a copy of the models on that machine (`parlour models
-  fetch` puts them there) and saves a constant 32 KB/s on the network. It is
+  follows it. It saves a constant 32 KB/s on the network, but needs a copy of
+  the models on that machine (`parlour models fetch` puts them there). It is
   off by default, so there is one less copy of the models to keep up to date.
 
 The satellite plays the server's speech, so the voice is the same in every
-room, and changing it is one setting on one machine.
+room and you change it in one place.
 
-## Home Assistant, and the satellites you already have
+## Home Assistant satellites
 
 This is the cheapest client, because the hardware is already in your house.
-Home Assistant keeps doing the wake word, the speech to text and the speech
-back; only the thinking moves to Parlour. The setup
-is in [Home Assistant](/docs/home-assistant). In short: point the OpenAI
+Home Assistant keeps handling the wake word, speech to text and the spoken
+reply. Only the thinking moves to Parlour. The full setup is in
+[Home Assistant](/docs/home-assistant). In short, point the OpenAI
 Conversation integration at `http://<the server>:8765/v1`, with model
 `parlour` and your token as the API key.
 
@@ -104,14 +100,13 @@ Conversation integration at `http://<the server>:8765/v1`, with model
 
 Open `http://<the server>:8765` and add it to your home screen. Hold the
 button, say something, let go. The page's settings take the token and,
-optionally, a room, and a link with `?token=...&room=kitchen` fills in both
-so you do not have to type them on a phone keyboard.
+optionally, a room. A link with `?token=...&room=kitchen` fills in both, so you
+do not have to type them on a phone keyboard.
 
-One catch: Safari only grants microphone access over HTTPS or on localhost,
-so on iOS you will want a reverse proxy with a certificate, or Tailscale, in
-front of it.
+Safari only grants microphone access over HTTPS or on localhost. On iOS, put
+a reverse proxy with a certificate, or Tailscale, in front of the server.
 
-Under the hood the page posts one recording to
+Under the hood, the page posts one recording to
 `POST /voice?client=phone&room=kitchen` and gets back
 `{ heard, reply, via, audio }`, where `audio` is a base64 WAV of the reply.
 Anything that can record and post can use the same route.
@@ -122,8 +117,8 @@ Anything that can record and post can use the same route.
 ws://<the server>:8765/listen?client=hallway&room=hallway&token=...
 ```
 
-Send 16 kHz mono signed 16-bit PCM as binary frames of any size; the server
-re-cuts them into the 80 ms frames the wake word wants. It replies with JSON
+Send 16 kHz mono signed 16-bit PCM as binary frames of any size. The server
+re-cuts them into the 80 ms frames the wake word needs. It replies with JSON
 events and one binary WAV per answer.
 
 | From the server | Meaning |
@@ -133,16 +128,16 @@ events and one binary WAV per answer.
 | `{"type":"reply","text":"...","via":"local"}` | Followed by the WAV as a binary frame. |
 | `{"type":"stop"}` | Stop playing: a new wake word arrived. |
 
-- **Wake mode**, the default. The server runs the same openWakeWord and the
-  same endpointing its own microphone gets, so your device can be nothing
-  more than a microphone, a speaker and a network stack.
-- **Push mode** (`&mode=push`). Your device says when a request starts and
-  stops with `{"type":"start"}` and `{"type":"end"}`, or `{"type":"cancel"}`
-  to throw it away. Good for a button, or for hardware that did its own wake
-  word.
+- **Wake mode**, the default. The server runs the same openWakeWord and
+  endpointing as its own microphone, so your device can be just a microphone,
+  a speaker and a network stack.
+- **Push mode** (`&mode=push`). Your device marks the start and end of a
+  request with `{"type":"start"}` and `{"type":"end"}`, or sends
+  `{"type":"cancel"}` to throw it away. Use it for a button, or for hardware
+  that does its own wake word.
 
-Send `{"type":"spoke"}` when playback finishes and the server starts
-listening again straight away instead of waiting out its own guess.
+Send `{"type":"spoke"}` when playback finishes, and the server starts
+listening again straight away instead of waiting out its own estimate.
 
 ## Automations and scripts
 
@@ -157,15 +152,15 @@ The content type is required. A form on a web page can post `text/plain`
 anywhere without the browser asking first, but it cannot claim to be JSON.
 
 You get back `{"reply": "...", "via": "local"}`, where `via` says which model
-answered. Add a `client` to the body if you want a conversation of your own;
-otherwise every caller shares the `api` session.
+answered. Add a `client` to the body for a conversation of your own.
+Otherwise, every caller shares the `api` session.
 
 ## Bonjour
 
-The server advertises `_parlour._tcp` with a TXT record saying
-`role=server`, `token=required` or `token=none`, and `api=/v1`. The name is
-`discovery.name`, or `"<config.name> on <hostname>"` when that is empty.
-`discovery.enabled: false` turns it off, in which case every satellite needs
+The server advertises `_parlour._tcp` with a TXT record of `role=server`,
+`token=required` or `token=none`, and `api=/v1`. The name is
+`discovery.name`, or `"<config.name> on <hostname>"` when that is empty. Set
+`discovery.enabled: false` to turn it off. Every satellite then needs
 `serverUrl` filled in.
 
 ```sh
