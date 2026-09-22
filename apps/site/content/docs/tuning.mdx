@@ -1,3 +1,8 @@
+---
+title: Tuning
+description: Wake sensitivity, how long it waits for you to finish, the voice, model sizes, and what to change when something is wrong.
+---
+
 Everything on this page is a key in `~/.config/parlour/config.json`.
 `parlour config edit` opens the file, `parlour config show` prints what is
 in force with the defaults filled in, and `parlour service restart` (or a
@@ -15,7 +20,7 @@ restart from the app) picks up whatever you changed.
 | It answers slowly | Try a smaller local model, or a smaller whisper model: `parlour models fetch --whisper ggml-base.en.bin`, then `parlour service install` to rewrite the whisper service. It loads the first model file in `~/Library/Caches/parlour/models/whisper/`, and `base` sorts before `small`. |
 | It asks the cloud too often, or not often enough | That is decided by the prompt rather than a threshold. See `packages/parlour/src/core/prompt.ts`. |
 | It says nothing at all | Run `parlour doctor`, or press Check in the app. It will name the part that is down. |
-| It talks over itself | `audio.bargeIn` is off by default for a good reason: with one box in one room, the microphone hears the speaker. |
+| It talks over itself | `audio.bargeIn` is off by default because with one box in one room, the microphone hears the speaker. |
 | It fires twice on one wake word | Raise `wake.refractoryMs`. |
 | The voice is not the one you wanted | `tts.voice` and `tts.speed`. Kokoro downloads itself the first time Parlour starts after an install, so that first start is slow and the fallback voice may speak until it is ready. |
 | It can see the lights but not the blinds | Expose the blinds. Home Assistant only publishes what is exposed under Settings > Voice assistants > Expose. |
@@ -41,9 +46,8 @@ restart from the app) picks up whatever you changed.
   talking. **`silenceThreshold`** is the RMS level, from 0 to 1, below which
   a frame counts as silence. A noisy room wants it higher; a quiet speaker
   wants it lower.
-- **`maxUtteranceMs`** caps a single request. Think of it as a safety net for
-  a microphone that never goes quiet rather than a way to allow long
-  questions.
+- **`maxUtteranceMs`** caps a single request. It is a limit for a microphone
+  that never goes quiet, not a way to allow long questions.
 
 ## The wake word
 

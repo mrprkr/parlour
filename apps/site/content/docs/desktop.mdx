@@ -1,11 +1,15 @@
+---
+title: The menu bar app
+description: What the app does, how it drives the CLI, and how to run it against a checkout.
+---
+
 `apps/desktop` is a Tauri app: a Rust shell around the `parlour` command,
 with a window as its only interface. It exists so that the everyday things
 (start, stop, is it listening, what did it just hear, why is it not
 answering) never need a terminal. It is an interface rather than a second
 implementation: everything it knows about Parlour it learns by running the
 CLI, and every setting it writes goes through `parlour config write`, so the
-app and the terminal can never end up with different ideas about the same
-house.
+app and the terminal always see the same configuration.
 
 ## Building it
 
@@ -111,11 +115,10 @@ launch:
 { "parlourBin": "/path/to/parlour/packages/parlour/bin/parlour-dev", "autostart": false }
 ```
 
-The path is kept for as long as it is executable, so the app will not swap
-it back for the global copy behind your back. The dev build and the
-installed `Parlour.app` share the same settings file, so when you are done,
-put the global path back, or delete the file and let the app find `parlour`
-again.
+The path is kept for as long as it is executable, so the app will not
+replace it with the global copy. The dev build and the installed
+`Parlour.app` share the same settings file, so when you are done, put the
+global path back, or delete the file and let the app find `parlour` again.
 
 ## Two things worth knowing
 

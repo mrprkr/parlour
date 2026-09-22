@@ -1,19 +1,28 @@
 import { Analytics } from "@vercel/analytics/next";
+import { RootProvider } from "fumadocs-ui/provider/next";
 import type { Metadata, Viewport } from "next";
-import { Young_Serif } from "next/font/google";
-import Link from "next/link";
+import { Alegreya, Geist } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
 
-const youngSerif = Young_Serif({
-  weight: "400",
+// Two faces. Alegreya gives the headings their character; Geist does
+// everything that is read, consulted or clicked.
+const alegreya = Alegreya({
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  display: "swap",
+  variable: "--font-serif",
+});
+
+const geist = Geist({
+  weight: ["400", "500", "600", "700"],
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-young-serif",
+  variable: "--font-sans",
 });
 
 const description =
-  "Parlour is a voice assistant for your home that runs on a Mac you already own. A local wake word, local speech to text, a local model with tools, and a cloud model only when it is needed. Open source, MIT.";
+  "Parlour is a voice assistant for Home Assistant that runs on a Mac you already own. Talk to it from any room. The wake word, the transcription, the model and the voice all stay on that machine. Open source, MIT.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://heyparlour.app"),
@@ -21,7 +30,7 @@ export const metadata: Metadata = {
   description,
   openGraph: {
     title: "Parlour",
-    description: "A voice assistant for your home, on a Mac you already own.",
+    description: "Give Home Assistant a voice, and ask it anything else.",
     type: "website",
     url: "https://heyparlour.app/",
   },
@@ -29,34 +38,16 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#eef0ea" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f1f1b" },
+    { media: "(prefers-color-scheme: light)", color: "#f4f3ef" },
+    { media: "(prefers-color-scheme: dark)", color: "#111110" },
   ],
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en-GB" className={youngSerif.variable}>
+    <html lang="en-GB" className={`${alegreya.variable} ${geist.variable}`} suppressHydrationWarning>
       <body>
-        <header className="top">
-          <Link className="wordmark" href="/">
-            Parlour
-          </Link>
-          <nav>
-            <Link href="/docs">Docs</Link>
-            <a href="https://github.com/mrprkr/parlour">GitHub</a>
-          </nav>
-        </header>
-
-        {children}
-
-        <footer>
-          <p>
-            Parlour is released under the MIT licence. <a href="https://github.com/mrprkr/parlour">Source</a>,{" "}
-            <a href="https://github.com/mrprkr/parlour/issues">issues</a>,{" "}
-            <a href="https://www.npmjs.com/package/parlour">npm</a>.
-          </p>
-        </footer>
+        <RootProvider>{children}</RootProvider>
         <Analytics />
       </body>
     </html>

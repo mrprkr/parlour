@@ -1,8 +1,13 @@
+---
+title: Clients
+description: Satellites, the phone page, custom hardware, the ask endpoint, and Bonjour.
+---
+
 One machine in your house runs the models, holds the tokens and does the
 answering. Everything else with a microphone is a client: it sends what it
-hears, plays back what it is sent, and runs no models of its own. Nobody has
-to be told an address, either. The server advertises itself with Bonjour and
-the clients go looking for it.
+hears, plays back what it is sent, and runs no models of its own. No client
+needs to be given an address: the server advertises itself with Bonjour and
+the clients find it.
 
 ```text
                         finds it with Bonjour
@@ -32,7 +37,7 @@ parlour service restart
 
 Without a token the server only listens on loopback, answers the machine it
 runs on, and does not advertise itself at all. A voice assistant on an open
-port can turn the heating on and read your shopping list, so this is the
+port can turn the heating on and read your shopping list, so closed is the
 safe default. Note that the browser on that same machine counts as
 "somewhere else": a request addressed to a name other than `localhost`, or
 sent by a page that was not served from `localhost`, is refused. `parlour
@@ -55,8 +60,8 @@ parlour init          # answer "satellite", name the room, paste the token
 
 That writes `role: "satellite"` and installs the service (a satellite has no
 app to own it). From then on it finds the server by name, reconnects for as
-long as it is switched on, and backs off politely when the server is down,
-doubling its wait up to `satellite.retryMs` rather than hammering it.
+long as it is switched on, and waits longer between attempts while the
+server is down, doubling up to `satellite.retryMs`.
 
 ```json
 {
@@ -81,16 +86,16 @@ doubling its wait up to `satellite.retryMs` rather than hammering it.
 - **`localWake`** runs the wake word on the satellite and streams only what
   follows it. It costs a copy of the models on that machine (`parlour models
   fetch` puts them there) and saves a constant 32 KB/s on the network. It is
-  off by default, because it is one less thing to keep in step.
+  off by default, so there is one less copy of the models to keep up to date.
 
 The satellite plays the server's speech, so the voice is the same in every
 room, and changing it is one setting on one machine.
 
 ## Home Assistant, and the satellites you already have
 
-This is the cheapest client of all, because the hardware is already in your
-house and already works. Home Assistant keeps doing the wake word, the speech
-to text and the speech back; only the thinking moves to Parlour. The setup
+This is the cheapest client, because the hardware is already in your house.
+Home Assistant keeps doing the wake word, the speech to text and the speech
+back; only the thinking moves to Parlour. The setup
 is in [Home Assistant](/docs/home-assistant). In short: point the OpenAI
 Conversation integration at `http://<the server>:8765/v1`, with model
 `parlour` and your token as the API key.
