@@ -27,6 +27,8 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # The pnpm version comes from packageManager in package.json, so there
       # is one place to bump it.
@@ -88,6 +90,8 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6

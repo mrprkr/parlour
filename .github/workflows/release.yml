@@ -66,6 +66,8 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -120,6 +122,8 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # Before anything is built, because an unsigned dmg attached to a
       # release is worse than no release: it installs, it looks right, and it
