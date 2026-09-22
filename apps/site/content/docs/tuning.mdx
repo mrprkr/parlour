@@ -99,6 +99,30 @@ is `macos-say`).
 - A hosted OpenAI-compatible endpoint works as the local model too: add
   `"apiKeyEnv": "SOME_NAME"` naming a variable in `secrets.env`.
 
+### Decision triage (optional)
+
+```json
+{
+  "llm": {
+    "decision": {
+      "provider": "jev",
+      "mode": "shadow",
+      "escalateThreshold": 0.85,
+      "localConfidence": 0.75
+    }
+  }
+}
+```
+
+TypeSafe [Jev](https://docs.typesafe.ai) answers a fixed set of Noul and
+Choice questions about each utterance before the local model runs. Put
+`TYPESAFE_API_KEY` in `secrets.env`. Start with `"mode": "shadow"`: the
+router logs `needs_cloud`, intent and confidence, but still lets
+`ask_the_clever_one` decide. Switch to `"mode": "triage"` once the scores
+look right: scores above `escalateThreshold` go straight to the cloud model,
+and a clear house or timer intent keeps escalation off so house commands
+stay local. `"provider": "none"` (the default) skips the call entirely.
+
 ## Search
 
 ```json

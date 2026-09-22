@@ -50,7 +50,7 @@ runs. Vercel builds it with the Next.js builder, Root Directory `apps/site`.
   is to register the built-ins. That file is the seam an embedding program can leave out.
 - `core/ports.ts` declares the interfaces for everything that touches hardware, a model or the
   network: `AudioSource`, `AudioSink`, `WakeWordEngine`, `SpeechToText`, `TextToSpeech`,
-  `ChatModel`, `SearchProvider`, `SecretStore`, `ServiceManager`, `Integration`. Each may expose
+  `ChatModel`, `DecisionModel`, `SearchProvider`, `SecretStore`, `ServiceManager`, `Integration`. Each may expose
   `doctor(): Promise<Check[]>`; `parlour doctor` is those checks joined together.
 - `core/providers.ts` is a registry keyed by `(kind, name)`. Built-ins in `providers/<kind>/<name>.ts`
   call `registerProvider` on import and are listed in `providers/index.ts`. Config picks each slot

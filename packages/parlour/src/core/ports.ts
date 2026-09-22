@@ -57,6 +57,59 @@ export interface ChatModel extends Diagnosable {
   complete(messages: Message[], tools: ToolSpec[]): Promise<Completion>;
 }
 
+/**
+ * A System One decision model: state in, typed answers with probabilities out.
+ * Used for pre-router triage (escalate vs stay local). It does not generate
+ * speech; that stays with ChatModel.
+ */
+export type DecisionState = string | Record<string, unknown> | unknown[];
+
+/** String, or a structured object the model can refer to by field name. */
+export type DecisionInstructions = string | Record<string, unknown>;
+
+export type DecisionQuestion =
+  | {
+      type: "noul";
+      instructions: DecisionInstructions;
+      criteria?: { true: string; false: string };
+    }
+  | {
+      type: "choice";
+      instructions: DecisionInstructions;
+      criteria: Record<string, string | null>;
+    }
+  | {
+      type: "score";
+      instructions: DecisionInstructions;
+      criteria: string[];
+    };
+
+export type DecisionAnswer =
+  | { type: "noul"; noul: number }
+  | {
+      type: "choice";
+      choice: string;
+      probabilities: Record<string, number>;
+      confidence: number;
+    }
+  | {
+      type: "score";
+      score: number;
+      legend: Record<string, string>;
+      probabilities: Record<string, number>;
+      confidence: number;
+    };
+
+export interface DecisionResult {
+  model: string;
+  answers: Record<string, DecisionAnswer>;
+}
+
+export interface DecisionModel extends Diagnosable {
+  readonly label: string;
+  evaluate(state: DecisionState, questions: Record<string, DecisionQuestion>): Promise<DecisionResult>;
+}
+
 export interface SearchResult {
   title: string;
   url: string;

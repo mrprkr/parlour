@@ -20,6 +20,7 @@ export type ProviderKind =
   | "stt"
   | "tts"
   | "llm"
+  | "decision"
   | "search"
   | "secrets"
   | "service"

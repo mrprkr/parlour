@@ -13,6 +13,7 @@ const SUBCOMMANDS = ["status", "set"] as const;
 const KNOWN: { name: string; key: keyof Secrets; what: string }[] = [
   { name: "HA_TOKEN", key: "haToken", what: "Home Assistant" },
   { name: "ANTHROPIC_API_KEY", key: "anthropicKey", what: "cloud escalation" },
+  { name: "TYPESAFE_API_KEY", key: "typesafeKey", what: "Jev decision triage" },
   { name: "PARLOUR_TOKEN", key: "token", what: "the network" },
   { name: "BRAVE_API_KEY", key: "braveKey", what: "Brave search" },
 ];

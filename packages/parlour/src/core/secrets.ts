@@ -12,6 +12,8 @@ export interface Secrets {
   haToken?: string;
   anthropicKey?: string;
   braveKey?: string;
+  /** TypeSafe Jev, for optional pre-router triage. */
+  typesafeKey?: string;
   /** Required before the server will listen anywhere but loopback. */
   token?: string;
   logLevel?: string;
@@ -67,6 +69,7 @@ export function loadSecrets(paths: Paths, env: NodeJS.ProcessEnv = process.env):
     haToken: get("HA_TOKEN"),
     anthropicKey: get("ANTHROPIC_API_KEY"),
     braveKey: get("BRAVE_API_KEY"),
+    typesafeKey: get("TYPESAFE_API_KEY"),
     // AGENT_TOKEN is what the first release called it. Read for one release so
     // an upgrade does not lock every phone and satellite out of the house.
     token: get("PARLOUR_TOKEN") ?? get("AGENT_TOKEN"),

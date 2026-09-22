@@ -1,8 +1,9 @@
 import { logger } from "./logger.ts";
 import { runTurn, type TurnResult } from "./loop.ts";
-import type { ChatModel } from "./ports.ts";
+import type { ChatModel, DecisionModel } from "./ports.ts";
 import { escalateSpec, systemPrompt } from "./prompt.ts";
 import type { ToolRegistry } from "./registry.ts";
+import { planTriage, runTriage, type TriageMode } from "./triage.ts";
 import type { Message } from "./types.ts";
 
 const log = logger("router");
@@ -46,6 +47,14 @@ export interface RouterOptions {
   promptContext?: () => string[];
   /** The clock, injectable so a test can age a session without waiting. */
   now?: () => number;
+  /**
+   * Optional System One model that judges escalate-vs-local before the
+   * generative turn. Null or absent keeps ask_the_clever_one as the only gate.
+   */
+  decision?: DecisionModel | null;
+  decisionMode?: TriageMode;
+  escalateThreshold?: number;
+  localConfidence?: number;
 }
 
 interface Session {
@@ -57,6 +66,10 @@ interface Session {
  * Local first, cloud when the local model says so or falls over. The local
  * model is fast, free and private; the cloud one is right more often. Sending
  * "turn the hall light off" to a data centre is a waste of both.
+ *
+ * When a DecisionModel is configured, it may short-circuit that judgment with
+ * calibrated probabilities (triage mode) or only log what it would have done
+ * (shadow mode).
  */
 export class Router {
   readonly #sessions = new Map<string, Session>();
@@ -81,7 +94,23 @@ export class Router {
     };
     const messages: Message[] = [system, ...session.history, { role: "user", content: text }];
     const tools = registry.specs();
-    const localTools = cloud ? [...tools, escalateSpec] : tools;
+
+    const triage = await this.#triage(
+      text,
+      options.room,
+      tools.map((tool) => tool.name),
+    );
+    if (triage?.path === "cloud" && cloud) {
+      return this.#finish(
+        session,
+        text,
+        await this.#cloudTurn(cloud, system, session.history, text, maxToolRounds, registry),
+        "cloud",
+      );
+    }
+
+    const offerEscalate = triage ? triage.offerEscalate : cloud !== null;
+    const localTools = offerEscalate ? [...tools, escalateSpec] : tools;
 
     let via: "local" | "cloud" = "local";
     let result: TurnResult;
@@ -92,7 +121,7 @@ export class Router {
         tools: localTools,
         registry,
         maxRounds: maxToolRounds,
-        allowEscalation: cloud !== null,
+        allowEscalation: offerEscalate,
       });
     } catch (error) {
       log.warn(`${local.label} failed:`, error instanceof Error ? error.message : error);
@@ -103,26 +132,85 @@ export class Router {
     }
 
     if (result.escalateTo && cloud) {
-      via = "cloud";
-      const handover: Message[] = [system, ...session.history, { role: "user", content: result.escalateTo }];
-      try {
-        // No house tools for the cloud: the house stays local, the cloud gets
-        // the question and brings its own web search. Handing it the local
-        // web_search tool as well would clash with that one by name.
-        result = await runTurn({
-          model: cloud,
-          messages: handover,
-          tools: [],
-          registry,
-          maxRounds: maxToolRounds,
-          allowEscalation: false,
-        });
-      } catch (error) {
-        log.error(`${cloud.label} failed:`, error instanceof Error ? error.message : error);
-        return { text: "I could not reach the cloud model, and I did not want to guess.", via: "cloud" };
+      if (triage?.shadow) {
+        log.info(
+          `shadow triage would ${triage.verdict.needsCloud >= (this.#options.escalateThreshold ?? 0.85) ? "escalate" : "stay local"}` +
+            ` (needs_cloud=${triage.verdict.needsCloud.toFixed(2)} intent=${triage.verdict.intent}` +
+            ` conf=${triage.verdict.intentConfidence.toFixed(2)}); local escalated`,
+        );
       }
+      via = "cloud";
+      result = await this.#cloudTurn(
+        cloud,
+        system,
+        session.history,
+        result.escalateTo,
+        maxToolRounds,
+        registry,
+      );
+    } else if (triage?.shadow) {
+      log.info(
+        `shadow triage: needs_cloud=${triage.verdict.needsCloud.toFixed(2)}` +
+          ` needs_web=${triage.verdict.needsWeb.toFixed(2)} intent=${triage.verdict.intent}` +
+          ` conf=${triage.verdict.intentConfidence.toFixed(2)} via=${triage.verdict.model}; local answered`,
+      );
     }
 
+    return this.#finish(session, text, result, via);
+  }
+
+  async #triage(text: string, room: string | undefined, toolNames: string[]) {
+    const decision = this.#options.decision;
+    if (!decision) return null;
+    try {
+      const verdict = await runTriage(decision, { transcript: text, room, tools: toolNames });
+      const plan = planTriage(verdict, {
+        mode: this.#options.decisionMode ?? "shadow",
+        escalateThreshold: this.#options.escalateThreshold ?? 0.85,
+        localConfidence: this.#options.localConfidence ?? 0.75,
+        hasCloud: this.#options.cloud !== null,
+      });
+      log.info(
+        `triage ${plan.shadow ? "shadow" : plan.path}: needs_cloud=${verdict.needsCloud.toFixed(2)}` +
+          ` intent=${verdict.intent} conf=${verdict.intentConfidence.toFixed(2)} via ${verdict.model}`,
+      );
+      return plan;
+    } catch (error) {
+      log.warn(`triage failed, continuing locally:`, error instanceof Error ? error.message : error);
+      return null;
+    }
+  }
+
+  async #cloudTurn(
+    cloud: ChatModel,
+    system: Message,
+    history: Message[],
+    question: string,
+    maxToolRounds: number,
+    registry: ToolRegistry,
+  ): Promise<TurnResult> {
+    try {
+      // No house tools for the cloud: the house stays local, the cloud gets
+      // the question and brings its own web search. Handing it the local
+      // web_search tool as well would clash with that one by name.
+      return await runTurn({
+        model: cloud,
+        messages: [system, ...history, { role: "user", content: question }],
+        tools: [],
+        registry,
+        maxRounds: maxToolRounds,
+        allowEscalation: false,
+      });
+    } catch (error) {
+      log.error(`${cloud.label} failed:`, error instanceof Error ? error.message : error);
+      return {
+        text: "I could not reach the cloud model, and I did not want to guess.",
+        messages: [],
+      };
+    }
+  }
+
+  #finish(session: Session, text: string, result: TurnResult, via: "local" | "cloud"): Answer {
     // Keep the user and assistant turns, drop the tool traffic: it is long,
     // it is stale by the next question, and it is the bulk of the tokens.
     const turn: Message[] = [
@@ -130,7 +218,6 @@ export class Router {
       { role: "assistant", content: result.text },
     ];
     session.history = [...session.history, ...turn].slice(-MAX_HISTORY);
-
     return { text: result.text || "Done.", via };
   }
 

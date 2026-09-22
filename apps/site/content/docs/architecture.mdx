@@ -94,7 +94,7 @@ microphone loop, the text REPL, the doctor and the network server all take
 one of these rather than building their own, which is why a timer set from
 a phone still sounds in the room and every client shares one tool list.
 
-The cloud model and web search are the two slots the house can run without.
+The cloud model, decision triage and web search are the slots the house can run without.
 A provider that cannot start (nearly always a missing key) is reported by
 the doctor and left out. A name that leads nowhere, on the other hand, is a
 mistake in config and is thrown, because a house that quietly answers with
@@ -148,6 +148,15 @@ and no house tools. If the local model throws or times out and
 `llm.cloud.onLocalFailure` is true, the cloud model gets the original
 question instead. With no cloud model configured, failures are final and the
 escalation tool is not offered at all.
+
+Optionally, `llm.decision` names a System One decision model (built-in:
+`jev`) that judges escalate-versus-local before the generative turn. In
+`shadow` mode it only logs calibrated scores beside whatever the local model
+did; in `triage` mode a high `needs_cloud` / `needs_web` score skips local
+and hands the transcript to the cloud, while a clear house or timer intent
+keeps the escalate tool off so the answer stays on-box. Default is
+`provider: "none"`, so local-only houses are unchanged. Triage needs
+`TYPESAFE_API_KEY` in `secrets.env` and sends the transcript to TypeSafe.
 
 `core/loop.ts` runs the tool rounds for whichever model is answering, up to
 `llm.maxToolRounds`, and stops with an apology rather than looping forever.

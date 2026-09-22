@@ -4,6 +4,11 @@ import type {
   AudioSource,
   ChatModel,
   Check,
+  DecisionAnswer,
+  DecisionModel,
+  DecisionQuestion,
+  DecisionResult,
+  DecisionState,
   Integration,
   SearchProvider,
   SearchResult,
@@ -44,6 +49,47 @@ export class FakeChatModel implements ChatModel {
     if (!next) throw new Error("script exhausted");
     return next;
   }
+}
+
+/** Returns a fixed DecisionResult, recording each evaluate call. */
+export class FakeDecisionModel implements DecisionModel {
+  readonly label: string;
+  readonly calls: { state: DecisionState; questions: string[] }[] = [];
+  readonly #result: DecisionResult;
+
+  constructor(result: DecisionResult, label = "fake-decision") {
+    this.label = label;
+    this.#result = result;
+  }
+
+  async evaluate(state: DecisionState, questions: Record<string, DecisionQuestion>): Promise<DecisionResult> {
+    this.calls.push({ state, questions: Object.keys(questions) });
+    return this.#result;
+  }
+}
+
+/** Convenience builder for the Parlour triage answer shape. */
+export function triageAnswers(partial: {
+  needsCloud?: number;
+  needsWeb?: number;
+  intent?: string;
+  intentConfidence?: number;
+  roomAmbiguous?: number;
+  model?: string;
+}): DecisionResult {
+  const intent = partial.intent ?? "chat";
+  const answers: Record<string, DecisionAnswer> = {
+    needs_cloud: { type: "noul", noul: partial.needsCloud ?? 0.1 },
+    needs_web: { type: "noul", noul: partial.needsWeb ?? 0.1 },
+    intent: {
+      type: "choice",
+      choice: intent,
+      probabilities: { [intent]: 1 },
+      confidence: partial.intentConfidence ?? 0.9,
+    },
+    room_ambiguous: { type: "noul", noul: partial.roomAmbiguous ?? 0.1 },
+  };
+  return { model: partial.model ?? "fake-decision", answers };
 }
 
 /** Hears the same thing whatever it is given. */
