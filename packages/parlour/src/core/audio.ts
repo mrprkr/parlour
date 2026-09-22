@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { endianness } from "node:os";
 
 /**
  * The one audio format everything in core agrees on: 16 kHz, mono, signed 16
@@ -8,6 +9,54 @@ import { spawn } from "node:child_process";
  */
 export const FRAME_SAMPLES = 1280;
 export const FRAME_MS = 80;
+
+/**
+ * Audio is the one thing in the house that arrives constantly whether anybody
+ * is talking or not, so it is moved rather than converted: on a little-endian
+ * machine, which every machine Parlour runs on is, PCM bytes and 16 bit
+ * samples are the same bytes and a frame is one copy. The per-sample path is
+ * kept for the machine that proves the assumption wrong.
+ */
+const LITTLE_ENDIAN = endianness() === "LE";
+const EMPTY = Buffer.alloc(0);
+
+/**
+ * Little-endian PCM bytes to one frame, copied rather than viewed: the buffer
+ * a socket hands over is pooled and is written over long before the utterance
+ * it belongs to is finished. Short input leaves the rest of the frame silent.
+ */
+export function frameFrom(bytes: Buffer, offset = 0, samples = FRAME_SAMPLES): Int16Array {
+  const frame = new Int16Array(samples);
+  const available = Math.max(0, Math.min(samples * 2, bytes.length - offset));
+  if (LITTLE_ENDIAN) new Uint8Array(frame.buffer).set(bytes.subarray(offset, offset + available));
+  else for (let i = 0; i * 2 < available; i++) frame[i] = bytes.readInt16LE(offset + i * 2);
+  return frame;
+}
+
+/**
+ * A stream of whatever sized chunks a client sends, cut into the frames the
+ * wake word insists on. One per connection: the part-frame left at the end of
+ * a chunk belongs to that client and nobody else.
+ */
+export class FrameCutter {
+  #carry: Buffer = EMPTY;
+
+  push(chunk: Buffer): Int16Array[] {
+    const bytes = FRAME_SAMPLES * 2;
+    const buffer = this.#carry.length ? Buffer.concat([this.#carry, chunk]) : chunk;
+    const frames: Int16Array[] = [];
+    let at = 0;
+    for (; at + bytes <= buffer.length; at += bytes) frames.push(frameFrom(buffer, at));
+    // What is kept is always less than one frame, and it is copied because
+    // the chunk it came from is the socket's to reuse once we return.
+    this.#carry = at < buffer.length ? Buffer.from(buffer.subarray(at)) : EMPTY;
+    return frames;
+  }
+
+  reset(): void {
+    this.#carry = EMPTY;
+  }
+}
 
 /** Root mean square of a frame, normalised to 0..1. Used for endpointing. */
 export function rms(frame: Int16Array): number {
@@ -22,9 +71,14 @@ export function toWav(frames: Int16Array[], sampleRate: number): Buffer {
   const data = Buffer.alloc(samples * 2);
   let offset = 0;
   for (const frame of frames) {
-    for (const sample of frame) {
-      data.writeInt16LE(sample, offset);
-      offset += 2;
+    if (LITTLE_ENDIAN) {
+      data.set(new Uint8Array(frame.buffer, frame.byteOffset, frame.length * 2), offset);
+      offset += frame.length * 2;
+    } else {
+      for (const sample of frame) {
+        data.writeInt16LE(sample, offset);
+        offset += 2;
+      }
     }
   }
   const header = Buffer.alloc(44);
@@ -63,11 +117,9 @@ export function wavToFrames(wav: Buffer): Int16Array[] {
   }
 
   const frames: Int16Array[] = [];
-  for (let at = start; at + 2 <= start + length; at += FRAME_SAMPLES * 2) {
-    const samples = Math.min(FRAME_SAMPLES, Math.floor((start + length - at) / 2));
-    const frame = new Int16Array(FRAME_SAMPLES);
-    for (let i = 0; i < samples; i++) frame[i] = wav.readInt16LE(at + i * 2);
-    frames.push(frame);
+  const end = start + length;
+  for (let at = start; at + 2 <= end; at += FRAME_SAMPLES * 2) {
+    frames.push(frameFrom(wav.subarray(0, end), at));
   }
   return frames;
 }

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { type Logger, logger } from "../../core/logger.ts";
 import type { ChatModel, Check } from "../../core/ports.ts";
 import { defineProvider, type ProviderContext, registerProvider } from "../../core/providers.ts";
+import { stripThinking } from "../../core/text.ts";
 import type { Completion, Message, ToolSpec } from "../../core/types.ts";
 
 interface ApiToolCall {
@@ -103,33 +104,8 @@ export class OpenAiCompatibleModel implements ChatModel {
    * different failures that look the same from the outside: the agent hears
    * you and says nothing.
    */
-  async doctor(): Promise<Check[]> {
-    const { baseUrl, model } = this.#opts;
-    let served: string[] | null = null;
-    try {
-      const response = await fetch(`${baseUrl}/models`, {
-        headers: this.#opts.apiKey ? { authorization: `Bearer ${this.#opts.apiKey}` } : {},
-        signal: AbortSignal.timeout(4000),
-      });
-      if (response.ok) {
-        const body = (await response.json()) as { data?: { id?: string }[] };
-        served = (body.data ?? []).map((m) => m.id ?? "");
-      }
-    } catch {
-      served = null;
-    }
-    // A server that is not answering is the usual failure, and what to do
-    // about it depends on whose server it is: Parlour's own is a service to
-    // restart, anybody else's is a window to go and open.
-    const down = this.#opts.managed
-      ? `${baseUrl} is not answering. parlour restart, or parlour service logs for why it stopped.`
-      : `${baseUrl} is not answering. Start the server in LM Studio, or run parlour init to have Parlour run one.`;
-    const detail = served
-      ? served.length
-        ? `served: ${served.join(", ")}. Configured: ${model}.`
-        : "the server is up but has no model loaded."
-      : down;
-    return [{ name: "local model", status: served?.includes(model) ? "ok" : "fail", detail }];
+  doctor(): Promise<Check[]> {
+    return localModelCheck(this.#opts);
   }
 
   #parseArgs(raw: string): Record<string, unknown> {
@@ -141,6 +117,45 @@ export class OpenAiCompatibleModel implements ChatModel {
       return {};
     }
   }
+}
+
+/**
+ * The check itself, apart from the class, because the AI SDK provider reaches
+ * the same server by a different road and the same two failures look the same
+ * from the outside there too.
+ */
+export async function localModelCheck(opts: {
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+  managed?: boolean;
+}): Promise<Check[]> {
+  const { baseUrl, model } = opts;
+  let served: string[] | null = null;
+  try {
+    const response = await fetch(`${baseUrl}/models`, {
+      headers: opts.apiKey ? { authorization: `Bearer ${opts.apiKey}` } : {},
+      signal: AbortSignal.timeout(4000),
+    });
+    if (response.ok) {
+      const body = (await response.json()) as { data?: { id?: string }[] };
+      served = (body.data ?? []).map((m) => m.id ?? "");
+    }
+  } catch {
+    served = null;
+  }
+  // A server that is not answering is the usual failure, and what to do
+  // about it depends on whose server it is: Parlour's own is a service to
+  // restart, anybody else's is a window to go and open.
+  const down = opts.managed
+    ? `${baseUrl} is not answering. parlour restart, or parlour service logs for why it stopped.`
+    : `${baseUrl} is not answering. Start the server in LM Studio, or run parlour init to have Parlour run one.`;
+  const detail = served
+    ? served.length
+      ? `served: ${served.join(", ")}. Configured: ${model}.`
+      : "the server is up but has no model loaded."
+    : down;
+  return [{ name: "local model", status: served?.includes(model) ? "ok" : "fail", detail }];
 }
 
 function toApiMessage(message: Message): Record<string, unknown> {
@@ -164,11 +179,6 @@ function toApiMessage(message: Message): Record<string, unknown> {
     default:
       return { role: message.role, content: message.content };
   }
-}
-
-/** Qwen and friends emit their reasoning inline. It must never be spoken. */
-function stripThinking(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 }
 
 export function createOpenAiCompatible(

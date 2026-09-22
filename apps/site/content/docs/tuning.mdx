@@ -112,6 +112,65 @@ is `macos-say`).
 - A hosted OpenAI-compatible endpoint works as the local model too: add
   `"apiKeyEnv": "SOME_NAME"` naming a variable in `secrets.env`.
 
+### Through the AI SDK instead
+
+Either slot can be filled by `"provider": "ai-sdk"`, which reaches the same
+two back ends through Vercel's AI SDK rather than through Parlour's own
+clients:
+
+```json
+{
+  "llm": {
+    "local": { "provider": "ai-sdk", "backend": "openai-compatible", "baseUrl": "http://127.0.0.1:8920/v1", "model": "qwen2.5-7b-instruct" },
+    "cloud": { "provider": "ai-sdk", "backend": "anthropic", "model": "claude-opus-5", "effort": "low", "webSearch": true }
+  }
+}
+```
+
+The loop does not move. Tools are handed to the SDK without an `execute`, so
+it returns the calls rather than running them, and the tool rounds, the
+escalation and the request deadline stay in Parlour. What changes is who
+keeps up with the two APIs.
+
+The built-in clients remain the default, because they are what a house runs
+with nothing but `fetch` behind them. Reach for this one if you would rather
+track one library than two APIs, or to put the SDK's own middleware in front
+of a model.
+
+## The pipeline
+
+```json
+{
+  "pipeline": {
+    "concurrency": 2,
+    "queueDepth": 2,
+    "triage": "auto",
+    "maxTasks": 4,
+    "timeoutMs": 45000
+  }
+}
+```
+
+- **`concurrency`** is how many requests are answered at once across the
+  whole house. One request per client either way, so this is how many rooms
+  can be answered at once rather than how hard one room can push. Two suits
+  one machine with one local model; raise it if the model is hosted
+  elsewhere and can take it, and the queue will still keep each room in turn.
+- **`queueDepth`** is how many requests may wait in one client's lane. Past
+  it, that client's oldest waiting request is dropped and nothing is said
+  for it: somebody who asks twice wants the second answer.
+- **`triage`** is when a request is repaired and split before it is acted
+  on. `auto` reads anything compound, long or ambiguous and lets a plain
+  instruction through at once. `always` costs a local round trip on every
+  request and is worth it in a noisy room or with a small speech model;
+  `never` sends the words to the action agent exactly as they were heard.
+- **`maxTasks`** caps how many things one request may become. Four is "turn
+  the kitchen and hall lights off, set a timer and tell me the forecast".
+- **`timeoutMs`** is the ceiling on one whole request. It is checked between
+  tool rounds and between tasks rather than mid-request, so nothing already
+  with a model is abandoned; what it stops is a request still going long
+  after the person has left the room.
+
 ## Search
 
 ```json

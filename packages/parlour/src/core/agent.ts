@@ -164,6 +164,11 @@ export async function buildAgent(
       ...integrations.flatMap((integration) => integration.promptContext?.() ?? []),
       ...skillPromptContext(skills.skills),
     ],
+    triage: config.pipeline.triage,
+    maxTasks: config.pipeline.maxTasks,
+    concurrency: config.pipeline.concurrency,
+    queueDepth: config.pipeline.queueDepth,
+    timeoutMs: config.pipeline.timeoutMs,
   });
 
   if (audio) {

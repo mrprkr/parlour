@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { runTurn } from "./loop.ts";
+import { OUT_OF_TIME, runTurn } from "./loop.ts";
 import type { ChatModel } from "./ports.ts";
 import { ESCALATE_TOOL } from "./prompt.ts";
 import { defineTool, ToolRegistry } from "./registry.ts";
@@ -114,4 +114,62 @@ test("runTurn does not escalate when escalation is not allowed", async () => {
   const answer = result.messages.find((m) => m.role === "tool") as { content: string };
   assert.match(answer.content, /no other model/);
   assert.match(answer.content, /use the tools you have/);
+});
+
+test("the tools in one round run together rather than one after another", async () => {
+  const running: string[] = [];
+  const slow = (name: string, ms: number) =>
+    defineTool(name, "", { type: "object" }, async () => {
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      running.push(name);
+      return `${name} ran`;
+    });
+  const registry = new ToolRegistry().add(slow("slow", 30), slow("quick", 1));
+  const model = new FakeChatModel([
+    { text: "", toolCalls: [call("slow", {}, "1"), call("quick", {}, "2")] },
+    { text: "both", toolCalls: [] },
+  ]);
+
+  const started = Date.now();
+  const result = await runTurn({
+    model,
+    messages: [],
+    tools: [],
+    registry,
+    maxRounds: 3,
+    allowEscalation: false,
+  });
+
+  assert.equal(result.text, "both");
+  // The quick one finished first, so they were not run in turn.
+  assert.deepEqual(running, ["quick", "slow"]);
+  assert.ok(Date.now() - started < 60, "two tools cost the slower one, not the sum");
+  // The model still reads the answers in the order it asked for them.
+  assert.deepEqual(
+    result.messages.filter((m) => m.role === "tool").map((m) => (m as { name: string }).name),
+    ["slow", "quick"],
+  );
+});
+
+test("a turn that runs past its deadline stops between rounds", async () => {
+  const registry = registryWith("t");
+  const model = new FakeChatModel([
+    { text: "", toolCalls: [call("t")] },
+    { text: "never asked", toolCalls: [] },
+  ]);
+  let clock = 1000;
+  const result = await runTurn({
+    model,
+    messages: [],
+    tools: [],
+    registry,
+    maxRounds: 4,
+    allowEscalation: false,
+    deadline: 1500,
+    // The first round is always run; the tool it called took us past the end.
+    now: () => (clock += 600),
+  });
+
+  assert.equal(result.text, OUT_OF_TIME);
+  assert.equal(model.calls.length, 1);
 });

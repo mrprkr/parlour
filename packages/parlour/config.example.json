@@ -47,6 +47,13 @@
     },
     "maxToolRounds": 6
   },
+  "pipeline": {
+    "concurrency": 2,
+    "queueDepth": 2,
+    "triage": "auto",
+    "maxTasks": 4,
+    "timeoutMs": 45000
+  },
   "search": {
     "provider": "searxng",
     "url": "http://searxng.local:8080",
