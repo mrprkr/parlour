@@ -41,10 +41,12 @@ to the `parlour` CLI, so a capability the app needs must exist in the CLI first.
 signed and notarised: `src-tauri/Entitlements.plist` and the `macOS` block in `tauri.conf.json` are
 what allow it, and `scripts/notarise.sh` does the dmg, which Tauri signs but does not notarise.
 
-Site (`apps/site`, Next.js): the front page in `app/page.tsx`, the docs in `content/docs/*.mdx` served
-by `app/docs/[slug]` from the list in `app/docs/pages.ts`, looks in `app/globals.css`, header, footer,
-metadata, font and the analytics component in `app/layout.tsx`, security headers and the MDX plugins in
-`next.config.ts`.
+Site (`apps/site`, Next.js with fumadocs): the front page in `app/(home)/page.tsx`, the docs in
+`content/docs/*.mdx` ordered by `content/docs/meta.json` and served by `app/docs/[[...slug]]/page.tsx`,
+where `lib/source.ts` is the content source, `lib/layout.shared.tsx` the shared layout options and
+`app/api/search/route.ts` the search endpoint. Looks in `app/globals.css` and the generated
+`app/tokens.css`, header, footer, metadata, font and the analytics component in `app/layout.tsx`, the
+MDX components in `mdx-components.tsx`, security headers and the fumadocs MDX plugin in `next.config.ts`.
 `pnpm -C apps/site dev` locally; `pnpm exec nx run-many -t typecheck lint build -p site` is what CI
 runs. Vercel builds it with the Next.js builder, Root Directory `apps/site`.
 
