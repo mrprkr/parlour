@@ -15,6 +15,7 @@ packages/parlour/src/
                  loop.ts, speaker.ts, registry.ts, search.ts, timers.ts, prompt.ts, types.ts,
                  events.ts, logger.ts, process.ts, services.ts, localmodel.ts, version.ts
   providers/     audio/ffmpeg, audio/afplay, wake/openwakeword, stt/whisper-cpp, stt/yap,
+                 stt/parakeet-mlx,
                  tts/kokoro, tts/macos-say, llm/openai-compatible, llm/anthropic, llm/ai-sdk,
                  decision/laya-mlx, search/searxng, search/brave, secrets/macos-keychain,
                  secrets/file, service/launchd
@@ -39,7 +40,7 @@ a test and to fill from an npm package.
 | `AudioSource` | Yields 16 kHz mono frames of 1280 samples (80 ms). | `ffmpeg` on avfoundation |
 | `AudioSink` | Plays a WAV, and can be stopped. | `afplay` |
 | `WakeWordEngine` | Loads once, hands out one `WakeWordDetector` per stream. | `openwakeword` |
-| `SpeechToText` | WAV in, text out. | `whisper-cpp`, `yap` |
+| `SpeechToText` | WAV in, text out. | `whisper-cpp`, `yap`, `parakeet-mlx` |
 | `TextToSpeech` | Text in, WAV out, with a `warm()` to load before the first reply. | `kokoro`, `macos-say` |
 | `ChatModel` | Messages and tool specs in, a completion out. | `openai-compatible`, `anthropic`, `ai-sdk` |
 | `DecisionModel` | A request and typed questions in, answers with probabilities out. | `laya-mlx` |

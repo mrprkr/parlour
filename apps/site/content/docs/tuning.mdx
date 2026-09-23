@@ -106,6 +106,29 @@ until you remove it with `parlour service uninstall`. If launchd rather than
 the app runs the agent, follow it with `parlour service install`, which puts
 back only what the config still wants. `parlour doctor` checks yap is found.
 
+On Apple silicon there is also NVIDIA's
+[Parakeet](https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v2), through
+[parakeet-mlx](https://github.com/senstella/parakeet-mlx). It is fast and
+accurate for English and uses about 2 GB of memory.
+
+```sh
+pip install parakeet-mlx
+```
+
+```json
+{ "stt": { "provider": "parakeet-mlx" } }
+```
+
+Parlour keeps the model loaded in a Python worker that starts on the first
+utterance, so that one waits for the load (and, the first time, the download
+into the Hugging Face cache). `model` defaults to
+`mlx-community/parakeet-tdt-0.6b-v2`; `mlx-community/parakeet-tdt-0.6b-v3`
+trades a little English for about 25 languages. `python` defaults to
+`python3`; point it at a venv's own Python if parakeet-mlx lives there, for
+example `~/.local/share/uv/tools/parakeet-mlx/bin/python` after
+`uv tool install parakeet-mlx`. `parlour doctor` checks that Python can import
+it and that ffmpeg is found.
+
 ## The models
 
 This is what `parlour init` writes when you let Parlour run the local model,

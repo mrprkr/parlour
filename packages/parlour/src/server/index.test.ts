@@ -263,9 +263,11 @@ test("building twice ships one copy of the phone page, not a copy nested inside 
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, "src/server/web"), { recursive: true });
   writeFileSync(join(root, "src/server/web/index.html"), "<!doctype html>");
-  // The decision worker is copied by the same step, so it has to be there too.
+  // The Python workers are copied by the same step, so they have to be there too.
   mkdirSync(join(root, "src/providers/decision"), { recursive: true });
   writeFileSync(join(root, "src/providers/decision/laya-worker.py"), "");
+  mkdirSync(join(root, "src/providers/stt"), { recursive: true });
+  writeFileSync(join(root, "src/providers/stt/parakeet-worker.py"), "");
   // tsc has already written dist/server/ by the time the copy runs.
   mkdirSync(join(root, "dist/server"), { recursive: true });
 
