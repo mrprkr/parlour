@@ -129,6 +129,9 @@ export async function runSetup(options: SetupOptions, report: Reporter): Promise
   if (config.stt.provider === "yap") {
     if (await findOnPath("yap")) report.ok("yap");
     else report.warn("yap is missing, so there is no speech to text. brew install yap");
+  } else if (config.stt.provider === "parakeet-mlx") {
+    // A pip package in whatever Python the config names; parlour doctor checks it imports.
+    report.ok("parakeet-mlx, checked by parlour doctor");
   } else if (await findOnPath("whisper-server")) report.ok("whisper-server");
   else report.warn("whisper-server is missing, so there is no speech to text.");
   if (formulaeFor(config).includes(LLAMA_FORMULA)) {

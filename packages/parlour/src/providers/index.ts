@@ -12,6 +12,7 @@ import "./audio/afplay.ts";
 import "./wake/openwakeword.ts";
 import "./stt/whisper-cpp.ts";
 import "./stt/yap.ts";
+import "./stt/parakeet-mlx.ts";
 import "./tts/kokoro.ts";
 import "./tts/macos-say.ts";
 import "./llm/openai-compatible.ts";
