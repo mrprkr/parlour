@@ -24,6 +24,9 @@ export default function HomeLayout({ children }: { children: ReactNode }) {
           <a href="https://github.com/mrprkr/parlour/issues">issues</a>,{" "}
           <a href="https://www.npmjs.com/package/parlour">npm</a>.
         </p>
+        <p>
+          <Link href="/privacy">Privacy</Link>
+        </p>
       </footer>
     </div>
   );

@@ -1648,3 +1648,34 @@ body {
 .twinkleplop code .l:empty {
   height: 1lh;
 }
+
+/* ------------------------------------------------------------ policy */
+
+/* The privacy page: plain prose in sheets, nothing drawn. */
+.policy-updated {
+  margin-top: 1rem;
+  font-size: 0.92rem;
+  color: var(--ink-2);
+}
+
+.policy .sheet > h3 {
+  font-size: 1.15rem;
+  margin: 1.8rem 0 0.6rem;
+}
+
+.policy .sheet > ul {
+  max-width: var(--measure);
+  color: var(--ink-2);
+  list-style: disc;
+  margin: 0 0 1rem;
+  padding-left: 1.2rem;
+  text-wrap: pretty;
+}
+
+.policy .sheet > ul > li + li {
+  margin-top: 0.5rem;
+}
+
+.policy .sheet > ul strong {
+  color: var(--ink);
+}
