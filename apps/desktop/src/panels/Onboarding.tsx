@@ -34,6 +34,7 @@ import {
   writeConfig,
 } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
+import { PairPhone } from "@/panels/onboarding/PairPhone";
 import {
   Disclosure,
   Heading,
@@ -45,6 +46,8 @@ import {
   Stepper,
   type Tone,
 } from "@/panels/onboarding/parts";
+import { PipelinePanel } from "@/panels/PipelinePanel";
+import { ToolsPanel } from "@/panels/ToolsPanel";
 
 const HA_DEFAULT = "http://homeassistant.local:8123";
 const WAKE_DEFAULT = "hey_jarvis";
@@ -57,7 +60,7 @@ const WAKE_WORDS: { value: string; label: string }[] = [
   { value: "hey_mycroft", label: "hey mycroft" },
 ];
 
-type StepName = "install" | "voice" | "home" | "extras" | "finish";
+type StepName = "install" | "voice" | "home" | "extras" | "tools" | "phone" | "test" | "finish";
 
 /** The welcome is not a step: it asks nothing, so it has no place in the row along the top. */
 type Screen = "welcome" | StepName;
@@ -67,6 +70,9 @@ const STEPS: StepMeta<StepName>[] = [
   { name: "voice", label: "Voice" },
   { name: "home", label: "Home" },
   { name: "extras", label: "Extras" },
+  { name: "tools", label: "Skills" },
+  { name: "phone", label: "iPhone" },
+  { name: "test", label: "Test" },
   { name: "finish", label: "Finish" },
 ];
 
@@ -101,10 +107,13 @@ type Job = "cli" | "setup" | null;
 
 export function Onboarding({
   open,
+  running,
   onClose,
   onSaved,
 }: {
   open: boolean;
+  /** Parlour is already listening, which the test step has to warn about. */
+  running: boolean;
   onClose: () => void;
   onSaved: () => void;
 }): JSX.Element | null {
@@ -448,8 +457,16 @@ export function Onboarding({
     if (ok) {
       setAnthropic("");
       await refresh().catch(() => undefined);
-      go("finish");
+      go("tools");
     }
+  };
+
+  /** The iPhone step's own way on to the network, for someone who skipped it on Extras. */
+  const enableNetwork = async () => {
+    if (!hasToken) await setSecret("PARLOUR_TOKEN", mintToken());
+    setNetwork(true);
+    onSaved();
+    await refresh();
   };
 
   // ------------------------------------------------------------------ finish
@@ -524,6 +541,9 @@ export function Onboarding({
               ["Voice", "Which microphone to listen on, and the word that wakes it."],
               ["Home", "Your Home Assistant, if you have one."],
               ["Extras", "Cloud help and other devices, both optional."],
+              ["Skills", "House rules and extra tools, if you want them."],
+              ["iPhone", "Pair the phone app, if you use it."],
+              ["Test", "Try each part, then the whole thing out loud."],
             ].map(([name, what], index) => (
               <li key={name} className="flex gap-3 rounded-lg border bg-card px-3 py-2.5">
                 <span className="grid size-5 shrink-0 place-items-center rounded-full bg-border text-[11px] tabular-nums">
@@ -537,7 +557,7 @@ export function Onboarding({
             ))}
           </ol>
           <p className="mt-4 text-[13px] text-muted-foreground">
-            About ten minutes, most of it downloading. You can stop and come back.
+            About fifteen minutes, most of it downloading. You can stop and come back.
           </p>
         </div>
       );
@@ -895,7 +915,7 @@ export function Onboarding({
               <p className="text-muted-foreground">
                 {hasToken
                   ? "A shared token is already set. Devices holding it keep working."
-                  : "A shared token is made for you. The Status tab shows it, with a code to pair the iPhone app."}
+                  : "A shared token is made for you, and a later step shows the code that pairs the iPhone app."}
               </p>
             </Optional>
           </div>
@@ -908,6 +928,66 @@ export function Onboarding({
         </Button>
       );
       secondary = <BackButton onClick={() => go("home")} disabled={saving} />;
+      break;
+    }
+
+    case "tools": {
+      body = (
+        <>
+          <Heading title="Teach it more">
+            Optional, and all of it can be changed later on the Tools tab. Skills are house rules in plain
+            words; MCP servers, accounts and plugins bring new tools.
+          </Heading>
+          <ToolsPanel running={false} compact />
+        </>
+      );
+      primary = <Button onClick={() => go("phone")}>Continue</Button>;
+      secondary = <BackButton onClick={() => go("extras")} />;
+      break;
+    }
+
+    case "phone": {
+      body = (
+        <>
+          <Heading title="Pair your iPhone">
+            Optional. The Parlour app on the iPhone is a remote for the house: push to talk from any room, and
+            HomeKit from the phone.
+          </Heading>
+          <PairPhone tokenSet={hasToken} onEnableNetwork={enableNetwork} />
+        </>
+      );
+      primary = <Button onClick={() => go("test")}>{hasToken ? "Done" : "Continue"}</Button>;
+      secondary = (
+        <>
+          <BackButton onClick={() => go("tools")} />
+          {hasToken ? null : (
+            <Button variant="ghost" onClick={() => go("test")}>
+              Skip
+            </Button>
+          )}
+        </>
+      );
+      break;
+    }
+
+    case "test": {
+      body = (
+        <>
+          <Heading title="Try it out">
+            Each part on its own, then the whole round trip. Anything that fails says which part to look at.
+          </Heading>
+          <PipelinePanel running={running} />
+        </>
+      );
+      primary = <Button onClick={() => go("finish")}>Continue</Button>;
+      secondary = (
+        <>
+          <BackButton onClick={() => go("phone")} />
+          <Button variant="ghost" onClick={() => go("finish")}>
+            Skip
+          </Button>
+        </>
+      );
       break;
     }
 
@@ -964,8 +1044,8 @@ export function Onboarding({
           <div className="mt-5 flex items-start gap-3 rounded-xl border bg-card px-4 py-3">
             <House className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
             <p className="text-muted-foreground">
-              Parlour lives in the menu bar. Settings has everything asked here and more, and Connectors signs
-              in to the services it can use.
+              Parlour lives in the menu bar. Settings has everything asked here and more, Tools has the skills
+              and servers, and Test runs these checks again whenever you like.
             </p>
           </div>
         </>
@@ -978,7 +1058,7 @@ export function Onboarding({
       );
       secondary = (
         <>
-          <BackButton onClick={() => go("extras")} disabled={starting} />
+          <BackButton onClick={() => go("test")} disabled={starting} />
           <Button variant="ghost" disabled={checks === null} onClick={() => void doctor()}>
             Check again
           </Button>

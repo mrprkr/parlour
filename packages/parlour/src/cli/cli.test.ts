@@ -141,6 +141,7 @@ test("--help lists the commands and an unknown command fails with one line", asy
     "stop",
     "restart",
     "text",
+    "try",
     "doctor",
     "service",
     "connectors",
@@ -794,13 +795,82 @@ test("skills new writes a file the list and the show can read back", async () =>
   writeFileSync(file, "---\nname: bedtime\ndescription: What goodnight means\n---\nPorch light on.\n");
   const listed = await parlour(["skills", "list", "--json"]);
   assert.deepEqual((JSON.parse(listed.stdout) as { skills: { name: string }[] }).skills, [
-    { name: "bedtime", description: "What goodnight means", source: file },
+    { name: "bedtime", description: "What goodnight means", source: file, own: true },
   ]);
 
   const shown = await parlour(["skills", "show", "bedtime"]);
   assert.equal(shown.stdout.trim(), "Porch light on.");
   assert.equal((await parlour(["skills", "show", "nothing"])).code, 1);
   assert.equal((await parlour(["skills", "new", "bedtime"])).code, 1, "an existing file is not overwritten");
+});
+
+test("skills write replaces a skill after checking it, and remove deletes only the house's own", async () => {
+  const skill = "---\nname: bedtime\ndescription: What goodnight means\n---\nPorch light on.\n";
+  const written = await parlour(["skills", "write", "bedtime"], { stdin: skill });
+  assert.equal(written.code, 0, written.stderr);
+  const file = join(home, "config", "skills", "bedtime.md");
+  assert.equal(readFileSync(file, "utf8"), skill);
+
+  const renamed = await parlour(["skills", "write", "bedtime"], {
+    stdin: skill.replace("name: bedtime", "name: other"),
+  });
+  assert.equal(renamed.code, 1, "the frontmatter has to agree with the name");
+  const empty = await parlour(["skills", "write", "bedtime"], { stdin: "---\nname: bedtime\n---\n" });
+  assert.equal(empty.code, 1, "a skill with no body is refused");
+  assert.equal(readFileSync(file, "utf8"), skill, "a refused write leaves the file alone");
+  assert.equal((await parlour(["skills", "write", "../escape"], { stdin: skill })).code, 1);
+
+  const removed = await parlour(["skills", "remove", "bedtime"]);
+  assert.equal(removed.code, 0, removed.stderr);
+  assert.equal(existsSync(file), false);
+  assert.equal((await parlour(["skills", "remove", "bedtime"])).code, 1);
+});
+
+test("try asks the local model the config names and reports what it said", async () => {
+  const { createServer } = await import("node:http");
+  const server = createServer((request, response) => {
+    request.resume();
+    request.on("end", () => {
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "Paris." } }] }));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address() as { port: number };
+    mkdirSync(join(home, "config"), { recursive: true });
+    writeFileSync(
+      join(home, "config", "config.json"),
+      JSON.stringify({ llm: { local: { baseUrl: `http://127.0.0.1:${address.port}/v1`, model: "fake" } } }),
+    );
+    const run = await parlour(["try", "llm", "--json"]);
+    assert.equal(run.code, 0, run.stderr);
+    const trial = JSON.parse(run.stdout) as { stage: string; ok: boolean; reply: string; via: string };
+    assert.equal(trial.stage, "llm");
+    assert.equal(trial.ok, true);
+    assert.equal(trial.reply, "Paris.");
+    assert.equal(trial.via, "local:fake");
+  } finally {
+    server.close();
+  }
+});
+
+test("try reports a stage that cannot run as a failed trial, and an unknown stage as a usage error", async () => {
+  mkdirSync(join(home, "config"), { recursive: true });
+  writeFileSync(
+    join(home, "config", "config.json"),
+    JSON.stringify({ llm: { local: { baseUrl: "http://127.0.0.1:9/v1", timeoutMs: 2000 } } }),
+  );
+  const down = await parlour(["try", "llm", "--json"]);
+  assert.equal(down.code, 1);
+  const trial = JSON.parse(down.stdout) as { ok: boolean; detail: string };
+  assert.equal(trial.ok, false);
+  assert.ok(trial.detail.length > 0);
+
+  const unknown = await parlour(["try", "bogus"]);
+  assert.equal(unknown.code, 1);
+  assert.match(unknown.stderr, /Unknown subcommand/);
+  assert.equal((await parlour(["try", "mic", "--seconds", "0"])).code, 1);
 });
 
 test("plugins add loads the package before it writes the name into config", async () => {
