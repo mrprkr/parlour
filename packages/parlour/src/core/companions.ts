@@ -33,6 +33,7 @@ export class BoundedLog {
   #fd: number | null = null;
   #size = 0;
   #warned = false;
+  #closed = false;
 
   constructor(path: string, warn: (message: string) => void, max = MAX_LOG_BYTES) {
     this.#path = path;
@@ -41,10 +42,13 @@ export class BoundedLog {
   }
 
   write(chunk: Buffer): void {
+    // Output a child flushes after its log was closed is dropped rather than
+    // allowed to reopen the file behind the supervisor's back.
+    if (this.#closed) return;
     try {
       if (this.#fd === null) this.#open();
       if (this.#size + chunk.length > this.#max && this.#size > 0) {
-        this.close();
+        this.#release();
         renameSync(this.#path, `${this.#path}.1`);
         this.#open();
       }
@@ -57,7 +61,13 @@ export class BoundedLog {
     }
   }
 
+  /** For good: nothing written afterwards reaches the file. */
   close(): void {
+    this.#closed = true;
+    this.#release();
+  }
+
+  #release(): void {
     if (this.#fd !== null) closeSync(this.#fd);
     this.#fd = null;
   }
@@ -93,6 +103,16 @@ export function startCompanions(specs: ServiceSpec[], options: CompanionOptions)
   const timers = new Set<ReturnType<typeof setTimeout>>();
   let stopped = false;
 
+  // One log per companion for its whole life, restarts included, so a child
+  // that is still flushing as its replacement starts writes to the same file
+  // through the same size check rather than to a second handle on it. What a
+  // dying child says last is usually why it died, so it is kept, not cut off.
+  // Each is held to launchd's size, so a crash loop cannot fill the container.
+  const logs = new Map<ServiceSpec, BoundedLog>();
+  for (const spec of specs) {
+    logs.set(spec, new BoundedLog(spec.logPath, (message) => log.warn(`${spec.what} log: ${message}`)));
+  }
+
   const start = (spec: ServiceSpec) => {
     const [command, ...args] = spec.program;
     if (!command) return;
@@ -101,17 +121,14 @@ export function startCompanions(specs: ServiceSpec[], options: CompanionOptions)
     children.add(child);
     killOnExit(child);
 
-    // One file per companion however many times it restarts, held to the
-    // same size launchd's logs are, so a crash loop cannot fill the container.
-    const file = new BoundedLog(spec.logPath, (message) => log.warn(`${spec.what} log: ${message}`));
-    const write = (chunk: Buffer) => file.write(chunk);
+    const file = logs.get(spec);
+    const write = (chunk: Buffer) => file?.write(chunk);
     child.stdout?.on("data", write);
     child.stderr?.on("data", write);
 
     child.on("error", (error) => log.warn(`${spec.what}: ${error.message}`));
     child.on("exit", (code, signal) => {
       children.delete(child);
-      file.close();
       if (stopped) return;
       log.warn(`${spec.what} exited (${signal ?? code}), starting it again`);
       const timer = setTimeout(() => {
@@ -127,6 +144,7 @@ export function startCompanions(specs: ServiceSpec[], options: CompanionOptions)
   return {
     stop() {
       stopped = true;
+      for (const file of logs.values()) file.close();
       for (const timer of timers) clearTimeout(timer);
       for (const child of children) child.kill("SIGTERM");
     },

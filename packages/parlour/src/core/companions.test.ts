@@ -95,3 +95,14 @@ test("a log that cannot be written is said once and does not throw", () => {
   assert.equal(warnings.length, 1);
   assert.equal(existsSync("/dev/null/cannot"), false);
 });
+
+test("a closed log drops what arrives late instead of reopening the file", () => {
+  const dir = mkdtempSync(join(tmpdir(), "parlour-companions-"));
+  const path = join(dir, "llm.log");
+  const file = new BoundedLog(path, () => {});
+  file.write(Buffer.from("before"));
+  file.close();
+  file.write(Buffer.from("after"));
+  assert.equal(readFileSync(path, "utf8"), "before");
+  rmSync(dir, { recursive: true, force: true });
+});
