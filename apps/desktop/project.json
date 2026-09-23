@@ -17,6 +17,10 @@
       "options": { "cwd": "apps/desktop" },
       "outputs": ["{projectRoot}/src-tauri/target/release/bundle"]
     },
+    "xcode": {
+      "command": "xcodegen generate",
+      "options": { "cwd": "apps/desktop/xcode" }
+    },
     "appstore": {
       "command": "appstore/package.sh",
       "options": { "cwd": "apps/desktop" },

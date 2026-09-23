@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 #
-# Builds the Mac App Store copy of Parlour Server.app, signs it for the sandbox,
-# wraps it in the installer package App Store Connect takes, and with
-# --upload validates and uploads it.
+# Builds the Mac App Store copy of Parlour Server.app on this Mac and signs it
+# for the sandbox. Xcode Cloud is how releases are built (../xcode); this is
+# for trying the sandboxed app locally, and, given the certificates, for
+# making and uploading a package by hand when Xcode Cloud is not an option.
 #
 # The dmg is Tauri's job end to end. This build is not, because the App Store
 # wants something Tauri does not do: every executable inside the app signed
 # with only the sandbox and inherit keys, and the app with its own. So Tauri
-# builds the bundle and this script signs it.
+# builds the bundle (build.sh) and this signs it (sign-nested.sh, then the app).
 #
 # Usage: apps/desktop/appstore/package.sh [--upload]
 #
@@ -63,26 +64,10 @@ if $upload; then
   [ "$identity" != "-" ] || { echo "--upload needs APPSTORE_SIGNING_IDENTITY: Apple takes nothing signed ad hoc." >&2; exit 1; }
 fi
 
-echo "== Staging node, ffmpeg, whisper, llama.cpp and parlour"
-node --experimental-strip-types "$desktop/appstore/stage.ts"
-
-echo "== Building the app"
-# The Apple variables are cleared for this step alone: given them, Tauri signs
-# and notarises with the Developer ID setup the dmg uses, and notarising is
-# not what an App Store build wants. The signing happens below instead.
-(
-  cd "$desktop"
-  pnpm icons
-  env -u APPLE_CERTIFICATE -u APPLE_CERTIFICATE_PASSWORD -u APPLE_SIGNING_IDENTITY \
-    -u APPLE_ID -u APPLE_PASSWORD -u APPLE_API_KEY -u APPLE_API_ISSUER -u APPLE_API_KEY_PATH \
-    pnpm exec tauri build --bundles app --features appstore \
-    --config src-tauri/tauri.appstore.conf.json -- --locked
-)
+built="$("$desktop/appstore/build.sh" | tail -1)"
 
 rm -rf "$out"
 mkdir -p "$out"
-built="$(find "$tauri/target/release/bundle/macos" -maxdepth 1 -name "*.app" | head -1)"
-[ -n "$built" ] || { echo "Tauri built no .app." >&2; exit 1; }
 app="$out/$(basename "$built")"
 # ditto rather than cp: it keeps what codesign cares about, and nothing else.
 ditto "$built" "$app"
@@ -93,39 +78,17 @@ if [ -n "${PARLOUR_BUILD_NUMBER:-}" ]; then
 fi
 
 entitlements="$out/app.entitlements"
-if [ "$identity" = "-" ]; then
-  # An ad hoc signature has no team, and an app that claims one without a
-  # profile to back it up is killed at launch. The sandbox itself still works.
-  cp "$tauri/AppStore.entitlements" "$entitlements"
-  /usr/libexec/PlistBuddy -c "Delete :com.apple.application-identifier" "$entitlements"
-  /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.team-identifier" "$entitlements"
-else
-  sed "s/TEAM_ID/$APPLE_TEAM_ID/g" "$tauri/AppStore.entitlements" > "$entitlements"
+cp "$tauri/AppStore.entitlements" "$entitlements"
+if [ "$identity" != "-" ]; then
+  # What Xcode would add from the profile. Ad hoc gets neither: an app that
+  # claims a team without a profile to back it up is killed at launch.
+  /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $APPLE_TEAM_ID.io.parlour.desktop" "$entitlements"
+  /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string $APPLE_TEAM_ID" "$entitlements"
   cp "$APPSTORE_PROVISIONING_PROFILE" "$app/Contents/embedded.provisionprofile"
 fi
 
 echo "== Signing as $identity"
-main="$app/Contents/MacOS/$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$plist")"
-# Every Mach-O inside the app other than the app's own executable, before the
-# app is signed around them, because signing the app seals what is inside it.
-# The four executables get the child entitlements and nothing else. Native
-# modules and libraries under parlour's node_modules are signed without any:
-# they run in node's process, under node's entitlements.
-count=0
-while IFS= read -r -d '' file; do
-  [ "$file" = "$main" ] && continue
-  case "$(file -b "$file")" in
-    *Mach-O*executable*)
-      codesign --force --sign "$identity" --entitlements "$tauri/AppStoreChild.entitlements" "$file"
-      ;;
-    *Mach-O*)
-      codesign --force --sign "$identity" "$file"
-      ;;
-    *) continue ;;
-  esac
-  count=$((count + 1))
-done < <(find "$app/Contents" -type f -print0)
-echo "signed $count executables and libraries inside the app"
+"$desktop/appstore/sign-nested.sh" "$app" "$identity"
 codesign --force --sign "$identity" --entitlements "$entitlements" "$app"
 
 echo "== Checking the signature"

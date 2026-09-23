@@ -33,10 +33,18 @@ flag: macOS sets `APP_SANDBOX_CONTAINER_ID` in every sandboxed process, and
 - `../src-tauri/AppStore.entitlements` covers the app: sandbox, microphone,
   network client and server. `AppStoreChild.entitlements` covers everything
   inside it: sandbox plus inherit, and nothing else.
-- `package.sh` stages, builds, signs from the inside out, makes the `.pkg`,
-  and with `--upload` validates and uploads it.
-- `.github/workflows/appstore.yml` runs `package.sh --upload` when started by
-  hand from the Actions tab. The header lists the secrets it needs.
+- `build.sh` stages and has Tauri build the app, unsigned. `sign-nested.sh`
+  signs everything inside it with the child entitlements. Both are shared by
+  the two ways of building it below.
+- `../xcode/` is how releases are built: an Xcode project (generated from
+  `project.yml` by xcodegen) whose one build phase runs `build.sh`, copies the
+  app into the product and runs `sign-nested.sh`. Xcode then signs the app
+  with its managed certificate and profile, and archives it. That is what
+  Xcode Cloud builds, and `ci_scripts/ci_post_clone.sh` installs what it needs.
+- `package.sh` does the same on this Mac without Xcode. With no variables it
+  signs ad hoc, for trying the sandbox. Given the certificates it also makes
+  the `.pkg`, and with `--upload` validates and uploads it. It's a fallback for
+  when Xcode Cloud isn't available.
 
 ## Trying it on your own Mac
 
@@ -51,19 +59,35 @@ The result runs sandboxed on the machine that built it, which is the quickest
 way to find out what the sandbox refuses before App Review does. Its data goes
 in `~/Library/Containers/io.parlour.desktop/Data`.
 
-## One-time setup in the Apple Developer account
+## Building it in Xcode Cloud
 
-1. Register the App ID `io.parlour.desktop` under Identifiers. It needs no extra
-   capabilities.
-2. Create an **Apple Distribution** certificate and a **Mac Installer
-   Distribution** certificate. Export both, with their keys, into one `.p12`.
-3. Create a **Mac App Store Connect** provisioning profile for the App ID and
-   the distribution certificate.
-4. In App Store Connect, create a macOS app with that bundle ID. Set the
-   category and the privacy details (microphone, and data sent to Anthropic
-   only when the cloud model is turned on).
-5. Create an App Store Connect API key with the App Manager role.
-6. Add the secrets listed in `appstore.yml` to the repository.
+Xcode Cloud manages the certificates, the profile and the upload, so there
+are no signing secrets to keep anywhere.
+
+1. In App Store Connect, create a macOS app named Parlour Server with the
+   bundle ID `io.parlour.desktop`. Set the category and the privacy details
+   (microphone, and data sent to Anthropic only when the cloud model is on).
+2. Generate the project once (`pnpm exec nx run desktop:xcode`, which needs
+   `brew install xcodegen`), open `apps/desktop/xcode/ParlourServer.xcodeproj`
+   and, from the Report navigator's Cloud tab, create a workflow for the
+   `ParlourServer` scheme. Xcode registers the App ID the first time.
+3. In the workflow: an **Archive** action for macOS with **App Store Connect**
+   as the distribution, a TestFlight (internal) post-action if you want one,
+   and `PARLOUR_DEVELOPMENT_TEAM` set to the team ID in its environment. Start
+   it on changes to `main`, a tag, or by hand.
+
+Xcode Cloud keeps nothing between builds, so every build compiles ffmpeg,
+whisper.cpp and llama.cpp again: budget about 20 to 30 compute minutes each.
+Build numbers come from Xcode Cloud (`CI_BUILD_NUMBER`), and the version from
+`tauri.conf.json`, which `pnpm release:version` keeps in step.
+
+To check the Xcode side locally without signing anything:
+
+```sh
+cd apps/desktop/xcode && xcodegen generate
+xcodebuild archive -project ParlourServer.xcodeproj -scheme ParlourServer \
+  -archivePath /tmp/ParlourServer.xcarchive CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=
+```
 
 ## Things App Review will ask about
 

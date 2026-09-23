@@ -3,20 +3,17 @@
 <plist version="1.0">
 <dict>
   <!--
-    The Mac App Store build, signed by appstore/package.sh rather than by
-    Tauri. TEAM_ID is filled in there from APPLE_TEAM_ID; a local build with
-    no team drops the two identifier keys and signs ad hoc, which is enough to
-    run the app sandboxed on the machine that built it.
+    The Mac App Store build. Xcode signs with this (CODE_SIGN_ENTITLEMENTS in
+    ../xcode/project.yml) and adds the team and application identifiers from
+    the provisioning profile itself; appstore/package.sh adds them when it
+    signs by hand, and leaves them out for an ad hoc build, which is killed at
+    launch if it claims a team it cannot prove.
 
     Everything Parlour does is inside the sandbox: HOME is the container, so
     its config, secrets, models and logs all land there without being told.
   -->
   <key>com.apple.security.app-sandbox</key>
   <true/>
-  <key>com.apple.application-identifier</key>
-  <string>TEAM_ID.io.parlour.desktop</string>
-  <key>com.apple.developer.team-identifier</key>
-  <string>TEAM_ID</string>
 
   <!-- The wake word, through ffmpeg, which inherits this. -->
   <key>com.apple.security.device.audio-input</key>
