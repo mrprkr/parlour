@@ -3,6 +3,9 @@ import { InstallButton } from "../install-button";
 import { ConfigFile, DesktopSettings, PhoneHouse, PhoneTalk, PrivacyDiagram, RoomScene } from "./pictures";
 import { Topology } from "./topology";
 
+// The newest release's dmg. desktop-release.yml uploads it under this fixed name so the link never moves.
+const downloadUrl = "https://github.com/mrprkr/parlour/releases/latest/download/Parlour-Server-arm64.dmg";
+
 // Things people actually say to it, set as type rather than listed.
 const asked = [
   "Turn the heating up a degree.",
@@ -27,6 +30,9 @@ export default function Home() {
             </p>
             <div className="actions">
               <InstallButton />
+              <a className="docs-link" href={downloadUrl}>
+                Download for Mac
+              </a>
               <Link className="docs-link" href="/docs">
                 Read the docs
               </Link>
@@ -201,8 +207,9 @@ export default function Home() {
           </pre>
           <p>
             All you need is a Mac with Node 22 and Homebrew. Every other room just needs a microphone. Rather
-            skip the terminal? The <Link href="/docs/desktop">menu bar app</Link> does it all with buttons.
-            Parlour answers to <code>hey_jarvis</code> out of the box, and you can teach it{" "}
+            skip the terminal? The <Link href="/docs/desktop">menu bar app</Link> does it all with buttons:{" "}
+            <a href={downloadUrl}>download it</a> for a Mac with Apple silicon. Parlour answers to{" "}
+            <code>hey_jarvis</code> out of the box, and you can teach it{" "}
             <Link href="/docs/wake-word">a name of your own</Link> in an afternoon.
           </p>
         </div>
