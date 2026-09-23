@@ -29,3 +29,10 @@ test("the file store is picked elsewhere, or when security is missing", () => {
   assert.equal(pickSecretStore(paths, { PATH: join(bin, "empty") }, "darwin").name, "file");
   assert.equal(pickSecretStore(paths, {}, "darwin").name, "file");
 });
+
+test("the file store is picked inside the App Store sandbox, security or not", () => {
+  assert.equal(
+    pickSecretStore(paths, { PATH: bin, APP_SANDBOX_CONTAINER_ID: "io.parlour.desktop" }, "darwin").name,
+    "file",
+  );
+});
