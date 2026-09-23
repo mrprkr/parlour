@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
-use crate::settings::{found, node_version, recent_enough, shell_path, Settings};
+use crate::settings::{found, node_version, parlour_command, recent_enough, shell_path, Settings};
 
 /// What the onboarding needs to know: which pieces are already in place, so it
 /// can show what is left rather than making someone read a README to find out.
@@ -24,14 +24,16 @@ pub struct Readiness {
     pub config: bool,
     /// Nothing left for the install step to do.
     pub installed: bool,
+    /// The App Store build: node, parlour and ffmpeg are inside the app, so
+    /// there is nothing to install from npm and no path to choose.
+    pub bundled: bool,
 }
 
 /// One line of the CLI's stdout, when asked to run it. Not an error: a
 /// command that fails says so through its exit status and stderr.
 fn output(settings: &Settings, args: &[&str]) -> Option<String> {
-    let output = Command::new(&settings.parlour_bin)
+    let output = parlour_command(settings)
         .args(args)
-        .env("PATH", shell_path())
         .output()
         .ok()?;
     if !output.status.success() {
@@ -67,6 +69,7 @@ pub fn inspect(settings: &Settings) -> Readiness {
         ffmpeg,
         config,
         installed: parlour_ok && node_ok && ffmpeg && config,
+        bundled: cfg!(feature = "appstore"),
     }
 }
 
@@ -144,10 +147,15 @@ pub fn run(app: &AppHandle, settings: &Settings, deps: bool) -> Result<bool, Str
             settings.parlour_bin
         ));
     }
-    let mut command = Command::new(&settings.parlour_bin);
+    let mut command = parlour_command(settings);
     command.args(["init", "--porcelain", "--yes"]);
-    if !deps {
+    // Inside the sandbox there is no Homebrew to ask and no LaunchAgent to
+    // write; the tools came with the app and the app keeps Parlour running.
+    if !deps || cfg!(feature = "appstore") {
         command.arg("--no-deps");
+    }
+    if cfg!(feature = "appstore") {
+        command.arg("--no-service");
     }
     stream(app, command, "parlour init")
 }
@@ -156,6 +164,9 @@ pub fn run(app: &AppHandle, settings: &Settings, deps: bool) -> Result<bool, Str
 /// out of step. npm is found through the shell's PATH, the same way `node` is,
 /// which is what makes a version manager's install work from a bundled app.
 pub fn install_cli(app: &AppHandle, version: &str) -> Result<bool, String> {
+    if cfg!(feature = "appstore") {
+        return Err("This copy of the app carries parlour inside it, so there is nothing to install.".into());
+    }
     emit(app, "step", &format!("Installing parlour {version}"));
     let mut command = Command::new("npm");
     command.args(["install", "-g", &format!("parlour@{version}")]);

@@ -43,9 +43,55 @@ impl Settings {
     }
 
     /// True when the path is something that can be run, which is the one
-    /// thing worth checking before spawning it.
+    /// thing worth checking before spawning it. The App Store build has no
+    /// path to choose: parlour is inside it, so it is valid when that is.
     pub fn looks_valid(&self) -> bool {
+        if cfg!(feature = "appstore") {
+            return bundled::script().is_file() && executable(&bundled::node());
+        }
         !self.parlour_bin.is_empty() && executable(Path::new(&self.parlour_bin))
+    }
+}
+
+/// The command that runs parlour, with the PATH every one of them gets. The
+/// installed `parlour` is a script that asks for `node` by name; the App
+/// Store build runs its own node on its own copy of the script, because the
+/// sandbox has no npm and would not let one that npm installed run.
+pub fn parlour_command(settings: &Settings) -> Command {
+    let mut command = if cfg!(feature = "appstore") {
+        let mut command = Command::new(bundled::node());
+        command.arg(bundled::script());
+        command
+    } else {
+        Command::new(&settings.parlour_bin)
+    };
+    command.env("PATH", shell_path());
+    command
+}
+
+/// Where the App Store build keeps what a terminal install gets from npm and
+/// Homebrew. The executables sit beside the app's own in Contents/MacOS,
+/// where Tauri puts sidecars; parlour's JavaScript is a resource.
+pub mod bundled {
+    use std::path::PathBuf;
+
+    /// Contents/MacOS, found from the running executable rather than assumed.
+    pub fn bin_dir() -> PathBuf {
+        std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(PathBuf::from))
+            .unwrap_or_default()
+    }
+
+    pub fn node() -> PathBuf {
+        bin_dir().join("node")
+    }
+
+    pub fn script() -> PathBuf {
+        bin_dir()
+            .join("../Resources/parlour/dist/cli/main.js")
+            .components()
+            .collect()
     }
 }
 
@@ -97,6 +143,15 @@ fn found_on(path: &str, binary: &str) -> Option<PathBuf> {
 pub fn shell_path() -> &'static str {
     static PATH: OnceLock<String> = OnceLock::new();
     PATH.get_or_init(|| {
+        // The App Store build asks no shell: the sandbox would not let it read
+        // the dotfiles that make the answer worth having, and everything it
+        // runs is either inside the app or part of macOS.
+        if cfg!(feature = "appstore") {
+            return format!(
+                "{}:/usr/bin:/bin:/usr/sbin:/sbin",
+                bundled::bin_dir().display()
+            );
+        }
         let mut path = login_shell("echo \"$PATH\"").unwrap_or_default();
         // The usual places go on the end regardless, for a shell that would
         // not say, or a PATH that a dotfile has trimmed.
@@ -132,6 +187,9 @@ fn login_shell(command: &str) -> Option<String> {
 /// managers, and a stale copy in /usr/local/bin should not beat the one the
 /// person actually uses.
 pub fn detect_parlour() -> Option<PathBuf> {
+    if cfg!(feature = "appstore") {
+        return Some(bundled::script());
+    }
     if let Some(path) = login_shell("command -v parlour").map(PathBuf::from) {
         if executable(&path) {
             return Some(path);

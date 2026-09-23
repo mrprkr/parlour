@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
-use crate::settings::{shell_path, Settings};
+use crate::settings::{parlour_command, Settings};
 
 const LOG_LINES: usize = 400;
 
@@ -68,7 +68,7 @@ impl Supervisor {
             ));
         }
 
-        let mut child = agent_command(&settings.parlour_bin)
+        let mut child = agent_command(settings)
             .spawn()
             .map_err(|e| format!("could not start {}: {e}", settings.parlour_bin))?;
 
@@ -157,11 +157,10 @@ impl Supervisor {
 /// log lines. Only PATH is set, so `LOG_LEVEL` in `secrets.env` is honoured
 /// the same as it is in a terminal: the CLI only copies a value from the file
 /// when the variable is unset, and the logger defaults to `info` anyway.
-fn agent_command(parlour_bin: &str) -> Command {
-    let mut command = Command::new(parlour_bin);
+fn agent_command(settings: &Settings) -> Command {
+    let mut command = parlour_command(settings);
     command
         .args(["start", "--events"])
-        .env("PATH", shell_path())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     command
@@ -202,13 +201,18 @@ mod tests {
 
     #[test]
     fn agent_command_leaves_log_level_to_secrets_env() {
-        let command = agent_command("parlour");
+        let command = agent_command(&Settings {
+            parlour_bin: "parlour".into(),
+            autostart: false,
+        });
         let forced: Vec<_> = command
             .get_envs()
             .filter(|(key, _)| *key == OsStr::new("LOG_LEVEL"))
             .collect();
         assert!(forced.is_empty(), "LOG_LEVEL must not be forced: {forced:?}");
         assert!(command.get_envs().any(|(key, _)| key == OsStr::new("PATH")));
-        assert_eq!(command.get_args().collect::<Vec<_>>(), ["start", "--events"]);
+        // The App Store build puts its own script first, for its own node.
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(args[args.len() - 2..], ["start", "--events"]);
     }
 }

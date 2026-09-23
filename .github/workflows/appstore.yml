@@ -1,0 +1,159 @@
+name: App Store
+
+# Builds the Mac App Store copy of Parlour.app, signs it for the sandbox and
+# uploads it to App Store Connect, where it appears under TestFlight. Run by
+# hand: an upload spends a build number and puts a build in front of Apple, so
+# it is a decision, not something a tag does in passing. Submitting for review
+# stays a button in App Store Connect.
+#
+# All of the work is apps/desktop/appstore/package.sh, which runs the same on
+# a Mac with the same variables. Eight repository secrets stand behind it:
+#
+# | Secret                        | What it is                                                     |
+# | ----------------------------- | -------------------------------------------------------------- |
+# | APPSTORE_CERTIFICATES         | A .p12 holding both the Apple Distribution (or 3rd Party Mac   |
+# |                               | Developer Application) and the Mac Installer Distribution      |
+# |                               | certificates with their keys, base64 encoded                   |
+# | APPSTORE_CERTIFICATES_PASSWORD| The password set when that .p12 was exported                   |
+# | APPSTORE_SIGNING_IDENTITY     | The application certificate's name, in full                    |
+# | APPSTORE_INSTALLER_IDENTITY   | The installer certificate's name, in full                      |
+# | APPSTORE_PROVISIONING_PROFILE | The Mac App Store profile for io.parlour.desktop, base64       |
+# | APPLE_TEAM_ID                 | The ten-character team identifier                              |
+# | APPLE_API_KEY                 | An App Store Connect API key id, App Manager role              |
+# | APPLE_API_ISSUER              | That key's issuer id                                           |
+# | APPLE_API_KEY_P8              | The key's .p8, base64 encoded                                  |
+#
+# These are separate from the Developer ID secrets release.yml uses: the App
+# Store wants different certificates, and a mistake in one should not stop
+# the other.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    name: Build, sign and upload
+    runs-on: macos-latest
+    # Two cmake builds, an ffmpeg build and Apple's processing on the far end.
+    timeout-minutes: 90
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # As in release.yml: only what is on main is built with signing secrets,
+      # so a branch cannot change a build script to read them.
+      - name: Verify the ref is on the default branch
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "Error: This ref is not an ancestor of the main branch." >&2
+            echo "Only commits merged to main may be built with signing secrets." >&2
+            exit 1
+          fi
+
+      - name: Check the secrets are present
+        env:
+          APPSTORE_CERTIFICATES: ${{ secrets.APPSTORE_CERTIFICATES }}
+          APPSTORE_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
+          APPSTORE_SIGNING_IDENTITY: ${{ secrets.APPSTORE_SIGNING_IDENTITY }}
+          APPSTORE_INSTALLER_IDENTITY: ${{ secrets.APPSTORE_INSTALLER_IDENTITY }}
+          APPSTORE_PROVISIONING_PROFILE: ${{ secrets.APPSTORE_PROVISIONING_PROFILE }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          missing=""
+          for name in APPSTORE_CERTIFICATES APPSTORE_CERTIFICATES_PASSWORD APPSTORE_SIGNING_IDENTITY \
+                      APPSTORE_INSTALLER_IDENTITY APPSTORE_PROVISIONING_PROFILE APPLE_TEAM_ID \
+                      APPLE_API_KEY APPLE_API_ISSUER APPLE_API_KEY_P8; do
+            if [ -z "${!name:-}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "Missing repository secrets:$missing" >&2
+            echo "The header of this file says what each one is." >&2
+            exit 1
+          fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache the Cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      # ffmpeg, whisper.cpp and llama.cpp at the versions stage.ts pins. The
+      # key is the script itself, so a bumped version is a fresh build.
+      - name: Cache the bundled tools
+        uses: actions/cache@v4
+        with:
+          path: apps/desktop/appstore/.cache
+          key: appstore-tools-${{ hashFiles('apps/desktop/appstore/stage.ts') }}
+
+      - name: Install build tools
+        run: brew list cmake >/dev/null 2>&1 || brew install cmake
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check Cargo.lock is in sync
+        run: cargo check --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --features appstore
+
+      # A keychain of the job's own, so the certificates never touch the
+      # runner's login keychain, and a profile and key on disk only for as
+      # long as the job runs.
+      - name: Import the certificates and profile
+        env:
+          APPSTORE_CERTIFICATES: ${{ secrets.APPSTORE_CERTIFICATES }}
+          APPSTORE_CERTIFICATES_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
+          APPSTORE_PROVISIONING_PROFILE: ${{ secrets.APPSTORE_PROVISIONING_PROFILE }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          keychain="$RUNNER_TEMP/appstore.keychain-db"
+          password="$(openssl rand -hex 16)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$APPSTORE_CERTIFICATES" | base64 --decode > "$RUNNER_TEMP/certs.p12"
+          security import "$RUNNER_TEMP/certs.p12" -k "$keychain" -P "$APPSTORE_CERTIFICATES_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/productbuild
+          rm "$RUNNER_TEMP/certs.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          echo "$APPSTORE_PROVISIONING_PROFILE" | base64 --decode > "$RUNNER_TEMP/embedded.provisionprofile"
+          echo "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/api-key.p8"
+
+      - name: Build, sign and upload
+        env:
+          APPSTORE_SIGNING_IDENTITY: ${{ secrets.APPSTORE_SIGNING_IDENTITY }}
+          APPSTORE_INSTALLER_IDENTITY: ${{ secrets.APPSTORE_INSTALLER_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          # Unique per upload, which App Store Connect insists on, and rising.
+          PARLOUR_BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          APPSTORE_PROVISIONING_PROFILE="$RUNNER_TEMP/embedded.provisionprofile" \
+          APPLE_API_KEY_PATH="$RUNNER_TEMP/api-key.p8" \
+            apps/desktop/appstore/package.sh --upload
+
+      - name: Clean up
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/appstore.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/embedded.provisionprofile" "$RUNNER_TEMP/api-key.p8"

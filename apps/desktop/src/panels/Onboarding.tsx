@@ -350,7 +350,8 @@ export function Onboarding({
     let current = readiness;
     let running: Job = null;
     try {
-      if (!current?.parlourOk) {
+      // The App Store build carries parlour inside it; there is no npm to ask.
+      if (!current?.parlourOk && !current?.bundled) {
         running = "cli";
         setJob(running);
         setActivity("Installing the parlour command with npm");
@@ -587,8 +588,9 @@ export function Onboarding({
       body = (
         <>
           <Heading title="Install Parlour">
-            Everything runs on this Mac. The speech tools come from Homebrew and the models are downloaded
-            once.
+            {readiness?.bundled
+              ? "Everything runs on this Mac. The speech tools come with the app and the models are downloaded once."
+              : "Everything runs on this Mac. The speech tools come from Homebrew and the models are downloaded once."}
           </Heading>
 
           {whereError !== null ? (
@@ -631,8 +633,10 @@ export function Onboarding({
                 name="The parlour command"
                 detail={
                   readiness.parlourOk
-                    ? `parlour ${readiness.parlourVersion}`
-                    : "From npm, at this app's version."
+                    ? `parlour ${readiness.parlourVersion}${readiness.bundled ? ", inside the app" : ""}`
+                    : readiness.bundled
+                      ? "Inside the app, but it did not answer. The details say why."
+                      : "From npm, at this app's version."
                 }
               />
               <Row
@@ -660,26 +664,28 @@ export function Onboarding({
             {logBox}
           </Disclosure>
 
-          <Disclosure label="Already have parlour somewhere else?">
-            <div className="grid gap-1">
-              <Label className="text-xs text-muted-foreground" htmlFor="ob-bin">
-                Path to the parlour command
-              </Label>
-              <Input
-                id="ob-bin"
-                spellCheck={false}
-                placeholder="/opt/homebrew/bin/parlour"
-                value={bin}
-                disabled={busy}
-                onChange={(event) => setBin(event.target.value)}
-                onBlur={() => void commitBin()}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") void commitBin();
-                }}
-              />
-            </div>
-            <Note>Only needed when it is not on the PATH a login shell has.</Note>
-          </Disclosure>
+          {readiness?.bundled ? null : (
+            <Disclosure label="Already have parlour somewhere else?">
+              <div className="grid gap-1">
+                <Label className="text-xs text-muted-foreground" htmlFor="ob-bin">
+                  Path to the parlour command
+                </Label>
+                <Input
+                  id="ob-bin"
+                  spellCheck={false}
+                  placeholder="/opt/homebrew/bin/parlour"
+                  value={bin}
+                  disabled={busy}
+                  onChange={(event) => setBin(event.target.value)}
+                  onBlur={() => void commitBin()}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void commitBin();
+                  }}
+                />
+              </div>
+              <Note>Only needed when it is not on the PATH a login shell has.</Note>
+            </Disclosure>
+          )}
         </>
       );
 
