@@ -1,0 +1,66 @@
+---
+title: Getting started
+description: Install Parlour on a Mac, answer a few questions, and talk to it tonight.
+---
+
+You will need a Mac with Node 22 or later and [Homebrew](https://brew.sh).
+`init` fetches the rest for you (ffmpeg, whisper.cpp and the models) through
+`brew`.
+
+```sh
+npm install -g parlour
+parlour init
+parlour text          # have a conversation in the terminal, no microphone needed
+parlour start         # the real thing, unless init already set it to run at login
+```
+
+Rather not use a terminal? [The menu bar app](/docs/desktop) does the same
+setup in a window.
+
+## What `init` asks
+
+`init` walks you through it with arrow keys and a handful of questions: what
+this machine is, which local model to run, your Home Assistant, an Anthropic
+key if you would like the cloud behind it, and preferences like the wake word
+and the voice. Escape goes back a question, and nothing is downloaded or
+written until a last screen has shown every answer and you have said yes. It
+writes `~/.config/parlour/config.json` and `secrets.env`, offers to run
+Parlour at login, and finishes by running `parlour doctor` so you know
+everything is in place. Changed your mind later? Run `init` again: every
+answer defaults to what is already set.
+
+## The local model comes with it
+
+`init` looks at how much memory the Mac has, suggests the largest model it can
+hold comfortably, downloads it, and keeps
+[llama.cpp](https://github.com/ggml-org/llama.cpp) serving it at login
+alongside whisper. Nothing to install by hand and nothing to remember to
+start. `parlour models suggest` shows the catalogue and which one it would
+pick.
+
+If you would rather run the model yourself, say so and point
+`llm.local.baseUrl` at whatever you have: [LM Studio](https://lmstudio.ai)
+(`init` still offers to install it), Ollama, or a box in the cupboard.
+Anything that speaks the OpenAI chat completions API will do.
+
+## Home Assistant
+
+Home Assistant gets its own part of `init`: it looks for your Home Assistant
+on the network, tells you exactly where to make a long lived token, checks the
+token as you paste it, and checks the MCP Server integration is switched on.
+Each of those fails in the same silent way, so each one is checked as it is
+answered rather than all three landing in `parlour doctor` half an hour later.
+Say no and the house is left out entirely. [Home Assistant](/docs/home-assistant)
+has the rest.
+
+## The cloud is optional
+
+Leave the Anthropic key empty and Parlour runs local only: the local model
+keeps every tool, answers everything itself, and not a word leaves the house.
+
+## Next
+
+- [The commands](/docs/commands), for everything the CLI can do.
+- [Skills, MCP and plugins](/docs/skills), to teach it your house and give it more to do.
+- [Clients](/docs/clients) and [the iOS app](/docs/ios), to reach it from other rooms.
+- [Tuning](/docs/tuning), when it wakes for the television.

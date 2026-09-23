@@ -1,0 +1,30 @@
+---
+title: The commands
+description: Every parlour command, and what each one is for.
+---
+
+```text
+parlour init [--yes] [--no-deps] [--no-service] [--porcelain]   dependencies, models, config, secrets, service or app
+parlour start [--events]                         the server or the satellite, per config.role
+parlour stop                                     stop it, until the next login
+parlour restart                                  after editing config.json or a secret
+parlour text                                     everything but the microphone
+parlour try mic|wake|stt|llm|cloud|tts|ask [--json]   one stage of the pipeline, tried on its own
+parlour doctor [--json]                          which of the moving parts is down
+parlour service install|uninstall|stop|restart|status|logs
+parlour connectors add <name> <url>|list|remove <name>
+parlour mcp add <name> --url <url>|-- <command>...|list|remove <name>
+parlour skills list|show <name>|new <name>|write <name>|remove <name>|path
+parlour plugins add <package>|list|remove <package>
+parlour models fetch [--llm auto]|suggest
+parlour config path|show|write|edit
+parlour secrets status|set <NAME>
+parlour pair [--host <name>] [--json]            a code for the iPhone app to scan: address and token
+```
+
+`parlour <command> --help` shows the flags for each one.
+
+`parlour connectors add` signs your household in to a remote MCP server (a
+calendar, say) and keeps the tokens in your Keychain. The `connectors`
+integration that loads them is on by default, and if a hand-written config
+leaves it out, `parlour doctor` will let you know.
