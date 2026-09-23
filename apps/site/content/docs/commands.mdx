@@ -30,10 +30,11 @@ parlour pair [--host <name>] [--json]            a code for the iPhone app to sc
 
 `parlour remote` manages a server from another machine, or from the same one
 without editing a file. It uses the same routes as the iPhone app's Server tab
-(see [Managing the server](/docs/clients#managing-the-server)). It finds the
-server the way a satellite does: `--url`, then `satellite.serverUrl`, then
-Bonjour, then this Mac. It sends `PARLOUR_TOKEN` from this machine's secrets,
-or `--token`.
+(see [Managing the server](/docs/clients#managing-the-server)). It talks to
+`--url`, or the server this machine pinned as a satellite (`satellite.serverUrl`),
+or this Mac. It never picks a server found with Bonjour, because it sends
+`PARLOUR_TOKEN` (from this machine's secrets, or `--token`) with every call,
+and anything on the network can advertise itself as Parlour.
 
 ```sh
 parlour remote status

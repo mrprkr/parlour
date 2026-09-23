@@ -26,19 +26,17 @@ test("pipeline settings are typed the way the server checks them", () => {
   assert.throws(() => parseSettings(["timeoutMs=soon"]), /whole number/);
 });
 
-test("the server is what was typed, then what the satellite knows, then Bonjour, then this Mac", async () => {
+test("the server is what was typed, then what the satellite pinned, then this Mac, never Bonjour", () => {
   const config = parseConfig({});
-  const nowhere = async () => null;
-  assert.deepEqual(await resolveRemote(config, { url: "http://kitchen:8765/" }, "s", nowhere), {
+  assert.deepEqual(resolveRemote(config, { url: "http://kitchen:8765/" }, "s"), {
     url: "http://kitchen:8765",
     token: "s",
   });
   const satellite = parseConfig({ satellite: { serverUrl: "http://study:8765" } });
-  assert.equal((await resolveRemote(satellite, {}, undefined, nowhere)).url, "http://study:8765");
-  const found = async () => ({ url: "http://parlour.local:8765" });
-  assert.equal((await resolveRemote(config, {}, undefined, found)).url, "http://parlour.local:8765");
-  assert.equal((await resolveRemote(config, {}, undefined, nowhere)).url, "http://127.0.0.1:8765");
-  assert.equal((await resolveRemote(config, { token: "typed" }, "saved", nowhere)).token, "typed");
+  assert.equal(resolveRemote(satellite, {}, undefined).url, "http://study:8765");
+  // With nothing named, the token only ever goes to this machine.
+  assert.equal(resolveRemote(config, {}, "saved").url, "http://127.0.0.1:8765");
+  assert.equal(resolveRemote(config, { token: "typed" }, "saved").token, "typed");
 });
 
 test("a remote call carries the token, and a refusal comes back as the server's sentence", async (t) => {

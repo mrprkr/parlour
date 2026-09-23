@@ -2,7 +2,6 @@ import type { AdminStatus, ManagedService } from "../core/admin.ts";
 import { type Config, loadConfig } from "../core/config.ts";
 import type { Check } from "../core/ports.ts";
 import { loadSecrets } from "../core/secrets.ts";
-import { findServer } from "../server/discovery.ts";
 import { type Command, parseCli, subcommand, UsageError } from "./args.ts";
 import { formatChecks, printJson, table } from "./output.ts";
 
@@ -14,7 +13,7 @@ const USAGE = [
   "parlour remote doctor                           the server's own checks",
   "parlour remote logs [agent|llm|whisper] [--lines N]",
   "parlour remote restart                          restart the agent on the server",
-  "  --url http://host:8765   the server; otherwise satellite.serverUrl, then Bonjour, then this Mac",
+  "  --url http://host:8765   the server; otherwise satellite.serverUrl, then this Mac",
   "  --token T                otherwise PARLOUR_TOKEN from this machine's secrets",
   "  --no-apply               with pipeline set: save it, and leave the restart for later",
   "  --json                   one JSON document, for a script",
@@ -32,21 +31,21 @@ export interface Remote {
 }
 
 /**
- * Where the server is. Asked in the order a person would: what they typed,
- * what this machine was told as a satellite, what the house network
- * announces, and this machine itself.
+ * Where the server is: what was typed, what this machine pinned as a
+ * satellite, or this machine itself. Never whatever Bonjour turns up first:
+ * the token goes with every call, and anything on the network can advertise
+ * `_parlour._tcp` to collect it. The satellite only trusts discovery once, and
+ * pins what it found; this has no such moment, so it asks to be told.
  */
-export async function resolveRemote(
+export function resolveRemote(
   config: Config,
   flags: { url?: string; token?: string },
   secretToken: string | undefined,
-  find: () => Promise<{ url: string } | null> = () => findServer(3000),
-): Promise<Remote> {
+): Remote {
   const token = flags.token || secretToken || undefined;
   const typed = flags.url || config.satellite.serverUrl;
   if (typed) return { url: typed.replace(/\/+$/, ""), token };
-  const found = await find();
-  return { url: found?.url ?? `http://127.0.0.1:${config.server.port}`, token };
+  return { url: `http://127.0.0.1:${config.server.port}`, token };
 }
 
 /** One call to an admin route. A refusal is the server's own sentence, not a status code. */
@@ -142,7 +141,7 @@ export const command: Command = {
     });
     const sub = subcommand(positionals, SUBCOMMANDS, USAGE);
     const { config } = loadConfig(paths);
-    const remote = await resolveRemote(
+    const remote = resolveRemote(
       config,
       { url: values.url as string | undefined, token: values.token as string | undefined },
       loadSecrets(paths).token,
