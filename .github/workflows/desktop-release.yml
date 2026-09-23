@@ -71,6 +71,10 @@ concurrency:
 permissions:
   contents: read
 
+# Actions from outside GitHub are pinned to a commit, with the tag it was
+# taken from beside it: the build job holds the signing secrets, and a tag can
+# be moved to point at anything.
+
 jobs:
   plan:
     name: Decide whether there is a release to make
@@ -178,7 +182,7 @@ jobs:
           echo "All six signing secrets are set."
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
       - name: Set up Node
         uses: actions/setup-node@v7
@@ -187,10 +191,10 @@ jobs:
           cache: pnpm
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
 
       - name: Cache the Cargo build
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: apps/desktop/src-tauri
 
@@ -262,7 +266,7 @@ jobs:
 
       - name: Create the release
         if: needs.plan.outputs.publish == 'true'
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: desktop-v${{ env.VERSION }}
           target_commitish: ${{ github.sha }}
