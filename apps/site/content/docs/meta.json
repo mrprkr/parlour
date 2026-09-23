@@ -2,6 +2,8 @@
   "title": "Docs",
   "pages": [
     "index",
+    "getting-started",
+    "commands",
     "architecture",
     "providers",
     "skills",
