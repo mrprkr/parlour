@@ -4,12 +4,12 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Privacy policy",
   description:
-    "What Parlour, the iOS app and this site collect, where it goes, and what we promise about any service we offer later.",
+    "What Parlour, the iOS app and this site collect, where it goes, and how a future, opt-in Parlour Cloud would handle your data.",
   alternates: { canonical: "/privacy" },
 };
 
 // Changing what this page promises means changing this date, and saying so on the page.
-const updated = "23 September 2026";
+const updated = "24 September 2026";
 
 export default function Privacy() {
   return (
@@ -18,7 +18,8 @@ export default function Privacy() {
         <h1 id="privacy-title">Privacy policy</h1>
         <p className="lede">
           Parlour is built so that we never see what you say to it. This page says what that means for the
-          Mac, the iOS app and this site, and what we promise about any service we offer in future.
+          Mac, the iOS app and this site, and how Parlour Cloud, an opt-in paid service we may offer in
+          future, would handle your data if you chose to use it.
         </p>
         <p className="policy-updated">Last updated {updated}.</p>
       </section>
@@ -26,18 +27,23 @@ export default function Privacy() {
       <section className="sheet" aria-labelledby="short-heading">
         <h2 id="short-heading">The short version</h2>
         <ul>
-          <li>We do not run a server that your voice, your requests or your house data pass through.</li>
           <li>
-            We have no accounts, no advertising and nothing to sell, and no tracking beyond the cookieless
+            Parlour runs on your own devices. Unless you sign up to Parlour Cloud, your voice, your requests
+            and your house data never pass through a server of ours.
+          </li>
+          <li>
+            We never sell your data or use it for advertising, and there is no tracking beyond the cookieless
             visit counts on this site.
           </li>
-          <li>The iOS app talks to your own Mac, and to nothing of ours.</li>
+          <li>The iOS app talks to your own Mac, and to nothing of ours unless you turn Parlour Cloud on.</li>
           <li>
             If you choose to connect a cloud service, such as a cloud model or a search provider, your Mac
             talks to that service directly under your own account, and its privacy policy applies.
           </li>
           <li>
-            This site counts visits without cookies, and nothing more. That is the only data that reaches us.
+            Parlour Cloud does not exist yet. If we launch it, it will be optional and paid, it will collect
+            only what it needs, and it will never be used to train models. Parlour will keep working fully
+            without it.
           </li>
         </ul>
       </section>
@@ -95,7 +101,8 @@ export default function Privacy() {
         <p>
           The iOS app is a client of the Parlour server on your Mac. It sends recordings and typed requests to
           the address you paired it with, and plays the answer back. It contains no analytics, advertising,
-          crash reporting or tracking code, and it does not contact any server run by us.
+          crash reporting or tracking code, and it does not contact any server run by us unless you switch on
+          Parlour Cloud.
         </p>
         <h3>What it keeps on the phone</h3>
         <ul>
@@ -157,44 +164,97 @@ export default function Privacy() {
         </p>
       </section>
 
-      <section className="sheet" aria-labelledby="future-heading">
-        <h2 id="future-heading">Services we may offer in future</h2>
+      <section className="sheet" aria-labelledby="cloud-heading">
+        <h2 id="cloud-heading">Parlour Cloud</h2>
         <p>
-          We may one day offer optional hosted services, such as reaching your house securely from outside,
-          push notifications, a relay for the iOS app, accounts or a paid tier. None exist today. If we build
-          one, these rules apply to it:
+          We may offer Parlour Cloud: managed services, run by us, that you can add to Parlour for a fee. It
+          might include a hosted model for requests your Mac cannot answer on its own, reaching your house
+          securely from outside, a relay and push notifications for the iOS app, and backups of your
+          configuration. None of it exists today, and nothing below applies until it does and you sign up.
         </p>
+        <p>
+          It will always be opt-in. Nothing in the free software will send data to Parlour Cloud until you
+          create an account and switch a service on, one service at a time. If you cancel, Parlour carries on
+          working on your own network exactly as before.
+        </p>
+
+        <h3>What it would collect</h3>
         <ul>
-          <li>It will be optional. Parlour will keep working fully on your own network without it.</li>
-          <li>It will collect only what it needs to work, and we will say exactly what that is.</li>
           <li>
-            Where a service only carries traffic between your devices and your house, we will encrypt it so
-            that we cannot read it wherever that is possible.
+            <strong>Your account.</strong> An email address, a name if you give one, and the settings for the
+            services you have switched on.
           </li>
           <li>
-            We will not sell your data, use it for advertising, or use your recordings, requests or house data
-            to train models.
+            <strong>Billing.</strong> Payments would be taken by a payment processor such as Stripe. We would
+            see your plan, your payment history and the last digits of your card, never the full card number.
           </li>
           <li>
-            We will name the companies that process data for us, keep data only as long as the service needs
-            it, and let you export and delete it.
+            <strong>What a service needs to do its job.</strong> A hosted model receives the text of the
+            requests your Mac sends it, never the recording. Remote access and the relay carry traffic between
+            your devices and your house, end-to-end encrypted wherever that is possible so that we cannot read
+            it. Backups are encrypted before they leave your Mac.
           </li>
           <li>
-            We will update this page before the service launches, and nothing it collects will be gathered
-            before you agree to it.
+            <strong>Running the service.</strong> IP addresses, device and app versions, timestamps, usage
+            counts for billing and limits, and error reports, used to keep the service working, secure and
+            fairly billed.
           </li>
         </ul>
+
+        <h3>What we would do with it, and what we would not</h3>
+        <ul>
+          <li>Use it only to provide, secure, bill for and support the services you have chosen.</li>
+          <li>
+            Never sell it, use it for advertising, or use your recordings, requests or house data to train
+            models, ours or anyone else's.
+          </li>
+          <li>
+            Not keep the content of requests once they are answered, beyond short-lived logs kept to
+            investigate abuse or faults, which are deleted within 30 days.
+          </li>
+          <li>
+            Share it only with the companies that run parts of the service for us (such as hosting, payments,
+            email and model providers), under contracts that hold them to the same terms, and we will list
+            them by name on this page before launch. Model providers will be chosen and configured so that
+            they do not train on your requests or keep them longer than they need to.
+          </li>
+          <li>
+            Disclose it to authorities only when the law requires it, and tell you when we are allowed to.
+          </li>
+        </ul>
+
+        <h3>Where it lives and how long we keep it</h3>
+        <p>
+          Parlour Cloud data may be processed in countries other than your own, including Australia, the
+          United States and the European Union. Where the law requires it, transfers will be covered by
+          appropriate safeguards such as standard contractual clauses. Account and service data is kept while
+          your account is open. When you close it, we delete it within 30 days, apart from billing records we
+          are required by law to keep for longer. You will be able to export your data at any time.
+        </p>
+        <p>
+          We will protect it with encryption in transit and at rest and with limited, logged staff access, and
+          if a breach puts your personal information at risk we will tell you and the relevant regulator as
+          the law requires.
+        </p>
+        <p>
+          Before Parlour Cloud launches, we will update this page with the specifics: the services, the
+          companies involved, and exactly what each one collects. We will ask you to agree to that before
+          anything is collected, and if we later change it in a way that matters, we will tell you before the
+          change takes effect.
+        </p>
       </section>
 
       <section className="sheet" aria-labelledby="rights-heading">
         <h2 id="rights-heading">Your rights</h2>
         <p>
-          Because Parlour keeps your data on your own devices, you are in control of it. On the Mac, delete{" "}
+          Parlour keeps your data on your own devices, so you are in control of it. On the Mac, delete{" "}
           <code>~/.config/parlour</code>, <code>~/Library/Logs/parlour</code> and{" "}
           <code>~/Library/Caches/parlour</code>; on the phone, delete the iOS app; and it is gone. Wherever
           you live, including under the GDPR, the UK GDPR and the Australian Privacy Principles, you may ask
-          us what personal information we hold about you, and have it corrected or deleted. Today the honest
-          answer is that we hold none beyond the aggregate site statistics above.
+          us what personal information we hold about you, have it corrected, exported or deleted, and object
+          to how we use it. Today the honest answer is that we hold none beyond the aggregate site statistics
+          above. If you use Parlour Cloud, you will be able to do all of this from your account, or by asking
+          us, and you may also complain to your local privacy regulator.
         </p>
         <p>
           Parlour is not directed at children and we do not knowingly collect information from anyone under
