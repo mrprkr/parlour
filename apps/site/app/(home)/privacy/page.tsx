@@ -27,7 +27,10 @@ export default function Privacy() {
         <h2 id="short-heading">The short version</h2>
         <ul>
           <li>We do not run a server that your voice, your requests or your house data pass through.</li>
-          <li>We have no accounts, no advertising, no tracking and nothing to sell.</li>
+          <li>
+            We have no accounts, no advertising and nothing to sell, and no tracking beyond the cookieless visit
+            counts on this site.
+          </li>
           <li>The iOS app talks to your own Mac, and to nothing of ours.</li>
           <li>
             If you choose to connect a cloud service, such as a cloud model or a search provider, your Mac
