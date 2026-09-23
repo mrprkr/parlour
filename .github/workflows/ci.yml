@@ -113,6 +113,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # generate_context! embeds the app icons at compile time and panics when
+      # they are missing, and they are generated rather than checked in.
+      - name: Generate the app icons
+        run: pnpm -C apps/desktop icons
+
       # Verify Cargo.lock is in sync. This catches dependency drift before the
       # release, where an out-of-date lock would fail the build with secrets.
       - name: Check Cargo.lock is in sync

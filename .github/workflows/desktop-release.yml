@@ -201,6 +201,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # generate_context! embeds the app icons at compile time and panics when
+      # they are missing, and they are generated rather than checked in.
+      - name: Generate the app icons
+        run: pnpm -C apps/desktop icons
+
       # Verify Cargo.lock is in sync before building with secrets. A mismatch
       # means Cargo would resolve dependencies during the build, which would
       # execute build scripts with access to the Apple credentials below.
