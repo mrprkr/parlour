@@ -140,8 +140,9 @@ and a fake in `testing/`; open an issue first, a port is a promise to every prov
 - Releasing: `pnpm release:version` turns the changesets into `packages/parlour/CHANGELOG.md` and a
   version, then `set-version.mjs --sync` writes that version into the desktop app's three files.
   `.github/workflows/changesets.yml` runs it on every push to main and keeps a "Release the pending
-  changesets" pull request open; merge it, then a `vX.Y.Z` tag on the merge publishes to npm and
-  attaches the dmg. `pnpm version:set X.Y.Z` still
+  changesets" pull request open. Merging it moves the app's version, and `desktop-release.yml`
+  publishes the signed dmg as a GitHub release tagged `desktop-vX.Y.Z`; a `vX.Y.Z` tag on the merge
+  publishes the CLI to npm through `release.yml`, which makes no GitHub release. `pnpm version:set X.Y.Z` still
   sets a version by hand, and the release workflow refuses a tag that disagrees with the package.
 
 ## This is a public repository

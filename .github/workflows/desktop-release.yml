@@ -1,0 +1,276 @@
+name: Desktop release
+
+# Parlour Server, the Mac app, is released on GitHub; the CLI stays on npm
+# through release.yml. The two share a version, but not a trigger: this runs
+# when the app's version moves on main, which is what merging the "Release
+# the pending changesets" pull request does, and publishes a GitHub release
+# tagged desktop-vX.Y.Z with the signed and notarised dmg on it. A version
+# that already has a release is left alone, so any other edit to
+# tauri.conf.json costs one quick look at the releases and nothing more.
+#
+# The dmg is uploaded under a name without the version, so
+# https://github.com/mrprkr/parlour/releases/latest/download/Parlour-Server-arm64.dmg
+# always fetches the newest one. That link rests on these being the only
+# releases in the repository marked latest; npm versions get none.
+#
+# The iOS app is not released here: an iPhone cannot install a build from a
+# download, only from the App Store or TestFlight. Nor is the Mac App Store
+# build, which Xcode Cloud archives and uploads (apps/desktop/appstore).
+#
+# The app is signed with a Developer ID certificate and notarised, which is
+# what lets someone open it without being told macOS cannot check it. Six
+# repository secrets stand behind that, and the build job stops before
+# building rather than shipping a dmg that looks fine and is refused on the
+# first machine that is not this one:
+#
+# | Secret                     | What it is                                              |
+# | -------------------------- | ------------------------------------------------------- |
+# | APPLE_CERTIFICATE          | The Developer ID Application .p12, base64 encoded        |
+# | APPLE_CERTIFICATE_PASSWORD | The password set when that .p12 was exported             |
+# | APPLE_SIGNING_IDENTITY     | "Developer ID Application: Name (TEAMID)", in full       |
+# | APPLE_ID                   | The Apple account the certificate belongs to             |
+# | APPLE_PASSWORD             | An app-specific password for that account, not its own   |
+# | APPLE_TEAM_ID              | The ten-character team identifier                        |
+#
+# The certificate expires after five years and the app-specific password when
+# somebody revokes it, and either one turns into a failed release rather than
+# a warning, so the preflight below names what is missing. The preflight only
+# sees whether a secret is set, though, not whether it is right: a certificate
+# that does not decode or an identity with a typo in it gets as far as the
+# signing step before it says so. Run this workflow by hand after changing any
+# of them, and find out in a few minutes rather than during a release.
+#
+# Follow-ups, deliberately not done here:
+# - The dmg is built for Apple silicon only, because the runner is. An Intel
+#   or universal build means `--target universal-apple-darwin` and both Rust
+#   targets installed.
+# - The app has no updater. A release is something you download, not something
+#   an installed copy notices; that would need Tauri's updater, its own signing
+#   key and a manifest, which could be one more file on these releases.
+
+on:
+  push:
+    branches: [main]
+    paths: [apps/desktop/src-tauri/tauri.conf.json]
+  # By hand it builds, signs and notarises the app and stops, which is how the
+  # six secrets above get proved without a release. Ticking "publish" also
+  # releases the current version if it has no release yet, which is how a
+  # release that failed part way is finished.
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a release for the current version if it has none
+        type: boolean
+        default: false
+
+# Two merges in quick succession must not race to create the same release.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Decide whether there is a release to make
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      build: ${{ steps.plan.outputs.build }}
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Read the version and look for its release
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          version="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          released=false
+          if gh release view "desktop-v$version" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            released=true
+          fi
+
+          if [ "$EVENT" = "push" ]; then
+            want=true
+          else
+            want="${PUBLISH:-false}"
+          fi
+
+          if [ "$want" = "true" ] && [ "$released" = "false" ]; then
+            publish=true
+          else
+            publish=false
+          fi
+          # A push with nothing to publish has nothing to prove either; a run
+          # by hand always builds, since proving the build is what it is for.
+          if [ "$EVENT" = "push" ] && [ "$publish" = "false" ]; then build=false; else build=true; fi
+
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "Parlour Server $version: released=$released build=$build publish=$publish"
+
+  app:
+    name: Build, sign and notarise the app
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: macos-latest
+    # Notarisation is two round trips to Apple, and how long each takes is
+    # Apple's business, not ours.
+    timeout-minutes: 60
+    permissions:
+      # To create the tag and the release and upload the dmg to it.
+      contents: write
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Verify the checked-out ref is reachable from the default branch before
+      # exposing secrets to repository-controlled build scripts. A
+      # workflow_dispatch ref that is not an ancestor of main can modify
+      # package.json, tauri.conf.json or their dependencies to exfiltrate the
+      # Apple signing secrets injected below.
+      - name: Verify the ref is on the default branch
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "Error: This ref is not an ancestor of the main branch." >&2
+            echo "Only commits merged to main may be built with signing secrets." >&2
+            exit 1
+          fi
+
+      # Before anything is built, because an unsigned dmg attached to a
+      # release is worse than no release: it installs, it looks right, and it
+      # is refused on the first machine that did not build it.
+      - name: Check the signing secrets are present
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=""
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
+                      APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name:-}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "Missing repository secrets:$missing" >&2
+            echo "The header of this file says what each one is and where it comes from." >&2
+            exit 1
+          fi
+          echo "All six signing secrets are set."
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache the Cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Verify Cargo.lock is in sync before building with secrets. A mismatch
+      # means Cargo would resolve dependencies during the build, which would
+      # execute build scripts with access to the Apple credentials below.
+      # `--locked` fails if the lock is out of date rather than updating it.
+      - name: Check Cargo.lock is in sync
+        run: cargo check --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+
+      # `pnpm build:locked` is `pnpm icons && tauri build -- --locked`, which
+      # passes --locked to the Cargo build. Tauri runs `pnpm build:ui` first
+      # through beforeBuildCommand, so this one step produces the icons, the
+      # frontend, the binary, the .app and the .dmg.
+      #
+      # The Apple variables are what turns that into a signed build. Tauri
+      # imports the certificate into a keychain of its own, signs with the
+      # hardened runtime and the entitlements named in tauri.conf.json, then
+      # notarises Parlour Server.app and staples the ticket into it. It signs
+      # the dmg as well, but stops there, which is what the next step is for.
+      - name: Build, sign and notarise the app
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm -C apps/desktop build:locked
+
+      # The disk image needs a ticket of its own, or the download is refused
+      # before anybody gets as far as the app inside it. This also asks
+      # Gatekeeper for its verdict on both, which is the only check that
+      # answers the question a release actually raises.
+      - name: Notarise the dmg and check Gatekeeper accepts it
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: scripts/notarise.sh
+
+      # A fixed name, so the latest/download link in the header never moves,
+      # and a checksum beside it for anyone who wants to check the download.
+      # The notes are the package's changelog entry for this version, since
+      # the app and the package share one; the pull requests since the last
+      # release are appended below them.
+      - name: Prepare the release files
+        if: needs.plan.outputs.publish == 'true'
+        run: |
+          mkdir -p release
+          cp apps/desktop/src-tauri/target/release/bundle/dmg/*.dmg release/Parlour-Server-arm64.dmg
+          (cd release && shasum -a 256 Parlour-Server-arm64.dmg > Parlour-Server-arm64.dmg.sha256)
+
+          {
+            echo "Parlour Server $VERSION for Macs with Apple silicon, signed and notarised."
+            echo "Open the dmg and drag Parlour Server into Applications. The app drives the"
+            echo "\`parlour\` command line, which it offers to install from npm if it is missing."
+            echo
+            awk -v v="$VERSION" '
+              $0 == "## " v { on = 1; next }
+              on && /^## / { exit }
+              on { print }
+            ' packages/parlour/CHANGELOG.md
+          } > release/notes.md
+          cat release/notes.md
+
+      - name: Create the release
+        if: needs.plan.outputs.publish == 'true'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: desktop-v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: Parlour Server ${{ env.VERSION }}
+          body_path: release/notes.md
+          generate_release_notes: true
+          make_latest: "true"
+          files: |
+            release/Parlour-Server-arm64.dmg
+            release/Parlour-Server-arm64.dmg.sha256
+          fail_on_unmatched_files: true
