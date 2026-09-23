@@ -7,7 +7,7 @@ name: App Store
 # stays a button in App Store Connect.
 #
 # All of the work is apps/desktop/appstore/package.sh, which runs the same on
-# a Mac with the same variables. Eight repository secrets stand behind it:
+# a Mac with the same variables. Nine repository secrets stand behind it:
 #
 # | Secret                        | What it is                                                     |
 # | ----------------------------- | -------------------------------------------------------------- |
