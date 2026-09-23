@@ -12,6 +12,7 @@ Parlour running itself.
 | parlour | `npm install -g parlour`, found through a login shell | inside the app, run by the app's own node |
 | node, ffmpeg | the person's own, Homebrew for ffmpeg | inside the app |
 | whisper-server, llama-server | Homebrew, kept warm by LaunchAgents | inside the app, started by `parlour start` |
+| afplay, say | macOS, `/usr/bin` | macOS, `/usr/bin`, which is on the PATH the app gives parlour; a sandboxed app may run system programs, and they inherit its sandbox |
 | config, secrets, models, logs | `~/.config/parlour`, `~/Library/...` | the same paths, inside the app's container |
 | connector tokens | the Keychain | `secrets.env` in the container |
 | open at login | "Start listening when this app opens" plus a LaunchAgent | SMAppService, a Login Item the person can see |
