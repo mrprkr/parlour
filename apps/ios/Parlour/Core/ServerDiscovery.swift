@@ -8,6 +8,7 @@
 import Foundation
 import Network
 import Observation
+import dnssd
 
 /// One server seen on the network.
 struct FoundServer: Identifiable, Hashable, Sendable {
@@ -39,17 +40,29 @@ final class ServerDiscovery {
       using: parameters
     )
 
-    browser.stateUpdateHandler = { [weak self] state in
+    browser.stateUpdateHandler = { [weak self, weak browser] state in
       Task { @MainActor in
+        // A browser being replaced still reports its own cancellation; only
+        // the current one may speak for the discovery state.
+        guard let self, let browser, self.browser === browser else { return }
         switch state {
         case .ready:
-          self?.browsing = true
-          self?.failure = nil
+          self.browsing = true
+          self.failure = nil
         case .failed(let error), .waiting(let error):
-          self?.browsing = false
-          self?.failure = Self.explain(error)
+          if case .dns(let code) = error, code == DNSServiceErrorType(kDNSServiceErr_DefunctConnection) {
+            // iOS severs the browser's connection to the Bonjour daemon when
+            // it suspends the app mid-browse. A defunct browser never
+            // recovers, so a fresh one takes its place rather than an error
+            // nobody can act on.
+            self.stop()
+            self.start()
+          } else {
+            self.browsing = false
+            self.failure = Self.explain(error)
+          }
         case .cancelled:
-          self?.browsing = false
+          self.browsing = false
         default:
           break
         }

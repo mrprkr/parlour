@@ -1,7 +1,7 @@
 //
 //  AppSettings.swift
-//  Which server, which room, and whether to try this phone's own model before
-//  asking the house. The token is the one thing not kept here; see TokenStore.
+//  Which server, and whether to try this phone's own model before asking the
+//  house. The token is the one thing not kept here; see TokenStore.
 //
 
 import Foundation
@@ -14,11 +14,6 @@ final class AppSettings {
   /// server is configured: discovered servers are never used automatically.
   var serverURL: String {
     didSet { defaults.set(serverURL, forKey: Key.serverURL) }
-  }
-
-  /// Which room the phone says it is in, so a follow-up lands in the right one.
-  var room: String {
-    didSet { defaults.set(room, forKey: Key.room) }
   }
 
   /// Answer on the phone when the model on it can, and only then ask the house.
@@ -51,22 +46,22 @@ final class AppSettings {
 
   private enum Key {
     static let serverURL = "serverURL"
-    static let room = "room"
     static let preferOnDevice = "preferOnDevice"
     static let onboarded = "onboarded"
   }
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
-    serverURL = defaults.string(forKey: Key.serverURL) ?? ""
-    room = defaults.string(forKey: Key.room) ?? ""
+    let storedServerURL = defaults.string(forKey: Key.serverURL) ?? ""
+    let storedToken = TokenStore.read() ?? ""
+    serverURL = storedServerURL
     preferOnDevice = defaults.bool(forKey: Key.preferOnDevice)
-    token = TokenStore.read() ?? ""
+    token = storedToken
     // A phone that was already pointed at a server before there was a setup
     // to go through has, in effect, been through it.
     onboarded =
       defaults.object(forKey: Key.onboarded) == nil
-      ? !serverURL.isEmpty || !token.isEmpty
+      ? !storedServerURL.isEmpty || !storedToken.isEmpty
       : defaults.bool(forKey: Key.onboarded)
   }
 

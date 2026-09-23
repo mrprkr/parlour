@@ -1,9 +1,7 @@
-import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { promisify } from "node:util";
 import { type Config, loadConfig, parseConfig, writeConfig } from "../core/config.ts";
 import {
   LOCAL_MODELS,
@@ -18,6 +16,7 @@ import type { Paths } from "../core/paths.ts";
 import { findOnPath } from "../core/process.ts";
 import { loadSecrets, writeSecret } from "../core/secrets.ts";
 import { AGENT_LABEL, serviceSpecs } from "../core/services.ts";
+import { type AudioInput, audioInputs } from "../providers/audio/ffmpeg.ts";
 import { pickServiceManager } from "../providers/service/index.ts";
 import { kokoroSchema } from "../providers/tts/kokoro.ts";
 import { findServer } from "../server/discovery.ts";
@@ -39,8 +38,6 @@ const USAGE = [
   "parlour init --porcelain   one JSON line per event, for the desktop app",
   "parlour init --local-model auto|none|<id>   answer the local model question without a terminal",
 ];
-
-const run = promisify(execFile);
 
 type Raw = Record<string, unknown>;
 
@@ -961,43 +958,6 @@ async function agentServiceInstalled(): Promise<boolean> {
 /** `--yes` answers yes; otherwise the person does. */
 function confirmOr(yes: boolean, question: string): Promise<boolean> {
   return yes ? Promise.resolve(true) : confirm(question);
-}
-
-export interface AudioInput {
-  /** As `audio.inputDevice` wants it: avfoundation's index, with the colon. */
-  index: string;
-  name: string;
-}
-
-/**
- * The microphones ffmpeg can see, so the device can be chosen from a list
- * rather than guessed at as a number. Nothing when ffmpeg is not installed,
- * which the Tools step has already complained about.
- */
-export function parseAudioInputs(ffmpegOutput: string): AudioInput[] {
-  const lines = ffmpegOutput.split("\n");
-  const start = lines.findIndex((line) => /audio devices/i.test(line));
-  if (start < 0) return [];
-  const inputs: AudioInput[] = [];
-  for (const line of lines.slice(start + 1)) {
-    // `[AVFoundation indev @ 0x...] [0] MacBook Pro Microphone`, and the video
-    // list above it has the same shape, which is why only what follows the
-    // audio heading is read.
-    const match = /\[AVFoundation[^\]]*\]\s*\[(\d+)\]\s*(.+?)\s*$/.exec(line);
-    if (!match) break;
-    inputs.push({ index: `:${match[1]}`, name: match[2] as string });
-  }
-  return inputs;
-}
-
-async function audioInputs(): Promise<AudioInput[]> {
-  try {
-    await run("ffmpeg", ["-f", "avfoundation", "-list_devices", "true", "-i", ""]);
-    return [];
-  } catch (error) {
-    // ffmpeg exits non-zero after listing, and the list is on stderr.
-    return parseAudioInputs((error as { stderr?: string }).stderr ?? "");
-  }
 }
 
 /** Sets a nested key on the sparse config, creating the objects on the way. */

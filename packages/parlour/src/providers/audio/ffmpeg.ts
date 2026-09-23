@@ -1,4 +1,5 @@
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
 import { z } from "zod";
 import { FRAME_SAMPLES } from "../../core/audio.ts";
 import type { Logger } from "../../core/logger.ts";
@@ -11,12 +12,65 @@ import { defineProvider, type ProviderContext, registerProvider } from "../../co
  * to the sink, so it is left to fall away here rather than listed.
  */
 export const FfmpegSchema = z.object({
-  /** `ffmpeg -f avfoundation -list_devices true -i ""` lists the indexes. */
+  /**
+   * ":" and an avfoundation index or name. `ffmpeg -f avfoundation
+   * -list_devices true -i ""` lists them; a name survives other devices
+   * coming and going, an index does not.
+   */
   inputDevice: z.string().default(":0"),
   sampleRate: z.literal(16000).default(16000),
 });
 
 export type FfmpegOptions = z.infer<typeof FfmpegSchema>;
+
+const execFileAsync = promisify(execFile);
+
+export interface AudioInput {
+  /** As `audio.inputDevice` wants it: avfoundation's index, with the colon. */
+  index: string;
+  name: string;
+}
+
+/**
+ * The microphones ffmpeg can see, so the device can be chosen from a list
+ * rather than guessed at as a number. Nothing when ffmpeg is not installed,
+ * which the Tools step has already complained about.
+ */
+export function parseAudioInputs(ffmpegOutput: string): AudioInput[] {
+  const lines = ffmpegOutput.split("\n");
+  const start = lines.findIndex((line) => /audio devices/i.test(line));
+  if (start < 0) return [];
+  const inputs: AudioInput[] = [];
+  for (const line of lines.slice(start + 1)) {
+    // `[AVFoundation indev @ 0x...] [0] MacBook Pro Microphone`, and the video
+    // list above it has the same shape, which is why only what follows the
+    // audio heading is read.
+    const match = /\[AVFoundation[^\]]*\]\s*\[(\d+)\]\s*(.+?)\s*$/.exec(line);
+    if (!match) break;
+    inputs.push({ index: `:${match[1]}`, name: match[2] as string });
+  }
+  return inputs;
+}
+
+export async function audioInputs(): Promise<AudioInput[]> {
+  try {
+    await execFileAsync("ffmpeg", ["-f", "avfoundation", "-list_devices", "true", "-i", ""]);
+    return [];
+  } catch (error) {
+    // ffmpeg exits non-zero after listing, and the list is on stderr.
+    return parseAudioInputs((error as { stderr?: string }).stderr ?? "");
+  }
+}
+
+/**
+ * Whether `inputDevice` names one of `inputs`, by index (":4") or by name
+ * (":MacBook Pro Microphone"). Indexes shift when a device comes or goes, so
+ * a config that was right last week can point at nothing today.
+ */
+export function findInput(inputDevice: string, inputs: AudioInput[]): AudioInput | undefined {
+  const audio = inputDevice.slice(inputDevice.indexOf(":") + 1);
+  return inputs.find((input) => input.index === `:${audio}` || input.name === audio);
+}
 
 /**
  * The command line `frames()` spawns, as `ps` prints it. Anchored to the
@@ -104,6 +158,25 @@ export class Microphone implements AudioSource {
         detail: found ?? "brew install ffmpeg. It is how the microphone is read.",
       },
     ];
+    if (found) {
+      const inputs = await audioInputs();
+      // An empty list is a Mac that has not granted the microphone, or no
+      // ffmpeg; neither is a question about the configured device.
+      if (inputs.length > 0) {
+        const input = findInput(this.#device, inputs);
+        checks.push({
+          name: "input device",
+          status: input ? "ok" : "fail",
+          detail: input
+            ? `${this.#device} is ${input.name}`
+            : `${this.#device} is not a microphone this Mac has. It has ${inputs
+                .map((i) => `${i.index} ${i.name}`)
+                .join(
+                  ", ",
+                )}. Set audio.inputDevice to one, by name (":${inputs[0]?.name}") so it survives devices coming and going.`,
+        });
+      }
+    }
     // An ffmpeg left behind by an earlier run keeps the device open, and
     // enough of them stop the next run opening it. Name them, and how to
     // clear them, rather than leave "it hears nothing" to be worked out.

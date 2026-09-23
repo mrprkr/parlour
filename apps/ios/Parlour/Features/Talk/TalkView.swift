@@ -163,7 +163,7 @@ struct TalkView: View {
       return
     }
     do {
-      let answer = try await client.voice(wav: wav, room: settings.room)
+      let answer = try await client.voice(wav: wav)
       heard = answer.heard
       via = answer.via
       reply = answer.reply.isEmpty ? "Nothing was heard." : answer.reply

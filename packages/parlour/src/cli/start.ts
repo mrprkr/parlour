@@ -1,7 +1,9 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { type Agent, buildAgent } from "../core/agent.ts";
 import { loadConfig } from "../core/config.ts";
 import { enableEvents } from "../core/events.ts";
 import { logger } from "../core/logger.ts";
+import type { AudioSource } from "../core/ports.ts";
 import { onShutdown } from "../core/process.ts";
 import { loadSecrets } from "../core/secrets.ts";
 import { LocalVoice, VoiceSession } from "../core/session.ts";
@@ -73,7 +75,48 @@ async function micMode(agent: Agent): Promise<void> {
   });
 
   log.info(`listening for "${config.wake.words.join('", "')}"`);
-  for await (const frame of agent.source.frames(abort.signal)) {
-    await session.push(frame);
+  await keepListening(
+    agent.source,
+    (frame) => session.push(frame),
+    abort.signal,
+    (wait) =>
+      log.error(
+        `the microphone (audio.inputDevice ${config.audio.inputDevice}) stopped; the server carries on, ` +
+          `and it is tried again in ${Math.round(wait / 1000)}s. parlour doctor names the devices there are.`,
+      ),
+  );
+}
+
+const RETRY_MS = [1_000, 5_000, 30_000, 60_000];
+/** A microphone that ran this long was working, so the next failure starts the backoff again. */
+const HEALTHY_MS = 60_000;
+
+/**
+ * Reads the microphone until `signal`, opening it again whenever it ends. A
+ * microphone is one client of the server among several, and a device that
+ * was unplugged or renumbered should not take the phone page, the iOS app
+ * and every satellite down with it.
+ */
+export async function keepListening(
+  source: AudioSource,
+  push: (frame: Int16Array) => Promise<void>,
+  signal: AbortSignal,
+  stopped: (retryInMs: number) => void,
+  retryMs: readonly number[] = RETRY_MS,
+): Promise<void> {
+  let failures = 0;
+  while (!signal.aborted) {
+    const opened = Date.now();
+    try {
+      for await (const frame of source.frames(signal)) await push(frame);
+    } catch (error) {
+      log.debug("microphone failed", error);
+    }
+    if (signal.aborted) return;
+    if (Date.now() - opened >= HEALTHY_MS) failures = 0;
+    const wait = retryMs[Math.min(failures, retryMs.length - 1)] ?? 0;
+    failures += 1;
+    stopped(wait);
+    await delay(wait, undefined, { signal }).catch(() => {});
   }
 }

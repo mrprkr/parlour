@@ -1080,9 +1080,9 @@
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Core/AppSettings.swift": {
-    "mtime": 1790160315.8236256,
-    "seen": 1790160895.554183,
-    "ast_hash": "6b9aead595bd1c727da5b6cbb0d051c4",
+    "mtime": 1790116024.7132764,
+    "seen": 1790123464.499488,
+    "ast_hash": "bfb46d201c990d9ffa999a97a558f3f7",
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Core/PairingLink.swift": {
@@ -1092,9 +1092,9 @@
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Core/ParlourClient.swift": {
-    "mtime": 1790160323.0272515,
-    "seen": 1790160895.554184,
-    "ast_hash": "ded51746b1fa3e1ddb12336e35813d9c",
+    "mtime": 1790115206.402074,
+    "seen": 1790123464.499489,
+    "ast_hash": "c8c3d6b79142b253f09bdf7f7ce62a77",
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Core/ServerDiscovery.swift": {
@@ -1104,9 +1104,9 @@
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Core/TokenStore.swift": {
-    "mtime": 1790160350.050045,
-    "seen": 1790160895.5541859,
-    "ast_hash": "c480155d15d3b6de869f92f07754a9dd",
+    "mtime": 1790095383.6164978,
+    "seen": 1790123464.49949,
+    "ast_hash": "ea8821c393c056cac3f15d5fe8d2f0e4",
     "semantic_hash": ""
   },
   "apps/ios/Parlour/DesignSystem/Components.swift": {
@@ -1152,9 +1152,9 @@
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Features/Onboarding/OnboardingView.swift": {
-    "mtime": 1790160584.2500544,
-    "seen": 1790160895.5541918,
-    "ast_hash": "304cbc7ccbeb655b32547e9247ceac6e",
+    "mtime": 1790159736.3723946,
+    "seen": 1790159785.35391,
+    "ast_hash": "d421694a00cfe6abebb58bb7e735b269",
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Features/Settings/PairingScanner.swift": {
@@ -1164,9 +1164,9 @@
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Features/Settings/SettingsView.swift": {
-    "mtime": 1790160333.617312,
-    "seen": 1790160895.554194,
-    "ast_hash": "8d4a5a5cf077e9617823d9dbcc3ff4c1",
+    "mtime": 1790115206.402474,
+    "seen": 1790123464.499496,
+    "ast_hash": "e6178de50a3c4c342737a309012135fc",
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Features/Talk/Recorder.swift": {
@@ -1176,9 +1176,9 @@
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Features/Talk/TalkView.swift": {
-    "mtime": 1790160329.5492995,
-    "seen": 1790160895.554195,
-    "ast_hash": "f2ee7bd0903b90781d92c4d1aa2b99aa",
+    "mtime": 1790115206.4025986,
+    "seen": 1790123464.499497,
+    "ast_hash": "28b520b2e51c45620d9cf870222a84cc",
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Resources/Assets.xcassets/AccentColor.colorset/Contents.json": {

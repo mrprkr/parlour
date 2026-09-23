@@ -70,9 +70,8 @@ struct ParlourClient: Sendable {
   }
 
   /// Text in, text out. The same route automations and scripts use.
-  func ask(_ text: String, room: String) async throws -> Answer {
-    var body: [String: String] = ["text": text, "client": "ios"]
-    if !room.isEmpty { body["room"] = room }
+  func ask(_ text: String) async throws -> Answer {
+    let body: [String: String] = ["text": text, "client": "ios"]
     var call = request(path: "/ask", method: "POST")
     call.setValue("application/json", forHTTPHeaderField: "content-type")
     call.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -83,9 +82,8 @@ struct ParlourClient: Sendable {
   }
 
   /// One recording in, the transcript, the reply and the spoken reply out.
-  func voice(wav: Data, room: String) async throws -> Answer {
-    var items = [URLQueryItem(name: "client", value: "ios")]
-    if !room.isEmpty { items.append(URLQueryItem(name: "room", value: room)) }
+  func voice(wav: Data) async throws -> Answer {
+    let items = [URLQueryItem(name: "client", value: "ios")]
     var call = request(path: "/voice", method: "POST", query: items)
     call.setValue("audio/wav", forHTTPHeaderField: "content-type")
     call.httpBody = wav

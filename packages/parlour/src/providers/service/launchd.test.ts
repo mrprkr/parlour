@@ -50,29 +50,50 @@ test("the provider is registered as service/launchd with a LaunchAgents director
   assert.equal(LaunchdSchema.parse({ launchctl: "/tmp/fake" }).launchctl, "/tmp/fake");
 });
 
+/**
+ * A launchctl that keeps its jobs as files in `dir`, and, like the real one,
+ * takes a while to let go of a job after `bootout`: for the next `drain`
+ * calls to `list` the job is still there, and `bootstrap` fails with launchd's
+ * error 5 while `load` fails but exits 0.
+ */
+function fakeLaunchctl(dir: string, log: string, drain = 0): string {
+  const stub = join(dir, "launchctl");
+  writeFileSync(
+    stub,
+    [
+      "#!/bin/sh",
+      `printf '%s\\n' "$*" >> "${log}"`,
+      'for last; do :; done; label=$(basename "$last" .plist)',
+      `job="${dir}/job-$label"; draining="${dir}/draining-$label"`,
+      'case "$1" in',
+      "  list)",
+      '    if [ -s "$draining" ]; then n=$(cat "$draining"); echo $((n - 1)) > "$draining";',
+      '      [ "$n" -le 1 ] && rm -f "$draining" "$job"; exit 0; fi',
+      '    [ -f "$job" ] && { echo \'{ "PID" = 4242; "LastExitStatus" = 0; };\'; exit 0; }',
+      "    exit 113 ;;",
+      '  bootstrap) [ -s "$draining" ] && exit 5; touch "$job" ;;',
+      '  load) [ -s "$draining" ] || touch "$job" ;;',
+      `  bootout|unload) [ -f "$job" ] && { [ ${drain} -gt 0 ] && echo ${drain} > "$draining" || rm -f "$job"; } ;;`,
+      "esac",
+      "exit 0",
+      "",
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  return stub;
+}
+
 test("install, status and uninstall go through the launchctl they were given", async () => {
   // A stub in place of launchctl, so this can run on any Mac (and on CI)
   // without loading a job into the launchd of whoever is running the tests.
-  // It records its arguments and reports one job as running.
+  // It records its arguments and remembers which jobs it has loaded.
   const dir = mkdtempSync(join(tmpdir(), "parlour-launchd-"));
   try {
     const log = join(dir, "calls.log");
-    const stub = join(dir, "launchctl");
-    writeFileSync(
-      stub,
-      [
-        "#!/bin/sh",
-        `printf '%s\\n' "$*" >> "${log}"`,
-        'if [ "$1" = list ]; then',
-        '  [ "$2" = io.parlour.agent ] && { echo \'{ "PID" = 4242; "LastExitStatus" = 0; };\'; exit 0; }',
-        "  exit 113",
-        "fi",
-        "exit 0",
-        "",
-      ].join("\n"),
-      { mode: 0o755 },
+    const stub = fakeLaunchctl(dir, log);
+    const manager = createLaunchd(
+      LaunchdSchema.parse({ launchAgentsDir: join(dir, "LaunchAgents"), launchctl: stub }),
     );
-    const manager = createLaunchd({ launchAgentsDir: join(dir, "LaunchAgents"), launchctl: stub });
     const local = { ...spec, logPath: join(dir, "logs", "agent.log") };
     const calls = () => readFileSync(log, "utf8").split("\n").filter(Boolean);
 
@@ -111,6 +132,33 @@ test("install, status and uninstall go through the launchctl they were given", a
       calls().some((call) => call.startsWith("bootout gui/")),
       `unloaded through the stub: ${calls().join("; ")}`,
     );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("reinstalling a running job waits for launchd to let go before loading it again", async () => {
+  // The local model takes a moment to exit after bootout, and a bootstrap in
+  // that moment fails. Install used to lose that race and leave the job
+  // unloaded, reporting nothing.
+  const dir = mkdtempSync(join(tmpdir(), "parlour-launchd-"));
+  try {
+    const log = join(dir, "calls.log");
+    const manager = createLaunchd(
+      LaunchdSchema.parse({
+        launchAgentsDir: join(dir, "LaunchAgents"),
+        launchctl: fakeLaunchctl(dir, log, 3),
+      }),
+    );
+    const local = { ...spec, label: "io.parlour.llm", logPath: join(dir, "logs", "llm.log") };
+
+    const [first] = await manager.install([local]);
+    assert.equal(first?.running, true, "installed from nothing");
+
+    const [again] = await manager.install([local]);
+    assert.equal(again?.running, true, "still loaded after the reinstall");
+    const [restarted] = await manager.restart([local]);
+    assert.equal(restarted?.running, true, "and after a restart");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
