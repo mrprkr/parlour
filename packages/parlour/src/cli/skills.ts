@@ -1,11 +1,11 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { loadConfig } from "../core/config.ts";
 import { emit } from "../core/events.ts";
 import type { Paths } from "../core/paths.ts";
 import { loadPlugins } from "../core/plugins.ts";
-import { loadSkills, withSkills } from "../core/skills.ts";
-import { type Command, parseCli, subcommand, UsageError } from "./args.ts";
+import { loadSkills, parseSkill, withSkills } from "../core/skills.ts";
+import { type Command, parseCli, readStdin, subcommand, UsageError } from "./args.ts";
 import { dim, printJson, table } from "./output.ts";
 
 const USAGE = [
@@ -13,15 +13,22 @@ const USAGE = [
   "parlour skills show <name>                      print one as the model reads it",
   "parlour skills new <name> [--description <d>]   write a skeleton to edit",
   "parlour skills path                             the directory they live in",
+  "parlour skills write <name> < file.md           replace one of the house's own, or add it",
+  "parlour skills remove <name>                    delete one of the house's own",
 ];
 
-const SUBCOMMANDS = ["list", "show", "new", "path"] as const;
+const SUBCOMMANDS = ["list", "show", "new", "path", "write", "remove"] as const;
+
+/** A skill name as a file name, so `write` cannot be pointed outside the directory. */
+const NAME = /^[a-z0-9][a-z0-9_-]*$/;
 
 /**
- * Skills are files, so there is no `remove`: delete the file. What the CLI
- * is for is seeing what the model will see, since a skill that is in the
+ * Skills are files, and a person at a terminal edits them as files. What the
+ * CLI is for is seeing what the model will see, since a skill that is in the
  * directory but has no description, or is shadowed by a plugin's copy, is
- * invisible until something does not happen.
+ * invisible until something does not happen. `write` and `remove` are for
+ * the desktop app, which has no editor of its own to open, and they only
+ * ever touch the house's own directory: a plugin's skills are the plugin's.
  */
 export const command: Command = {
   name: "skills",
@@ -44,8 +51,15 @@ export const command: Command = {
       case "list": {
         const { skills, problems } = await everySkill(paths);
         if (values.json) {
+          // `own` says whether this is a file in the house's directory, which is
+          // the only kind `write` and `remove` will touch.
           printJson({
-            skills: skills.map(({ name, description, source }) => ({ name, description, source })),
+            skills: skills.map(({ name, description, source }) => ({
+              name,
+              description,
+              source,
+              own: inside(dir, source),
+            })),
             problems,
           });
           return;
@@ -85,9 +99,50 @@ export const command: Command = {
         process.stdout.write(`${file}\n`);
         return;
       }
+
+      case "write": {
+        const name = positionals[1]?.toLowerCase();
+        if (!name) throw new UsageError(`Usage:\n  ${USAGE[4]}`);
+        if (!NAME.test(name))
+          throw new UsageError(`"${name}" is not a skill name: lower case letters, digits, - and _`);
+        const text = await readStdin();
+        const file = ownFile(dir, name) ?? join(dir, `${name}.md`);
+        // Parsed before it is written, so the file never holds a skill the
+        // model would skip, and the name inside it is the name it was given.
+        const parsed = parseSkill(text, file);
+        if (!("body" in parsed)) throw new Error(parsed.detail);
+        if (parsed.name !== name) {
+          throw new Error(`The frontmatter names it ${parsed.name}, not ${name}.`);
+        }
+        mkdirSync(dirname(file), { recursive: true });
+        writeFileSync(file, text.endsWith("\n") ? text : `${text}\n`);
+        process.stdout.write(`${file}\n`);
+        return;
+      }
+
+      case "remove": {
+        const name = positionals[1]?.toLowerCase();
+        if (!name) throw new UsageError(`Usage:\n  ${USAGE[5]}`);
+        const file = NAME.test(name) ? ownFile(dir, name) : undefined;
+        if (!file)
+          throw new Error(`No skill called ${name} in ${dir}. A plugin's skills go with the plugin.`);
+        // A skill kept as a directory has its files beside it, and they go too.
+        rmSync(file.endsWith("SKILL.md") ? dirname(file) : file, { recursive: true, force: true });
+        process.stdout.write(`Removed ${name}.\n`);
+        return;
+      }
     }
   },
 };
+
+/** The file a skill of the house's own is kept in, in either layout, if there is one. */
+function ownFile(dir: string, name: string): string | undefined {
+  return [join(dir, `${name}.md`), join(dir, name, "SKILL.md")].find((file) => existsSync(file));
+}
+
+function inside(dir: string, file: string): boolean {
+  return resolve(file).startsWith(`${resolve(dir)}/`);
+}
 
 function skillsDir(paths: Paths): string {
   return loadConfig(paths).config.skills.dir || paths.skillsDir;

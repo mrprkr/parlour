@@ -84,11 +84,12 @@ parlour start [--events]                         the server or the satellite, pe
 parlour stop                                     stop it, until the next login
 parlour restart                                  after editing config.json or a secret
 parlour text                                     everything but the microphone
+parlour try mic|wake|stt|llm|cloud|tts|ask [--json]   one stage of the pipeline, tried on its own
 parlour doctor [--json]                          which of the moving parts is down
 parlour service install|uninstall|stop|restart|status|logs
 parlour connectors add <name> <url>|list|remove <name>
 parlour mcp add <name> --url <url>|-- <command>...|list|remove <name>
-parlour skills list|show <name>|new <name>|path
+parlour skills list|show <name>|new <name>|write <name>|remove <name>|path
 parlour plugins add <package>|list|remove <package>
 parlour models fetch [--llm auto]|suggest
 parlour config path|show|write|edit

@@ -180,6 +180,9 @@ export function Stepper<Name extends string>({
   onPick: (name: Name) => void;
 }): JSX.Element {
   const at = steps.findIndex((step) => step.name === current);
+  // Past a handful of steps the names no longer fit side by side, so only the
+  // current one is spelled out and the rest say theirs on hover.
+  const crowded = steps.length > 5;
   return (
     <ol className="flex items-center gap-1.5" aria-label="Setup steps">
       {steps.map((step, index) => {
@@ -187,11 +190,15 @@ export function Stepper<Name extends string>({
         const here = index === at;
         const open = index <= reached && !here;
         return (
-          <li key={step.name} className="flex min-w-0 flex-1 items-center gap-1.5">
+          <li
+            key={step.name}
+            className={cn("flex min-w-0 flex-1 items-center gap-1.5", crowded && here && "flex-[2]")}
+          >
             <button
               type="button"
               disabled={!open}
               aria-current={here ? "step" : undefined}
+              title={step.label}
               onClick={() => onPick(step.name)}
               className={cn(
                 "flex min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-[12px] disabled:cursor-default",
@@ -207,7 +214,7 @@ export function Stepper<Name extends string>({
               >
                 {done ? <CheckIcon className="size-3" /> : index + 1}
               </span>
-              <span className="truncate">{step.label}</span>
+              <span className={cn("truncate", crowded && !here && "sr-only")}>{step.label}</span>
             </button>
             {index < steps.length - 1 ? (
               <span aria-hidden className={cn("h-px min-w-2 flex-1", done ? "bg-primary" : "bg-border")} />

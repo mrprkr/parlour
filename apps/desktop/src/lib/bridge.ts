@@ -260,3 +260,140 @@ export function mintToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
+
+// ------------------------------------------------------------ the pipeline
+
+export type Stage = "mic" | "wake" | "stt" | "llm" | "cloud" | "tts" | "ask";
+
+/** What `parlour try <stage> --json` prints. */
+export interface Trial {
+  stage: Stage;
+  ok: boolean;
+  detail: string;
+  ms: number;
+  heard?: string;
+  reply?: string;
+  level?: { peak: number; mean: number };
+  via?: string;
+}
+
+/**
+ * One stage of the pipeline on its own. Like the doctor, a failed trial exits 1
+ * and still prints its document, which is what says what went wrong, so only a
+ * run that printed nothing to read is thrown.
+ */
+export const tryStage = async (
+  stage: Stage,
+  options: { seconds?: number; text?: string; silent?: boolean } = {},
+): Promise<Trial> => {
+  const args = ["try", stage, "--json"];
+  if (options.seconds) args.push("--seconds", String(options.seconds));
+  if (options.text) args.push("--text", options.text);
+  if (options.silent) args.push("--silent");
+  const output = await run(args);
+  if (!output.stdout.trimStart().startsWith("{")) throw new Error(failure(output));
+  return JSON.parse(output.stdout) as Trial;
+};
+
+// --------------------------------------------------- skills, mcp and plugins
+
+export interface Skill {
+  name: string;
+  description: string;
+  source: string;
+  /** In the house's own directory, so it can be edited and removed here. A plugin's cannot. */
+  own: boolean;
+}
+
+export interface SkillList {
+  skills: Skill[];
+  problems: { source: string; detail: string }[];
+}
+
+export const listSkills = async (): Promise<SkillList> =>
+  JSON.parse(await parlour(["skills", "list", "--json"])) as SkillList;
+
+/** The body as the model reads it, without the frontmatter. */
+export const showSkill = async (name: string): Promise<string> =>
+  (await parlour(["skills", "show", name])).replace(/\n$/, "");
+
+/** The whole file on stdin. The CLI checks it parses before anything is written. */
+export const writeSkill = async (name: string, text: string): Promise<void> => {
+  await parlour(["skills", "write", name], text);
+};
+
+export const removeSkill = async (name: string): Promise<void> => {
+  await parlour(["skills", "remove", name]);
+};
+
+export type McpServer =
+  | { name: string; transport: "http"; url: string; tokenEnv?: string }
+  | { name: string; transport: "stdio"; command: string; args: string[]; tokenEnv?: string };
+
+export const listMcp = async (): Promise<McpServer[]> =>
+  JSON.parse(await parlour(["mcp", "list", "--json"])) as McpServer[];
+
+export const addMcp = async (
+  name: string,
+  where: { url: string } | { command: string[] },
+  tokenEnv?: string,
+): Promise<void> => {
+  const args = ["mcp", "add", name];
+  if (tokenEnv) args.push("--token-env", tokenEnv);
+  if ("url" in where) args.push("--url", where.url);
+  else args.push("--", ...where.command);
+  await parlour(args);
+};
+
+export const removeMcp = async (name: string): Promise<void> => {
+  await parlour(["mcp", "remove", name]);
+};
+
+export interface Plugin {
+  specifier: string;
+  name: string;
+  description: string;
+  providers: string[];
+  skills: number;
+  skillsDir: string;
+  integrations: string[];
+}
+
+export const listPlugins = async (): Promise<Plugin[]> =>
+  JSON.parse(await parlour(["plugins", "list", "--json"])) as Plugin[];
+
+/** The CLI loads the package before it names it in config, so a bad one is refused here. */
+export const addPlugin = async (specifier: string): Promise<void> => {
+  await parlour(["plugins", "add", specifier]);
+};
+
+export const removePlugin = async (specifier: string): Promise<void> => {
+  await parlour(["plugins", "remove", specifier]);
+};
+
+/**
+ * A secret by any name, for the ones a person names themselves: the token an
+ * MCP server reads from `tokenEnv`. The CLI refuses a name that is not a plain
+ * environment variable name.
+ */
+export const setNamedSecret = async (name: string, value: string): Promise<void> => {
+  await parlour(["secrets", "set", name], `${value}\n`);
+};
+
+/** Stop and start, so a change to config or a skill is picked up. */
+export const restartAgent = async (): Promise<void> => {
+  await stopAgent();
+  await startAgent();
+};
+
+/**
+ * A command line split the way a shell would for the simple cases: spaces
+ * between words, and quotes around a word that has spaces in it. Enough for
+ * `npx -y @scope/server --dir "My Files"`, which is what people paste.
+ */
+export function splitCommandLine(line: string): string[] {
+  const words: string[] = [];
+  const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  for (const match of line.matchAll(pattern)) words.push(match[1] ?? match[2] ?? match[3] ?? "");
+  return words;
+}

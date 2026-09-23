@@ -1,4 +1,4 @@
-// The window's shell: the header, the four tabs and the state everything else
+// The window's shell: the header, the tabs and the state everything else
 // reads. Only this file listens to Parlour, so a panel never has to wonder
 // whether someone else is already subscribed.
 import { type JSX, useCallback, useEffect, useState } from "react";
@@ -15,17 +15,19 @@ import {
   stopAgent,
 } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
-import { ConnectorsPanel } from "@/panels/ConnectorsPanel";
 import { LogsPanel } from "@/panels/LogsPanel";
 import { Onboarding } from "@/panels/Onboarding";
+import { PipelinePanel } from "@/panels/PipelinePanel";
 import { SettingsPanel } from "@/panels/SettingsPanel";
 import { StatusPanel } from "@/panels/StatusPanel";
+import { ToolsPanel } from "@/panels/ToolsPanel";
 
-type TabName = "status" | "connectors" | "settings" | "logs";
+type TabName = "status" | "test" | "tools" | "settings" | "logs";
 
 const TABS: { value: TabName; label: string }[] = [
   { value: "status", label: "Status" },
-  { value: "connectors", label: "Connectors" },
+  { value: "test", label: "Test" },
+  { value: "tools", label: "Tools" },
   { value: "settings", label: "Settings" },
   { value: "logs", label: "Logs" },
 ];
@@ -72,8 +74,14 @@ export function App(): JSX.Element {
   const [networkKey, setNetworkKey] = useState(0);
   /** Bumped when the onboarding wrote settings the Settings tab is also showing. */
   const [settingsKey, setSettingsKey] = useState(0);
-  /** Bumped on every visit to Connectors, which is when the old app reloaded it. */
-  const [connectorsKey, setConnectorsKey] = useState(0);
+  /**
+   * Bumped on every visit to Tools, which is when the lists are read again:
+   * a sign in finished in the browser, or a skill edited in a text editor,
+   * shows up without a button for it. Test is bumped too, since a change in
+   * Settings can change which voice or model it tries.
+   */
+  const [toolsKey, setToolsKey] = useState(0);
+  const [testKey, setTestKey] = useState(0);
 
   // A new array each time, because the log panel follows the tail by identity.
   const append = useCallback((line: string) => {
@@ -174,7 +182,8 @@ export function App(): JSX.Element {
         value={tab}
         onValueChange={(next) => {
           setTab(next as TabName);
-          if (next === "connectors") setConnectorsKey((key) => key + 1);
+          if (next === "tools") setToolsKey((key) => key + 1);
+          if (next === "test") setTestKey((key) => key + 1);
         }}
         className="min-h-0 flex-1 gap-0"
       >
@@ -184,14 +193,12 @@ export function App(): JSX.Element {
               key={entry.value}
               value={entry.value}
               className="flex-none px-2.5"
-              // Clicking the tab you are already on reloads the connectors, which
-              // is how the sign in a browser just finished gets picked up. The
-              // tabs only report a change of tab, so that click has to be caught
-              // here rather than in onValueChange.
+              // Clicking the tab you are already on reloads its lists, which is
+              // how the sign in a browser just finished gets picked up. The tabs
+              // only report a change of tab, so that click has to be caught here
+              // rather than in onValueChange.
               onClick={() => {
-                if (entry.value === "connectors" && tab === "connectors") {
-                  setConnectorsKey((key) => key + 1);
-                }
+                if (entry.value === "tools" && tab === "tools") setToolsKey((key) => key + 1);
               }}
             >
               {entry.label}
@@ -204,8 +211,12 @@ export function App(): JSX.Element {
             <StatusPanel status={status} reloadKey={networkKey} />
           </TabsContent>
 
-          <TabsContent value="connectors" forceMount className={cn(PANEL, "overflow-y-auto")}>
-            <ConnectorsPanel reloadKey={connectorsKey} />
+          <TabsContent value="test" forceMount className={cn(PANEL, "overflow-y-auto")}>
+            <PipelinePanel running={status.running} reloadKey={testKey} />
+          </TabsContent>
+
+          <TabsContent value="tools" forceMount className={cn(PANEL, "overflow-y-auto")}>
+            <ToolsPanel running={status.running} reloadKey={toolsKey} />
           </TabsContent>
 
           <TabsContent value="settings" forceMount className={cn(PANEL, "overflow-y-auto")}>
@@ -227,6 +238,7 @@ export function App(): JSX.Element {
           machine still needs setting up, and it draws nothing until it does. */}
       <Onboarding
         open={setupOpen}
+        running={status.running}
         onClose={() => setSetupOpen(false)}
         onSaved={() => {
           setSettingsKey((key) => key + 1);
