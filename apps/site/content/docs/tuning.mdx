@@ -278,6 +278,28 @@ Hugging Face cache.
   model is abandoned. It stops a request that is still running long after the
   person has left the room.
 
+You can change these from a client too: `parlour remote pipeline set` or the
+iPhone app's Server tab, within tighter limits than the file allows. See
+[Managing the server](/docs/clients#managing-the-server).
+
+### Keeping the Mac responsive
+
+The local model and whisper share the Mac with whoever is using it. On Apple
+silicon they also share its memory with the GPU. A model that does not fit
+does not fail cleanly: the whole machine slows to a crawl. So Parlour holds
+them back:
+
+- A model whose weights would take more than 70% of the Mac's memory is not
+  started, and `parlour doctor` says so. `parlour models suggest` names one
+  that fits.
+- Both servers leave two cores free, and use at most six. The local model
+  keeps one conversation's worth of context rather than several.
+- Both run at a lower priority than anything you are using. launchd waits a
+  minute before starting a crashed one again, rather than ten seconds.
+- Inside the App Store app, where Parlour keeps them running itself, a server
+  that crashes five times in ten minutes is left stopped until you start it
+  from a client.
+
 ## Search
 
 ```json

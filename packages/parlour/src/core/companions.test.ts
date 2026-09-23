@@ -55,7 +55,7 @@ test("a companion that dies is started again, and one that is stopped is not", a
     [{ label: "l", what: "llm", program: ["llama-server"], env: {}, logPath: join(dir, "llm.log") }],
     {
       log: logger("test"),
-      restartMs: 1,
+      restartMs: [1],
       spawn: () => {
         const child = fakeChild();
         children.push(child);
@@ -70,6 +70,69 @@ test("a companion that dies is started again, and one that is stopped is not", a
   companions.stop();
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(children.length, 2);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a companion that keeps crashing is left down until a client starts it", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "parlour-companions-"));
+  const children: ChildProcess[] = [];
+  const companions = startCompanions(
+    [{ label: "l", what: "llm", program: ["llama-server"], env: {}, logPath: join(dir, "llm.log") }],
+    {
+      log: logger("test"),
+      restartMs: [1],
+      crashLimit: 3,
+      spawn: () => {
+        const child = fakeChild();
+        children.push(child);
+        return child;
+      },
+    },
+  );
+  for (let crash = 0; crash < 3; crash++) {
+    children.at(-1)?.emit("exit", 1, null);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  // Two crashes were forgiven with a restart each; the third was one too many.
+  assert.equal(children.length, 3);
+  assert.deepEqual(
+    companions.states().map((state) => [state.running, state.held]),
+    [[false, true]],
+  );
+
+  assert.equal(companions.control("l", "start"), true);
+  assert.equal(children.length, 4);
+  assert.equal(companions.states()[0]?.running, true);
+  companions.stop();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a companion a client stopped stays stopped, and a restart brings it back", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "parlour-companions-"));
+  const children: ChildProcess[] = [];
+  const companions = startCompanions(
+    [{ label: "l", what: "llm", program: ["llama-server"], env: {}, logPath: join(dir, "llm.log") }],
+    {
+      log: logger("test"),
+      restartMs: [1],
+      spawn: () => {
+        const child = fakeChild();
+        children.push(child);
+        return child;
+      },
+    },
+  );
+  assert.equal(companions.control("l", "stop"), true);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(children.length, 1);
+  assert.equal(companions.states()[0]?.running, false);
+
+  assert.equal(companions.control("l", "restart"), true);
+  assert.equal(children.length, 2);
+  assert.equal(companions.control("l", "restart"), true);
+  assert.equal(children.length, 3);
+  assert.equal(companions.control("nope", "start"), false);
+  companions.stop();
   rmSync(dir, { recursive: true, force: true });
 });
 

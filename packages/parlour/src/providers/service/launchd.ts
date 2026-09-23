@@ -55,7 +55,13 @@ export function renderPlist(spec: ServiceSpec): string {
 
   // KeepAlive on a crash but not on a clean exit: a person who stops the agent
   // deliberately should not have to fight launchd to keep it stopped, and a
-  // crash loop should not spin the CPU.
+  // crash loop should not spin the CPU. A model server waits longer between
+  // tries and yields to whatever the person is doing, because reloading
+  // gigabytes of weights every ten seconds is a crash loop the whole Mac feels.
+  const throttle = spec.lowPriority ? 60 : 10;
+  const priority = spec.lowPriority
+    ? "  <key>ProcessType</key><string>Standard</string>\n  <key>Nice</key><integer>5</integer>"
+    : "  <key>ProcessType</key><string>Interactive</string>";
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -73,8 +79,8 @@ ${env}
     <key>SuccessfulExit</key><false/>
     <key>Crashed</key><true/>
   </dict>
-  <key>ThrottleInterval</key><integer>10</integer>
-  <key>ProcessType</key><string>Interactive</string>
+  <key>ThrottleInterval</key><integer>${throttle}</integer>
+${priority}
   <key>StandardOutPath</key><string>${xmlEscape(spec.logPath)}</string>
   <key>StandardErrorPath</key><string>${xmlEscape(spec.logPath)}</string>
 </dict>

@@ -186,6 +186,39 @@ You get back `{"reply": "...", "via": "local"}`, where `via` says which model
 answered. Add a `client` to the body for a conversation of your own.
 Otherwise, every caller shares the `api` session.
 
+## Managing the server
+
+A client with the token can also manage the server: change the pipeline's
+settings, start, stop and restart the model servers it keeps warm, and run
+the maintenance commands. The iPhone app's Server tab and `parlour remote`
+both use these routes. Set `server.admin: false` to turn them off.
+
+| Route | What it does |
+| --- | --- |
+| `GET /admin` | The services, the pipeline in force and the one saved, the memory, and whether the agent comes back by itself after a restart. |
+| `POST /admin/pipeline` | Saves a change to any of `concurrency`, `queueDepth`, `triage`, `maxTasks` and `timeoutMs`, then restarts the agent so it takes effect. Add `?apply=false` to save it for later. |
+| `POST /admin/service` | `{"service": "llm" \| "whisper", "action": "start" \| "stop" \| "restart"}`. |
+| `POST /admin/doctor` | The server's own checks, `parlour doctor` over the network. |
+| `GET /admin/logs?service=agent&lines=50` | The end of one log: `agent`, `llm` or `whisper`, up to 200 lines. |
+| `POST /admin/restart` | Restarts the agent. |
+
+Some limits are there to protect the Mac, so the server can refuse a request
+even with the right token. It answers `{"error": "..."}` with a sentence
+saying why:
+
+- The pipeline's numbers have tighter bounds than the config file allows. For
+  example, at most four requests at once, and a timeout between 5 seconds and
+  5 minutes. Every request running at once is another generation the local
+  model has to hold in memory.
+- A model whose weights would take more than 70% of the Mac's memory is not
+  started. The doctor warns you above 50%.
+- The server takes one change at a time. It also refuses to repeat the same
+  action on the same thing within 15 seconds, so a script stuck in a loop
+  cannot restart the model over and over.
+- The agent restarts by exiting and letting launchd, or the menu bar app,
+  start it again. If you started it in a terminal, nothing would bring it back,
+  so a restart is refused and a pipeline change is saved until the next start.
+
 ## Bonjour
 
 The server advertises `_parlour._tcp` with a TXT record of `role=server`,

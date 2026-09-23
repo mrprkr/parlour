@@ -13,6 +13,8 @@ export type AgentEvent =
   | { type: "heard"; text: string }
   | { type: "reply"; text: string; via: "local" | "cloud"; ms: number }
   | { type: "muted" }
+  /** About to exit so as to be started again, with RESTART_EXIT_CODE. */
+  | { type: "restarting" }
   | { type: "error"; message: string };
 
 let enabled = false;

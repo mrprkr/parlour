@@ -136,6 +136,12 @@ export interface ServiceSpec {
   program: string[];
   env: Record<string, string>;
   logPath: string;
+  /**
+   * A model server rather than the agent: it runs at a lower priority and
+   * waits longer after a crash, so a model that cannot load does not hold
+   * the machine hostage while it keeps trying.
+   */
+  lowPriority?: boolean;
 }
 
 export interface ServiceState {

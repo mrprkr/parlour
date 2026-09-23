@@ -1,7 +1,8 @@
 //
 //  ParlourClient.swift
-//  The three routes a client needs, and nothing else. The shapes here are the
-//  ones in apps/site/content/docs/clients.mdx; keep them in step.
+//  The routes a client needs: asking, and managing the server from the
+//  Server tab. The shapes here are the ones in
+//  apps/site/content/docs/clients.mdx; keep them in step.
 //
 
 import Foundation
@@ -26,6 +27,8 @@ enum ClientError: LocalizedError {
   case noServer
   case unauthorised
   case server(status: Int)
+  /// The server said no, and said why.
+  case refused(String)
 
   var errorDescription: String? {
     switch self {
@@ -35,6 +38,8 @@ enum ClientError: LocalizedError {
       return "The server refused the token. Check PARLOUR_TOKEN in Settings."
     case .server(let status):
       return "The server answered \(status)."
+    case .refused(let reason):
+      return reason
     }
   }
 }
@@ -90,6 +95,58 @@ struct ParlourClient: Sendable {
     return try await decode(call)
   }
 
+  // MARK: - Managing the server
+
+  /// Its services, the pipeline in force and the one saved, and its memory.
+  func adminStatus() async throws -> AdminStatus {
+    try await decode(request(path: "/admin", method: "GET"))
+  }
+
+  /// Saves a pipeline change; the server restarts itself to apply it when it can.
+  func setPipeline(_ change: PipelineChange) async throws -> PipelineResult {
+    var call = request(path: "/admin/pipeline", method: "POST")
+    call.setValue("application/json", forHTTPHeaderField: "content-type")
+    call.httpBody = try JSONEncoder().encode(change)
+    return try await decode(call)
+  }
+
+  /// Starts, stops or restarts a model server, and says where it ended up.
+  func control(_ service: String, _ action: ServiceAction) async throws -> ManagedService {
+    var call = request(path: "/admin/service", method: "POST")
+    call.setValue("application/json", forHTTPHeaderField: "content-type")
+    call.httpBody = try JSONEncoder().encode(["service": service, "action": action.rawValue])
+    // Loading a model takes longer than a question does.
+    call.timeoutInterval = 60
+    return try await decode(call)
+  }
+
+  /// The server's own checks, each provider asked in turn, which takes a while.
+  func doctor() async throws -> [ServerCheck] {
+    var call = request(path: "/admin/doctor", method: "POST")
+    call.setValue("application/json", forHTTPHeaderField: "content-type")
+    call.httpBody = Data("{}".utf8)
+    call.timeoutInterval = 60
+    struct Report: Decodable { let checks: [ServerCheck] }
+    let report: Report = try await decode(call)
+    return report.checks
+  }
+
+  /// The last lines of one log: agent, llm or whisper.
+  func logs(_ service: String, lines: Int = 80) async throws -> [String] {
+    let items = [URLQueryItem(name: "service", value: service), URLQueryItem(name: "lines", value: String(lines))]
+    struct Tail: Decodable { let lines: [String] }
+    let tail: Tail = try await decode(request(path: "/admin/logs", method: "GET", query: items))
+    return tail.lines
+  }
+
+  /// Restarts the agent on the server, which is how a saved change takes effect.
+  func restartAgent() async throws -> RestartResult {
+    var call = request(path: "/admin/restart", method: "POST")
+    call.setValue("application/json", forHTTPHeaderField: "content-type")
+    call.httpBody = Data("{}".utf8)
+    return try await decode(call)
+  }
+
   private func request(path: String, method: String, query: [URLQueryItem] = []) -> URLRequest {
     var components = URLComponents(url: base.appending(path: path), resolvingAgainstBaseURL: false)!
     if !query.isEmpty { components.queryItems = query }
@@ -103,7 +160,14 @@ struct ParlourClient: Sendable {
     let (data, response) = try await Self.session.data(for: call)
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
     if status == 401 { throw ClientError.unauthorised }
-    guard (200..<300).contains(status) else { throw ClientError.server(status: status) }
+    guard (200..<300).contains(status) else {
+      // A refusal carries its reason, which says more than the number does.
+      struct Refusal: Decodable { let error: String }
+      if let refusal = try? JSONDecoder().decode(Refusal.self, from: data) {
+        throw ClientError.refused(refusal.error)
+      }
+      throw ClientError.server(status: status)
+    }
     let decoder = JSONDecoder()
     // `audio` comes back as base64, which is what Data's default strategy wants.
     return try decoder.decode(T.self, from: data)

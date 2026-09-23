@@ -33,6 +33,14 @@ test("the plist keeps the agent alive after a crash but not after a clean exit",
   );
 });
 
+test("a model server's plist yields to the person at the Mac and waits longer after a crash", () => {
+  const xml = renderPlist({ ...spec, label: "io.parlour.llm", lowPriority: true });
+  assert.match(xml, /<key>ThrottleInterval<\/key><integer>60<\/integer>/);
+  assert.match(xml, /<key>ProcessType<\/key><string>Standard<\/string>/);
+  assert.match(xml, /<key>Nice<\/key><integer>5<\/integer>/);
+  assert.doesNotMatch(renderPlist(spec), /<key>Nice<\/key>/);
+});
+
 test("the plist escapes what XML would otherwise read as markup", () => {
   const xml = renderPlist({ ...spec, program: ["/tmp/a&b", "--name=<x>"], env: { A: "1 & 2" } });
   assert.match(xml, /<string>\/tmp\/a&amp;b<\/string>/);

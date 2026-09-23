@@ -11,7 +11,8 @@ parlour restart                                  after editing config.json or a 
 parlour text                                     everything but the microphone
 parlour try mic|wake|stt|llm|cloud|tts|ask [--json]   one stage of the pipeline, tried on its own
 parlour doctor [--json]                          which of the moving parts is down
-parlour service install|uninstall|stop|restart|status|logs
+parlour service install|uninstall|start|stop|restart|status|logs [agent|llm|whisper]
+parlour remote status|pipeline [set key=value...]|service <llm|whisper> <start|stop|restart>|doctor|logs|restart
 parlour connectors add <name> <url>|list|remove <name>
 parlour mcp add <name> --url <url>|-- <command>...|list|remove <name>
 parlour skills list|show <name>|new <name>|write <name>|remove <name>|path
@@ -23,6 +24,23 @@ parlour pair [--host <name>] [--json]            a code for the iPhone app to sc
 ```
 
 `parlour <command> --help` shows the flags for each one.
+
+`parlour service start`, `stop`, `restart` and `logs` take one service by name
+(`agent`, `llm` for the local model, or `whisper`), or all of them without one.
+
+`parlour remote` manages a server from another machine, or from the same one
+without editing a file. It uses the same routes as the iPhone app's Server tab
+(see [Managing the server](/docs/clients#managing-the-server)). It finds the
+server the way a satellite does: `--url`, then `satellite.serverUrl`, then
+Bonjour, then this Mac. It sends `PARLOUR_TOKEN` from this machine's secrets,
+or `--token`.
+
+```sh
+parlour remote status
+parlour remote pipeline set triage=always timeoutMs=30000   # saved, and the agent restarts
+parlour remote service llm restart
+parlour remote logs llm --lines 100
+```
 
 `parlour connectors add` signs your household in to a remote MCP server (a
 calendar, say) and keeps the tokens in your Keychain. The `connectors`

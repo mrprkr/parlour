@@ -98,7 +98,13 @@ thinking and speaking, and a Start or Stop button.
 | Settings | Where `parlour` is, whether to start listening when the app opens, wake word, sensitivity, microphone, silence timeout, voice, the local and cloud models, the Home Assistant address and the secrets, including the access token. It reads `parlour config show --raw` (the file as written, so saving does not freeze every default into it) and writes through `parlour config write` and `parlour secrets set`. |
 | Logs | Parlour's output, live. |
 
-The tray menu has Open, Start listening, Stop and Quit.
+The tray menu has Open, Start listening, Stop and Quit. Quit asks first,
+because it stops more than the app. The agent and the services it keeps
+running (whisper and the local model) are stopped too, so they do not keep
+holding memory for a server nobody can reach. They start again when you open
+the app, or at the next login if they are installed as services. When a
+client restarts the agent to apply a setting, the app starts it again
+itself, as launchd would.
 
 ## How it fits together
 
@@ -180,7 +186,7 @@ app find `parlour` again.
 - **A true menu bar app.** The activation policy is Accessory, so there is no
   Dock icon and no menu bar of its own. The tray is the way back to the
   window. Closing the window leaves Parlour running. Quitting from the tray
-  stops it properly.
+  asks, then stops the agent and everything it keeps warm.
 - **Generated icons.** The mark is drawn once, in `packages/design`, and
   `pnpm exec nx run design:icons` writes `src-tauri/icon.png` and the menu bar's
   `src-tauri/tray.png` from it (see [the design system](/docs/design)).

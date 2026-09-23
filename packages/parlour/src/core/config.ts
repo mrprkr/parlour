@@ -194,6 +194,12 @@ export const ConfigSchema = z.object({
       host: z.string().default("0.0.0.0"),
       /** Serve the push to talk page at / for phones. */
       web: z.boolean().default(true),
+      /**
+       * Let clients with the token manage the server: the pipeline settings,
+       * the model servers and the maintenance commands, under /admin. The
+       * token already reaches the house, so this is on unless switched off.
+       */
+      admin: z.boolean().default(true),
     })
     .prefault({}),
 

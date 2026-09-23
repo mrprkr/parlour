@@ -109,6 +109,11 @@ The icons (favicon, iOS, macOS, menu bar) are drawn in `src/icon.ts` and rasteri
   `ask_the_clever_one`, which escalates to the cloud model (Claude, server-side web search, no
   house tools). `core/loop.ts` runs tool rounds up to `llm.maxToolRounds`, every tool in a round
   at once. The `pipeline` config block holds the knobs.
+- `core/admin.ts` is what a client may do to the server over `/admin` (pipeline settings, the model
+  servers, doctor, logs, restart) and `parlour remote` is its CLI client. `core/guardrails.ts` keeps
+  the model servers from taking the Mac down: the memory budget, thread caps and crash backoff. The
+  agent restarts itself by exiting with `RESTART_EXIT_CODE` (75), which launchd and the desktop
+  app's supervisor both answer by starting it again.
 - `integrations/` (`home-assistant`, `mcp`, `connectors`) are named sources of tools, prompt lines
   and a mute `gate()`.
 - `server/` is the HTTP + WebSocket server (`/v1` OpenAI-compatible, `/listen` raw PCM, `/ask`,
