@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: Check out
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
@@ -84,7 +84,7 @@ jobs:
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
 
       - name: Set up Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -100,7 +100,7 @@ jobs:
       # ffmpeg, whisper.cpp and llama.cpp at the versions stage.ts pins. The
       # key is the script itself, so a bumped version is a fresh build.
       - name: Cache the bundled tools
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: apps/desktop/appstore/.cache
           key: appstore-tools-${{ hashFiles('apps/desktop/appstore/stage.ts') }}

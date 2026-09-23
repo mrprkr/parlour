@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import type { ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { startCompanions } from "./companions.ts";
+import { BoundedLog, startCompanions } from "./companions.ts";
 import { logger } from "./logger.ts";
 
 /** Enough of a ChildProcess for the supervisor: it exits when killed. */
@@ -71,4 +71,27 @@ test("a companion that dies is started again, and one that is stopped is not", a
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(children.length, 2);
   rmSync(dir, { recursive: true, force: true });
+});
+
+test("a companion log is held to its size, with one backup", () => {
+  const dir = mkdtempSync(join(tmpdir(), "parlour-companions-"));
+  const path = join(dir, "whisper.log");
+  const file = new BoundedLog(path, () => {}, 10);
+  file.write(Buffer.from("123456"));
+  file.write(Buffer.from("7890ab"));
+  file.write(Buffer.from("cdef"));
+  file.close();
+  assert.equal(readFileSync(`${path}.1`, "utf8"), "123456");
+  assert.equal(readFileSync(path, "utf8"), "7890abcdef");
+  assert.ok(statSync(path).size <= 10);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a log that cannot be written is said once and does not throw", () => {
+  const warnings: string[] = [];
+  const file = new BoundedLog("/dev/null/cannot/exist.log", (message) => warnings.push(message));
+  file.write(Buffer.from("a"));
+  file.write(Buffer.from("b"));
+  assert.equal(warnings.length, 1);
+  assert.equal(existsSync("/dev/null/cannot"), false);
 });

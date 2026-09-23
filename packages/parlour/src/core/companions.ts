@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { createWriteStream, mkdirSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, renameSync, statSync, writeSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Logger } from "./logger.ts";
 import type { ServiceSpec } from "./ports.ts";
@@ -16,6 +16,58 @@ import { killOnExit } from "./process.ts";
  * service logs` reads the same place either way. One that dies is restarted
  * after a pause, as launchd's KeepAlive would, until `stop` is called.
  */
+
+/** What launchd's logs are held to, so a companion's are too. */
+export const MAX_LOG_BYTES = 8 * 1024 * 1024;
+
+/**
+ * A log file that never grows past `max`: when a write would take it over, the
+ * file becomes `<path>.1`, replacing the one before, and writing starts again.
+ * A write that fails (a full disk, a deleted directory) is dropped and said
+ * once, because the agent going down over a log is worse than a gap in it.
+ */
+export class BoundedLog {
+  readonly #path: string;
+  readonly #max: number;
+  readonly #warn: (message: string) => void;
+  #fd: number | null = null;
+  #size = 0;
+  #warned = false;
+
+  constructor(path: string, warn: (message: string) => void, max = MAX_LOG_BYTES) {
+    this.#path = path;
+    this.#max = max;
+    this.#warn = warn;
+  }
+
+  write(chunk: Buffer): void {
+    try {
+      if (this.#fd === null) this.#open();
+      if (this.#size + chunk.length > this.#max && this.#size > 0) {
+        this.close();
+        renameSync(this.#path, `${this.#path}.1`);
+        this.#open();
+      }
+      writeSync(this.#fd as number, chunk);
+      this.#size += chunk.length;
+    } catch (error) {
+      if (!this.#warned)
+        this.#warn(`${this.#path}: ${error instanceof Error ? error.message : String(error)}`);
+      this.#warned = true;
+    }
+  }
+
+  close(): void {
+    if (this.#fd !== null) closeSync(this.#fd);
+    this.#fd = null;
+  }
+
+  #open(): void {
+    mkdirSync(dirname(this.#path), { recursive: true });
+    this.#fd = openSync(this.#path, "a");
+    this.#size = statSync(this.#path).size;
+  }
+}
 
 export type Spawn = (command: string, args: string[], env: Record<string, string>) => ChildProcess;
 
@@ -49,21 +101,17 @@ export function startCompanions(specs: ServiceSpec[], options: CompanionOptions)
     children.add(child);
     killOnExit(child);
 
-    try {
-      mkdirSync(dirname(spec.logPath), { recursive: true });
-      const file = createWriteStream(spec.logPath, { flags: "a" });
-      // A stream error with no listener ends the process, and that would be
-      // the agent going down over a log file.
-      file.on("error", (error) => log.warn(`${spec.what} log: ${error.message}`));
-      child.stdout?.pipe(file);
-      child.stderr?.pipe(file);
-    } catch {
-      // A log that cannot be written is not a reason to go without whisper.
-    }
+    // One file per companion however many times it restarts, held to the
+    // same size launchd's logs are, so a crash loop cannot fill the container.
+    const file = new BoundedLog(spec.logPath, (message) => log.warn(`${spec.what} log: ${message}`));
+    const write = (chunk: Buffer) => file.write(chunk);
+    child.stdout?.on("data", write);
+    child.stderr?.on("data", write);
 
     child.on("error", (error) => log.warn(`${spec.what}: ${error.message}`));
     child.on("exit", (code, signal) => {
       children.delete(child);
+      file.close();
       if (stopped) return;
       log.warn(`${spec.what} exited (${signal ?? code}), starting it again`);
       const timer = setTimeout(() => {
