@@ -395,7 +395,7 @@ fn main() {
             TrayIconBuilder::with_id("main")
                 .icon(tauri::include_image!("tray.png"))
                 .icon_as_template(true)
-                .tooltip("Parlour")
+                .tooltip("Parlour Server")
                 .menu(&menu)
                 .on_menu_event(|app, event| {
                     let state = app.state::<AppState>();

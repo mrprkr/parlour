@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Builds the Mac App Store copy of Parlour.app, signs it for the sandbox,
+# Builds the Mac App Store copy of Parlour Server.app, signs it for the sandbox,
 # wraps it in the installer package App Store Connect takes, and with
 # --upload validates and uploads it.
 #

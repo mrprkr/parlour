@@ -198,7 +198,7 @@ jobs:
       # The Apple variables are what turns that into a signed build. Tauri
       # imports the certificate into a keychain of its own, signs with the
       # hardened runtime and the entitlements named in tauri.conf.json, then
-      # notarises Parlour.app and staples the ticket into it. It signs the dmg
+      # notarises Parlour Server.app and staples the ticket into it. It signs the dmg
       # as well, but stops there, which is what the next step is for.
       #
       # The --locked flag prevents Cargo from resolving dependencies even if

@@ -2,12 +2,12 @@
 #
 # Notarise and staple the dmg, then check what Gatekeeper will check.
 #
-# Tauri signs, notarises and staples Parlour.app on its own, given the Apple
+# Tauri signs, notarises and staples Parlour Server.app on its own, given the Apple
 # environment variables, but it only signs the dmg: the disk image someone
 # downloads carries no notarisation ticket of its own, and macOS refuses to
 # open one. So the app is Tauri's job and the dmg is this script's.
 #
-# Usage: scripts/notarise.sh [path/to/Parlour.dmg]
+# Usage: scripts/notarise.sh [path/to/Parlour Server.dmg]
 #
 # With no argument it takes the one dmg in the release bundle directory. With
 # no Apple credentials in the environment it says so and does nothing, which

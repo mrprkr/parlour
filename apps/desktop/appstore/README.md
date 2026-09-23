@@ -43,7 +43,7 @@ flag: macOS sets `APP_SANDBOX_CONTAINER_ID` in every sandboxed process, and
 ```sh
 brew install cmake
 pnpm build:appstore
-open apps/desktop/appstore/out/Parlour.app
+open "apps/desktop/appstore/out/Parlour Server.app"
 ```
 
 With no signing variables set, it signs ad hoc and stops before the package.

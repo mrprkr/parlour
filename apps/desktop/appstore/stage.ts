@@ -1,5 +1,5 @@
 /**
- * Puts together what the Mac App Store build of Parlour.app carries inside it,
+ * Puts together what the Mac App Store build of Parlour Server.app carries inside it,
  * because the sandbox lets it install nothing and run nothing from outside:
  *
  *   src-tauri/binaries/node-<triple>            Node, from nodejs.org

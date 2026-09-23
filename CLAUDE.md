@@ -17,7 +17,7 @@ pnpm 10 and nx, Node 22+. Run from the repo root unless noted.
 pnpm install
 pnpm check                                   # typecheck + lint + test, every project
 pnpm build                                   # nx run-many -t build: parlour, the site, the app's UI
-pnpm build:desktop                           # Parlour.app and the dmg (nx run desktop:bundle)
+pnpm build:desktop                           # Parlour Server.app and the dmg (nx run desktop:bundle)
 pnpm build:appstore                          # the sandboxed Mac App Store build (needs cmake)
 pnpm build:ios                               # the iOS app for the simulator (nx run ios:xcodebuild)
 pnpm build:all                               # all of the above

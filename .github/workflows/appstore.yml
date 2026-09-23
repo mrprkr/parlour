@@ -1,6 +1,6 @@
 name: App Store
 
-# Builds the Mac App Store copy of Parlour.app, signs it for the sandbox and
+# Builds the Mac App Store copy of Parlour Server.app, signs it for the sandbox and
 # uploads it to App Store Connect, where it appears under TestFlight. Run by
 # hand: an upload spends a build number and puts a build in front of Apple, so
 # it is a decision, not something a tag does in passing. Submitting for review
