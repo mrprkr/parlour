@@ -54,9 +54,11 @@ export default function Privacy() {
         <h2 id="mac-heading">Parlour on your Mac</h2>
         <p>
           The server, the desktop app and the command line run on a Mac you own. The wake word, the
-          transcription, the local model and the voice all run there. Your configuration, secrets, skills and
-          logs are kept in <code>~/.config/parlour</code> on that Mac, and secrets live in the macOS keychain
-          or a file only your user can read. Nothing is sent to us.
+          transcription, the local model and the voice all run there. Your configuration and skills are kept
+          in <code>~/.config/parlour</code>, secrets in the macOS keychain or a file there that only your user
+          can read, downloaded models in <code>~/Library/Caches/parlour</code>, and logs in{" "}
+          <code>~/Library/Logs/parlour</code>. The logs include the text of what Parlour heard and said, so
+          they stay on the Mac with everything else. Nothing is sent to us.
         </p>
         <p>
           Some features reach the internet only because you switch them on and give them a key of your own:
@@ -99,7 +101,9 @@ export default function Privacy() {
             The server's access token, in the iOS keychain, marked to stay on this device and out of backups.
           </li>
           <li>
-            Recordings only for as long as it takes to send or transcribe them. They are not kept afterwards.
+            Nothing you record. The latest recording is held in memory until you record again or close the
+            app, and is never saved. For the on-device answer it is written to a temporary file that is
+            deleted as soon as it has been transcribed.
           </li>
         </ul>
         <h3>What it asks for, and what happens to it</h3>
@@ -182,11 +186,12 @@ export default function Privacy() {
       <section className="sheet" aria-labelledby="rights-heading">
         <h2 id="rights-heading">Your rights</h2>
         <p>
-          Because Parlour keeps your data on your own devices, you are in control of it: delete{" "}
-          <code>~/.config/parlour</code> on the Mac, or delete the iOS app, and it is gone. Wherever you live,
-          including under the GDPR, the UK GDPR and the Australian Privacy Principles, you may ask us what
-          personal information we hold about you, and have it corrected or deleted. Today the honest answer is
-          that we hold none beyond the aggregate site statistics above.
+          Because Parlour keeps your data on your own devices, you are in control of it. On the Mac, delete{" "}
+          <code>~/.config/parlour</code>, <code>~/Library/Logs/parlour</code> and{" "}
+          <code>~/Library/Caches/parlour</code>; on the phone, delete the iOS app; and it is gone. Wherever
+          you live, including under the GDPR, the UK GDPR and the Australian Privacy Principles, you may ask
+          us what personal information we hold about you, and have it corrected or deleted. Today the honest
+          answer is that we hold none beyond the aggregate site statistics above.
         </p>
         <p>
           Parlour is not directed at children and we do not knowingly collect information from anyone under
