@@ -1,5 +1,7 @@
 import type { ServiceManager } from "../../core/ports.ts";
+import { sandboxed } from "../../core/sandbox.ts";
 import { createLaunchd, LaunchdSchema } from "./launchd.ts";
+import { createSandboxed } from "./sandboxed.ts";
 
 const UNSUPPORTED =
   "Services are only supported on macOS so far. A systemd provider would be a welcome contribution.";
@@ -13,11 +15,15 @@ const UNSUPPORTED =
  * which runs the CLI as a process against a scratch HOME and must never
  * bootstrap a job into the launchd of whoever ran the tests. An empty value
  * counts as unset, as with the other variables.
+ *
+ * Inside the App Store app's sandbox there is no launchd to write to, so the
+ * answer there is the sandboxed manager, which installs nothing.
  */
 export function pickServiceManager(
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
 ): ServiceManager {
+  if (platform === "darwin" && sandboxed(env)) return createSandboxed();
   if (platform === "darwin") {
     return createLaunchd(LaunchdSchema.parse({ launchctl: env.PARLOUR_LAUNCHCTL || undefined }));
   }

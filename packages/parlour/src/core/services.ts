@@ -6,6 +6,7 @@ import type { Config } from "./config.ts";
 import { installedLocalModel, MANAGED_LLM_PORT } from "./localmodel.ts";
 import type { Paths } from "./paths.ts";
 import type { ServiceSpec } from "./ports.ts";
+import { sandboxed } from "./sandbox.ts";
 
 /**
  * What the service manager is asked to keep running. This is the one place
@@ -37,10 +38,13 @@ function toolPath(...binaries: (string | undefined)[]): string {
 async function defaultWhich(binary: string): Promise<string | undefined> {
   try {
     // Homebrew's directories are tried first because a login shell has them
-    // and the shell that asks for a service install may not.
-    const { stdout } = await run("which", [binary], {
-      env: { ...process.env, PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}` },
-    });
+    // and the shell that asks for a service install may not. Not inside the
+    // sandbox, where the tools are the ones the app carries on the PATH it
+    // gives, and a Homebrew copy is one the sandbox will not let run.
+    const PATH = sandboxed()
+      ? (process.env.PATH ?? "")
+      : `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}`;
+    const { stdout } = await run("which", [binary], { env: { ...process.env, PATH } });
     return stdout.trim() || undefined;
   } catch {
     return undefined;

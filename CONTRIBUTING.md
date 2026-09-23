@@ -125,7 +125,7 @@ release nobody can open. The certificate lasts five years and the
 app-specific password until somebody revokes it, so both will eventually be
 the reason a release stops.
 
-Tauri signs and notarises `Parlour.app` itself; `scripts/notarise.sh` does
+Tauri signs and notarises `Parlour Server.app` itself; `scripts/notarise.sh` does
 the dmg, which Tauri signs but leaves without a ticket, and then asks
 Gatekeeper about both. Run it by hand against a build of your own if you ever
 need to check the signing outside a release.

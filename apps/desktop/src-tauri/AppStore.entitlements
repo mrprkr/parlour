@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    The Mac App Store build. Xcode signs with this (CODE_SIGN_ENTITLEMENTS in
+    ../xcode/project.yml) and adds the team and application identifiers from
+    the provisioning profile itself; appstore/package.sh adds them when it
+    signs by hand, and leaves them out for an ad hoc build, which is killed at
+    launch if it claims a team it cannot prove.
+
+    Everything Parlour does is inside the sandbox: HOME is the container, so
+    its config, secrets, models and logs all land there without being told.
+  -->
+  <key>com.apple.security.app-sandbox</key>
+  <true/>
+
+  <!-- The wake word, through ffmpeg, which inherits this. -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+
+  <!-- The cloud model, Home Assistant, MCP servers and the model downloads. -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+
+  <!--
+    The server the phone page, the iOS app and satellites talk to, Bonjour so
+    they can find it, and whisper and the local model on loopback.
+  -->
+  <key>com.apple.security.network.server</key>
+  <true/>
+</dict>
+</plist>

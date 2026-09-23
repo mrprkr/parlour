@@ -10,5 +10,26 @@
   -->
   <key>NSMicrophoneUsageDescription</key>
   <string>Parlour listens for its wake word through this microphone.</string>
+
+  <!--
+    Parlour is a server on the house's network: the phone page, the iOS app
+    and satellites find it with Bonjour and talk to it directly, and it talks
+    to Home Assistant on the same network. macOS asks before any of that
+    happens, and these are what it asks about and what it says.
+  -->
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Parlour answers the phone app and other rooms on this network, and talks to your Home Assistant.</string>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_parlour._tcp</string>
+  </array>
+
+  <!--
+    The only encryption is HTTPS through the system and Node's own TLS, which
+    is exempt, so App Store Connect need not ask about export compliance on
+    every upload.
+  -->
+  <key>ITSAppUsesNonExemptEncryption</key>
+  <false/>
 </dict>
 </plist>

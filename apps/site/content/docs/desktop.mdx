@@ -6,6 +6,9 @@ description: What the app does, how it drives the CLI, and how to run it from a 
 The menu bar app handles the everyday things without a terminal: start, stop,
 is it listening, what did it just hear, why is it not answering.
 
+It is called Parlour Server, to tell it apart from Hey Parlour, the iPhone app
+that talks to it.
+
 `apps/desktop` is a Tauri app, a Rust shell around the `parlour` command with a
 window as its only interface. It is not a second implementation. It learns
 everything by running the CLI, and writes every setting through
@@ -19,7 +22,7 @@ You need Node 22, pnpm and a Rust toolchain (`rustup`).
 ```sh
 pnpm install
 pnpm -C apps/desktop app        # the window from the checkout, with live reload
-pnpm -C apps/desktop build      # Parlour.app and a dmg, in apps/desktop/src-tauri/target/release/bundle
+pnpm -C apps/desktop build      # Parlour Server.app and a dmg, in apps/desktop/src-tauri/target/release/bundle
 ```
 
 Live reload covers the window. The CLI it drives is whichever `parlour` the
@@ -28,7 +31,7 @@ not the checkout. See
 [Running the app against a checkout](#running-the-app-against-a-checkout).
 
 A build from your checkout is unsigned, which is fine on the machine that made
-it. Copy `Parlour.app` into `/Applications` and right-click to open it the
+it. Copy `Parlour Server.app` into `/Applications` and right-click to open it the
 first time. A release dmg is signed with a Developer ID certificate and
 notarised, so it opens normally on any Mac with Apple silicon, which is what
 it is built for.
@@ -50,7 +53,7 @@ to the app.
 
 The release workflow sets the Apple environment variables Tauri reads. Tauri
 creates its own keychain for the certificate, signs the app, notarises
-`Parlour.app` and staples the ticket into it. It signs the dmg but does not
+`Parlour Server.app` and staples the ticket into it. It signs the dmg but does not
 notarise it, and macOS refuses a disk image without its own ticket. So
 `scripts/notarise.sh`, at the root of the repository, notarises and staples
 the dmg, then asks Gatekeeper to assess both and checks the app's signature
@@ -146,7 +149,7 @@ it in either of two ways:
 ```
 
 The app keeps the path while it is executable and will not swap in the global
-copy. The dev build and the installed `Parlour.app` share this settings file,
+copy. The dev build and the installed `Parlour Server.app` share this settings file,
 so when you are done, put the global path back, or delete the file and let the
 app find `parlour` again.
 

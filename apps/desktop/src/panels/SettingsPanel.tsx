@@ -12,8 +12,10 @@ import {
   audioDevices,
   deviceValue,
   getSettings,
+  loginItem,
   readConfig,
   secretsStatus,
+  setLoginItem,
   setSecret,
   setSettings,
   writeConfig,
@@ -199,6 +201,15 @@ export function SettingsPanel({
    */
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Opening at login is the system's setting rather than the form's, so it is
+  // changed the moment it is ticked. Null is a build that does not offer it,
+  // which is also a build with parlour inside it and no path to choose.
+  const [atLogin, setAtLogin] = useState<boolean | null>(null);
+  useEffect(() => {
+    loginItem()
+      .then(setAtLogin)
+      .catch(() => setAtLogin(null));
+  }, []);
 
   // Parlour's own config is edited in place rather than shadowed, so the keys
   // this window knows nothing about survive a load and a save untouched.
@@ -385,15 +396,32 @@ export function SettingsPanel({
 
       <form className="grid gap-4" onSubmit={save}>
         <Group title="Where things are">
-          <Field id="parlourBin" label="The parlour command">
-            <Input
-              id="parlourBin"
-              spellCheck={false}
-              placeholder="/opt/homebrew/bin/parlour"
-              value={values.parlourBin}
-              onChange={(event) => set("parlourBin", event.target.value)}
-            />
-          </Field>
+          {atLogin === null ? (
+            <Field id="parlourBin" label="The parlour command">
+              <Input
+                id="parlourBin"
+                spellCheck={false}
+                placeholder="/opt/homebrew/bin/parlour"
+                value={values.parlourBin}
+                onChange={(event) => set("parlourBin", event.target.value)}
+              />
+            </Field>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="atLogin"
+                checked={atLogin}
+                onCheckedChange={(checked) =>
+                  void setLoginItem(checked === true)
+                    .then(setAtLogin)
+                    .catch((error) => say(String(error), "error"))
+                }
+              />
+              <Label htmlFor="atLogin" className="font-normal">
+                Open Parlour when you log in
+              </Label>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <Checkbox
               id="autostart"

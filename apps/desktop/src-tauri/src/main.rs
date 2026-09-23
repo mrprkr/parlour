@@ -1,6 +1,7 @@
 // The window is the only user interface; nothing prints to a console.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod login;
 mod settings;
 mod setup;
 mod supervisor;
@@ -15,7 +16,7 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 
-use settings::{detect_parlour, found, shell_path, Settings};
+use settings::{detect_parlour, found, parlour_command, Settings};
 use setup::Readiness;
 use supervisor::{Status, Supervisor};
 
@@ -112,9 +113,8 @@ async fn parlour(
     }
     let output =
         tauri::async_runtime::spawn_blocking(move || -> std::io::Result<std::process::Output> {
-            let mut child = Command::new(&settings.parlour_bin)
+            let mut child = parlour_command(&settings)
                 .args(&args)
-                .env("PATH", shell_path())
                 .stdin(if stdin.is_some() {
                     Stdio::piped()
                 } else {
@@ -395,7 +395,7 @@ fn main() {
             TrayIconBuilder::with_id("main")
                 .icon(tauri::include_image!("tray.png"))
                 .icon_as_template(true)
-                .tooltip("Parlour")
+                .tooltip("Parlour Server")
                 .menu(&menu)
                 .on_menu_event(|app, event| {
                     let state = app.state::<AppState>();
@@ -451,6 +451,8 @@ fn main() {
             microphone_check,
             open_privacy_settings,
             audio_devices,
+            login::login_item,
+            login::set_login_item,
         ])
         .run(tauri::generate_context!())
         .expect("could not start the app");

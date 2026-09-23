@@ -17,6 +17,15 @@
       "options": { "cwd": "apps/desktop" },
       "outputs": ["{projectRoot}/src-tauri/target/release/bundle"]
     },
+    "xcode": {
+      "command": "xcodegen generate",
+      "options": { "cwd": "apps/desktop/xcode" }
+    },
+    "appstore": {
+      "command": "appstore/package.sh",
+      "options": { "cwd": "apps/desktop" },
+      "outputs": ["{projectRoot}/appstore/out"]
+    },
     "app": { "command": "pnpm run app", "options": { "cwd": "apps/desktop" }, "continuous": true },
     "dev": { "command": "pnpm run dev", "options": { "cwd": "apps/desktop" }, "continuous": true },
     "typecheck": { "command": "pnpm run typecheck", "options": { "cwd": "apps/desktop" } },

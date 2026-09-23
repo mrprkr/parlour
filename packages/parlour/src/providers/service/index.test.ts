@@ -33,3 +33,14 @@ test("anywhere else every method names the gap rather than failing later", async
   await assert.rejects(manager.status([]), expected);
   await assert.rejects(manager.tail("/nowhere", 10), expected);
 });
+
+test("inside the App Store sandbox nothing is installed and installing says why", async () => {
+  const manager = pickServiceManager("darwin", { APP_SANDBOX_CONTAINER_ID: "io.parlour.desktop" });
+  const spec = { label: "io.parlour.agent", what: "the agent", logPath: "/nowhere.log" };
+  const [state] = await manager.status([spec]);
+  assert.equal(state?.installed, false);
+  assert.equal(state?.running, false);
+  assert.deepEqual(await manager.uninstall(["io.parlour.agent"]), []);
+  await assert.rejects(manager.install([{ ...spec, program: ["parlour"], env: {} }]), /sandbox/);
+  assert.match(await manager.tail("/nowhere.log", 5), /Nothing logged yet/);
+});

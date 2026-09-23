@@ -1,15 +1,19 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { type Agent, buildAgent } from "../core/agent.ts";
+import { type Companions, startCompanions } from "../core/companions.ts";
 import { loadConfig } from "../core/config.ts";
 import { enableEvents } from "../core/events.ts";
 import { logger } from "../core/logger.ts";
 import type { AudioSource } from "../core/ports.ts";
 import { onShutdown } from "../core/process.ts";
+import { sandboxed } from "../core/sandbox.ts";
 import { loadSecrets } from "../core/secrets.ts";
+import { AGENT_LABEL, serviceSpecs } from "../core/services.ts";
 import { LocalVoice, VoiceSession } from "../core/session.ts";
 import { type RunningServer, startServer } from "../server/index.ts";
 import { runSatellite } from "../server/satellite.ts";
 import { type Command, parseCli } from "./args.ts";
+import { parlourBin } from "./service.ts";
 
 const USAGE = ["parlour start [--events]   --events prints one JSON line per state change, for the app"];
 
@@ -37,7 +41,21 @@ export const command: Command = {
       return;
     }
 
-    const agent = await buildAgent(config, secrets, paths);
+    // Inside the App Store sandbox there is no launchd keeping whisper and the
+    // local model warm, so they start here, before the agent that talks to
+    // them, and stop when it does.
+    let companions: Companions | null = null;
+    if (sandboxed()) {
+      const specs = (await serviceSpecs(config, paths, parlourBin())).filter(
+        (spec) => spec.label !== AGENT_LABEL,
+      );
+      companions = startCompanions(specs, { log });
+    }
+
+    const agent = await buildAgent(config, secrets, paths).catch((error) => {
+      companions?.stop();
+      throw error;
+    });
     // The server is started inside the try so a port already taken still
     // closes the agent, whose connectors would otherwise keep the process
     // alive after the error has been printed.
@@ -48,6 +66,7 @@ export const command: Command = {
     } finally {
       await server?.close();
       await agent.close();
+      companions?.stop();
     }
   },
 };

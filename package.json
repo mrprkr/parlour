@@ -10,6 +10,7 @@
     "build:parlour": "nx run parlour:build",
     "build:site": "nx run site:build",
     "build:desktop": "nx run desktop:bundle",
+    "build:appstore": "nx run desktop:appstore",
     "build:ios": "nx run ios:xcodebuild",
     "build:all": "nx run-many -t build && nx run desktop:bundle && nx run ios:xcodebuild",
     "dev": "pnpm -C packages/parlour dev",

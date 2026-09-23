@@ -3,6 +3,7 @@ import type { Config } from "../core/config.ts";
 import { LLAMA_FORMULA, type LocalModel, localModel } from "../core/localmodel.ts";
 import type { Paths } from "../core/paths.ts";
 import { findOnPath } from "../core/process.ts";
+import { sandboxed } from "../core/sandbox.ts";
 import { LLM_LABEL, serviceSpecs, WHISPER_LABEL } from "../core/services.ts";
 import { pickServiceManager } from "../providers/service/index.ts";
 import { DEFAULT_WAKE_WORDS, DEFAULT_WHISPER_MODEL, fetchModels } from "./models.ts";
@@ -101,11 +102,16 @@ export async function runSetup(options: SetupOptions, report: Reporter): Promise
   }
 
   // A bundled app and a LaunchAgent both start with a bare PATH, so the usual
-  // places are put back before anything is looked for.
-  process.env.PATH = `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}`;
+  // places are put back before anything is looked for. The App Store app is
+  // the exception: its tools are inside it, already on the PATH it gives, and
+  // the sandbox would not let a Homebrew copy run.
+  const inSandbox = sandboxed();
+  if (!inSandbox) process.env.PATH = `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH ?? ""}`;
 
   report.step("Tools");
-  if (!options.deps) {
+  if (inSandbox) {
+    report.ok("the tools come with the app");
+  } else if (!options.deps) {
     report.ok("skipping Homebrew");
   } else if (!(await findOnPath("brew"))) {
     report.warn("Homebrew is not installed, so nothing can be installed for you.");
@@ -191,6 +197,10 @@ async function keepWarm(
   report: Reporter,
 ): Promise<void> {
   report.step(step);
+  if (sandboxed()) {
+    report.ok(specs.length ? "started with the agent, inside the app" : missing.replace(/,.*$/, "."));
+    return;
+  }
   if (options.service === false) {
     report.ok("not set up to start at login (--no-service)");
     return;

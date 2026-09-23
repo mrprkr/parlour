@@ -83,6 +83,8 @@ export interface Readiness {
   config: boolean;
   /** Nothing left for the install step to do. */
   installed: boolean;
+  /** The App Store build: node, parlour and ffmpeg come inside the app. */
+  bundled: boolean;
 }
 
 /** One line of `parlour doctor --json`. */
@@ -168,6 +170,9 @@ export const setupStatus = () => invoke<Readiness>("setup_status");
 /** `parlour init`, taking every default. `deps` lets it use Homebrew. */
 export const runSetup = (deps: boolean) => invoke<boolean>("run_setup", { deps });
 export const installCli = () => invoke<boolean>("install_cli");
+/** Whether the app opens at login, or null where the build does not offer it. */
+export const loginItem = () => invoke<boolean | null>("login_item");
+export const setLoginItem = (enabled: boolean) => invoke<boolean>("set_login_item", { enabled });
 
 export const microphoneCheck = (device: string | null) => invoke<Microphone>("microphone_check", { device });
 export const openPrivacySettings = () => invoke<void>("open_privacy_settings");

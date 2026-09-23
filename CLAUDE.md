@@ -17,7 +17,8 @@ pnpm 10 and nx, Node 22+. Run from the repo root unless noted.
 pnpm install
 pnpm check                                   # typecheck + lint + test, every project
 pnpm build                                   # nx run-many -t build: parlour, the site, the app's UI
-pnpm build:desktop                           # Parlour.app and the dmg (nx run desktop:bundle)
+pnpm build:desktop                           # Parlour Server.app and the dmg (nx run desktop:bundle)
+pnpm build:appstore                          # the sandboxed Mac App Store build (needs cmake)
 pnpm build:ios                               # the iOS app for the simulator (nx run ios:xcodebuild)
 pnpm build:all                               # all of the above
 pnpm dev:desktop | dev:site | dev:ios        # the app window, the site, or the Xcode project
@@ -47,6 +48,11 @@ with live reload; `pnpm exec nx run desktop:cargo-check` for the Rust side. It o
 to the `parlour` CLI, so a capability the app needs must exist in the CLI first. Release builds are
 signed and notarised: `src-tauri/Entitlements.plist` and the `macOS` block in `tauri.conf.json` are
 what allow it, and `scripts/notarise.sh` does the dmg, which Tauri signs but does not notarise.
+The Mac App Store build is the `appstore` Cargo feature plus `tauri.appstore.conf.json`: it carries
+node, parlour, ffmpeg, whisper-server and llama-server inside the app. `apps/desktop/appstore/` stages
+and signs it, `apps/desktop/xcode/` wraps it in an Xcode project so Xcode Cloud can archive and
+upload it, and `appstore/README.md` has the detail. Inside the sandbox the CLI notices
+`APP_SANDBOX_CONTAINER_ID` (`core/sandbox.ts`) and leaves Homebrew, launchd and the Keychain alone.
 
 Site (`apps/site`, Next.js with fumadocs): the front page in `app/(home)/page.tsx`, the docs in
 `content/docs/*.mdx` ordered by `content/docs/meta.json` and served by `app/docs/[[...slug]]/page.tsx`,

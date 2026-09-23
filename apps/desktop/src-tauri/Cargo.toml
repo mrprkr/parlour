@@ -18,3 +18,15 @@ codegen-units = 1
 lto = true
 opt-level = "s"
 strip = true
+
+# The Mac App Store build: Node, parlour and its tools come inside the app,
+# nothing is installed with npm or found through a login shell, and opening at
+# login is SMAppService rather than a LaunchAgent. `tauri build --features
+# appstore`, which scripts/appstore.sh does.
+[features]
+appstore = ["dep:objc2", "dep:objc2-foundation", "dep:objc2-service-management"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { version = "0.6", optional = true }
+objc2-foundation = { version = "0.3", optional = true, default-features = false, features = ["std", "NSError", "NSString"] }
+objc2-service-management = { version = "0.3", optional = true, default-features = false, features = ["std", "SMAppService", "objc2", "objc2-foundation"] }

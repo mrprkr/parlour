@@ -1,0 +1,55 @@
+# Parlour Server for the Mac App Store, as an Xcode project, because Xcode
+# Cloud only builds Xcode projects. Xcode builds nothing here itself: the one
+# build phase has Tauri build the app (../appstore/build.sh), copies it into
+# the product and signs what is inside it, and then Xcode signs, archives and
+# hands it to App Store Connect the way it does any Mac app.
+#
+# Generated rather than checked in, as the iOS app's is: `xcodegen generate`
+# in this directory, or `pnpm exec nx run desktop:xcode`. Xcode Cloud runs
+# ci_scripts/ci_post_clone.sh first, which does it there.
+name: ParlourServer
+options:
+  deploymentTarget:
+    macOS: "13.0"
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: ${PARLOUR_DEVELOPMENT_TEAM}
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  ParlourServer:
+    type: application
+    platform: macOS
+    sources: []
+    settings:
+      base:
+        PRODUCT_NAME: Parlour Server
+        PRODUCT_BUNDLE_IDENTIFIER: io.parlour.desktop
+        # The sandbox, the microphone and the network. Xcode adds the team
+        # and application identifiers from the profile.
+        CODE_SIGN_ENTITLEMENTS: ../src-tauri/AppStore.entitlements
+        # The helpers inside inherit the app's sandbox; a hardened runtime on
+        # top would need entitlements Apple does not allow a helper to have.
+        ENABLE_HARDENED_RUNTIME: NO
+        # Replaced by Tauri's own Info.plist in the build phase below, which
+        # carries the usage strings; this only has to exist until then.
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        CURRENT_PROJECT_VERSION: "1"
+        # The build phase runs cargo, pnpm and cmake, and writes outside the
+        # build directory, which Xcode's script sandbox would refuse.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    postBuildScripts:
+      - name: Build Parlour Server with Tauri
+        script: exec "$SRCROOT/embed.sh"
+        basedOnDependencyAnalysis: false
+        showEnvVars: false
+
+schemes:
+  ParlourServer:
+    build:
+      targets:
+        ParlourServer: all
+    archive:
+      config: Release

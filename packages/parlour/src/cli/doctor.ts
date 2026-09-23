@@ -6,6 +6,7 @@ import { logger } from "../core/logger.ts";
 import type { Paths } from "../core/paths.ts";
 import type { Check, Diagnosable } from "../core/ports.ts";
 import { type ProviderContextFactory, type ProviderKind, resolveProvider } from "../core/providers.ts";
+import { sandboxed } from "../core/sandbox.ts";
 import { loadSecrets, type Secrets } from "../core/secrets.ts";
 import { AGENT_LABEL, serviceSpecs } from "../core/services.ts";
 import { connectorStore } from "../integrations/connectors/store.ts";
@@ -156,6 +157,9 @@ async function satellite(config: Config, secrets: Secrets, paths: Paths): Promis
 
 /** Whether something keeps it alive, which is the difference between a thing that runs and a thing that keeps running. */
 async function service(config: Config, paths: Paths): Promise<Check> {
+  if (sandboxed()) {
+    return { name: "service", status: "ok", detail: "kept running by the app, inside its sandbox" };
+  }
   try {
     const specs = await serviceSpecs(config, paths, parlourBin());
     const states = await pickServiceManager().status(specs);
