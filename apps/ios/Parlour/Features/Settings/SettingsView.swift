@@ -1,6 +1,6 @@
 //
 //  SettingsView.swift
-//  Which server, which room, which token, and an honest account of the four
+//  Which server, which token, and an honest account of the four
 //  permissions the app asks for. A voice assistant that will not say what it
 //  is allowed to do is not one anybody should install.
 //
@@ -26,7 +26,7 @@ struct SettingsView: View {
     Wall {
       ScrollView {
         VStack(alignment: .leading, spacing: Space.xxl) {
-          Heading("Settings", detail: "One server, one token, one room.")
+          Heading("Settings", detail: "One server, one token.")
 
           server
           found
@@ -86,9 +86,6 @@ struct SettingsView: View {
           .textInputAutocapitalization(.never)
           .autocorrectionDisabled()
           .keyboardType(.URL)
-        field("Room", placeholder: "kitchen", text: $settings.room)
-          .textInputAutocapitalization(.never)
-          .autocorrectionDisabled()
 
         VStack(alignment: .leading, spacing: Space.xs) {
           Text("PARLOUR_TOKEN")

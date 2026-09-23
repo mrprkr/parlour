@@ -1128,15 +1128,15 @@
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Features/House/HomeKitStore.swift": {
-    "mtime": 1790159634.9948354,
-    "seen": 1790159785.353906,
-    "ast_hash": "c088d629f19b5fd450dcc79f06661846",
+    "mtime": 1790111570.9906933,
+    "seen": 1790123464.4994931,
+    "ast_hash": "9b6aa8c168df8485a71d88913a67f0c9",
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Features/House/HouseView.swift": {
-    "mtime": 1790159650.936768,
-    "seen": 1790159785.3539069,
-    "ast_hash": "47a2f77b7b256878d8447d93fe0d202f",
+    "mtime": 1790095383.6169596,
+    "seen": 1790123464.4994931,
+    "ast_hash": "445d35b632f4fc83d775a5fd18425dce",
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Features/Intelligence/LocalIntelligence.swift": {
@@ -1152,9 +1152,9 @@
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Features/Onboarding/OnboardingView.swift": {
-    "mtime": 1790159736.3723946,
-    "seen": 1790159785.35391,
-    "ast_hash": "d421694a00cfe6abebb58bb7e735b269",
+    "mtime": 1790115206.4022098,
+    "seen": 1790123464.499495,
+    "ast_hash": "7e10558741829fef7ea8e0e80d28a5f7",
     "semantic_hash": ""
   },
   "apps/ios/Parlour/Features/Settings/PairingScanner.swift": {
@@ -1827,12 +1827,6 @@
     "mtime": 1790111571.0284047,
     "seen": 1790123464.49963,
     "ast_hash": "8c9cb40340bbca604834d47a974532b6",
-    "semantic_hash": ""
-  },
-  "apps/ios/Parlour/Features/House/RoomView.swift": {
-    "mtime": 1790159703.215097,
-    "seen": 1790159785.353908,
-    "ast_hash": "97d364bcb043c220f152c32cc5300e41",
     "semantic_hash": ""
   }
 }

@@ -3,6 +3,7 @@ import { existsSync, statSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 import { z } from "zod";
 import type { ServiceManager, ServiceSpec, ServiceState } from "../../core/ports.ts";
@@ -20,6 +21,7 @@ import { defineProvider, registerProvider } from "../../core/providers.ts";
 
 const run = promisify(execFile);
 const MAX_LOG_BYTES = 8 * 1024 * 1024;
+const SETTLE_POLL_MS = 200;
 
 export const LaunchdSchema = z.object({
   launchAgentsDir: z.string().default(() => join(homedir(), "Library", "LaunchAgents")),
@@ -30,6 +32,8 @@ export const LaunchdSchema = z.object({
    * that call.
    */
   launchctl: z.string().default("launchctl"),
+  /** How long a job gets to leave launchd, or to arrive, before giving up on it. */
+  settleMs: z.number().int().nonnegative().default(15_000),
 });
 
 export type LaunchdOptions = z.infer<typeof LaunchdSchema>;
@@ -91,6 +95,16 @@ async function rotate(path: string): Promise<void> {
 export function createLaunchd(options: LaunchdOptions = LaunchdSchema.parse({})): ServiceManager {
   const plistPath = (label: string) => join(options.launchAgentsDir, `${label}.plist`);
 
+  /** Whether launchd has the job at all, running or not. */
+  async function loaded(label: string): Promise<boolean> {
+    try {
+      await run(options.launchctl, ["list", label]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * `bootstrap` is the modern way in and `load` is what older systems answer
    * to. Both are tried because the failure mode of guessing wrong is a service
@@ -99,6 +113,12 @@ export function createLaunchd(options: LaunchdOptions = LaunchdSchema.parse({}))
    * "stop" is "unload" without the `-w`: the old flag writes the job into
    * launchd's disabled list, which survives a reboot, and a person who asked
    * for it to stop until the next login would find it never coming back.
+   *
+   * `bootout` returns before the job has exited, and launchd refuses to
+   * bootstrap a label it is still tearing down (error 5). A llama-server
+   * cleaning up takes long enough to lose that race every time, so unloading
+   * waits for the label to go, and loading retries until `list` sees the job:
+   * `load` exits 0 even when it fails, so no exit code can be trusted here.
    */
   async function launch(action: "load" | "unload" | "stop", label: string): Promise<boolean> {
     const file = plistPath(label);
@@ -110,13 +130,23 @@ export function createLaunchd(options: LaunchdOptions = LaunchdSchema.parse({}))
         : action === "stop"
           ? ["unload", file]
           : ["unload", "-w", file];
-    for (const args of [modern, legacy]) {
-      try {
-        await run(options.launchctl, args);
-        return true;
-      } catch {}
+    const attempt = async () => {
+      for (const args of [modern, legacy]) {
+        try {
+          await run(options.launchctl, args);
+          return;
+        } catch {}
+      }
+    };
+    const want = action === "load";
+    const deadline = Date.now() + options.settleMs;
+    await attempt();
+    for (;;) {
+      if ((await loaded(label)) === want) return true;
+      if (Date.now() >= deadline) return false;
+      await delay(SETTLE_POLL_MS);
+      if (want) await attempt();
     }
-    return false;
   }
 
   async function state(spec: Pick<ServiceSpec, "label" | "what" | "logPath">): Promise<ServiceState> {

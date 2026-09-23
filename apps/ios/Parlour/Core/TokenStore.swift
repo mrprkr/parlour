@@ -1,7 +1,7 @@
 //
 //  TokenStore.swift
 //  PARLOUR_TOKEN opens every door in the house, so it lives in the keychain
-//  rather than in UserDefaults with the room name and the server address.
+//  rather than in UserDefaults with the server address.
 //
 
 import Foundation

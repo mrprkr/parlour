@@ -1,98 +1,103 @@
 //
 //  HouseView.swift
-//  The rooms and the accessories HomeKit already knows about, read straight
-//  off the phone. No server, no token, no network: this is the one screen that
-//  still works when the Mac at home is switched off.
+//  The rooms HomeKit already knows about, read straight off the phone. No
+//  server, no token, no network: this is the one screen that still works when
+//  the Mac at home is switched off. An overview of the rooms first, then a
+//  page per room with the right control for each accessory.
 //
 
 import SwiftUI
 
 struct HouseView: View {
   @State private var homeKit = HomeKitStore()
+  /// Ties each room card to its detail page for the zoom transition.
+  @Namespace private var zoom
+
+  private let columns = [GridItem(.adaptive(minimum: 150), spacing: Space.md)]
 
   var body: some View {
-    Wall {
-      ScrollView {
-        VStack(alignment: .leading, spacing: Space.xl) {
-          Heading(homeKit.homeName ?? "Your home", detail: "From HomeKit, on this phone")
+    NavigationStack {
+      Wall {
+        ScrollView {
+          VStack(alignment: .leading, spacing: Space.xl) {
+            Heading(homeKit.homeName ?? "Your home", detail: "From HomeKit, on this phone")
 
-          if !homeKit.ready {
-            Text("Asking HomeKit.")
-              .font(Ramp.small)
-              .foregroundStyle(Palette.bracken)
-          } else if !homeKit.authorised {
-            Panel {
-              VStack(alignment: .leading, spacing: Space.sm) {
-                Text("Parlour has not been let into HomeKit.")
-                  .font(Ramp.body)
-                  .foregroundStyle(Palette.ink)
-                Text("Settings, Privacy and Security, HomeKit.")
-                  .font(Ramp.small)
-                  .foregroundStyle(Palette.bracken)
+            if !homeKit.ready {
+              Text("Asking HomeKit.")
+                .font(Ramp.small)
+                .foregroundStyle(Palette.bracken)
+            } else if !homeKit.authorised {
+              Panel {
+                VStack(alignment: .leading, spacing: Space.sm) {
+                  Text("Parlour has not been let into HomeKit.")
+                    .font(Ramp.body)
+                    .foregroundStyle(Palette.ink)
+                  Text("Settings, Privacy and Security, HomeKit.")
+                    .font(Ramp.small)
+                    .foregroundStyle(Palette.bracken)
+                }
               }
-            }
-          } else if homeKit.accessories.isEmpty {
-            Text("No accessories in this home yet.")
-              .font(Ramp.small)
-              .foregroundStyle(Palette.bracken)
-          } else {
-            ForEach(homeKit.accessories.byRoom, id: \.room) { group in
-              room(group.room, group.accessories)
+            } else if homeKit.rooms.isEmpty {
+              Text("No accessories in this home yet.")
+                .font(Ramp.small)
+                .foregroundStyle(Palette.bracken)
+            } else {
+              LazyVGrid(columns: columns, alignment: .leading, spacing: Space.md) {
+                ForEach(homeKit.rooms) { room in
+                  NavigationLink(value: room.name) {
+                    RoomCard(name: room.name, count: room.accessories.count, lit: room.lit)
+                  }
+                  .buttonStyle(.plain)
+                  .matchedTransitionSource(id: room.name, in: zoom)
+                }
+              }
+              .animation(.smooth(duration: ParlourTokens.Motion.settle), value: homeKit.rooms)
             }
           }
+          .padding(.horizontal, Space.xl)
+          .padding(.vertical, Space.lg)
         }
-        .padding(.horizontal, Space.xl)
-        .padding(.vertical, Space.lg)
+      }
+      .toolbar(.hidden, for: .navigationBar)
+      .navigationDestination(for: String.self) { name in
+        RoomView(store: homeKit, name: name)
+          .navigationTransition(.zoom(sourceID: name, in: zoom))
       }
     }
     // Creating the home manager is what raises the HomeKit prompt, so it waits
     // until someone actually opens this tab.
     .task { homeKit.start() }
   }
+}
 
-  private func room(_ name: String, _ accessories: [Accessory]) -> some View {
-    VStack(alignment: .leading, spacing: Space.sm) {
-      Text(name.uppercased())
-        .font(Ramp.micro)
-        .tracking(0.6)
-        .foregroundStyle(Palette.bracken)
-      Rule()
-      ForEach(accessories) { accessory in
-        row(accessory)
-        Rule()
+/// One room on the overview: the shared state mark, the name, and how much of
+/// the room is on right now.
+private struct RoomCard: View {
+  let name: String
+  let count: Int
+  let lit: Int
+
+  var body: some View {
+    Panel {
+      VStack(alignment: .leading, spacing: Space.sm) {
+        StateMark(state: lit > 0 ? .idle : .stopped)
+        Text(name)
+          .font(Ramp.title)
+          .foregroundStyle(Palette.ink)
+          .lineLimit(2, reservesSpace: true)
+        Text(summary)
+          .font(Ramp.small)
+          .foregroundStyle(Palette.bracken)
+          .contentTransition(.numericText())
       }
     }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(name), \(summary)")
   }
 
-  private func row(_ accessory: Accessory) -> some View {
-    HStack(spacing: Space.md) {
-      // The same mark as everywhere else: lit when it is on, an outline when
-      // there is nothing there to switch.
-      StateMark(state: accessory.on == true ? .idle : .stopped)
-      VStack(alignment: .leading, spacing: 2) {
-        Text(accessory.name)
-          .font(Ramp.body)
-          .foregroundStyle(Palette.ink)
-        if !accessory.reachable {
-          Text("not answering")
-            .font(Ramp.micro)
-            .foregroundStyle(Palette.bracken)
-        }
-      }
-      Spacer()
-      if let on = accessory.on {
-        // HomeKit is the source of truth, so the binding writes through it and
-        // waits for the reload rather than flipping the switch optimistically.
-        Toggle(
-          accessory.name,
-          isOn: Binding(get: { on }, set: { _ in Task { await homeKit.toggle(accessory) } })
-        )
-        .labelsHidden()
-        .disabled(!accessory.reachable)
-      }
-    }
-    .padding(.vertical, Space.sm)
-    .accessibilityElement(children: .combine)
+  private var summary: String {
+    if lit > 0 { return "\(lit) of \(count) on" }
+    return count == 1 ? "1 device" : "\(count) devices"
   }
 }
 

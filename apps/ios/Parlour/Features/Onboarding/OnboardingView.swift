@@ -21,13 +21,22 @@ struct OnboardingView: View {
   @Environment(ServerDiscovery.self) private var discovery
   @Environment(LocalIntelligence.self) private var intelligence
   @Environment(\.openURL) private var openURL
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   @State private var step: Step
   /// The furthest step shown so far, which is how far the bar along the top lets a tap go.
   @State private var reached: Step
+  /// Which way the last move went, so a page slides in from the side it belongs on.
+  @State private var forward = true
+  /// Finding the Mac and pairing with it are two looks at the one Connect step.
+  @State private var stage = ConnectStage.find
+  @State private var stageForward = true
+  /// The discovered server the person put their finger on, before pairing.
+  @State private var chosen: FoundServer?
   @State private var connection = Connection.untried
   @State private var scanning = false
   @State private var byHand = false
+  @State private var byToken = false
   @State private var microphone = Recorder.permission
   /// A link from outside the app, held until the person says it is theirs.
   @State private var offered: PairingLink?
@@ -53,6 +62,10 @@ struct OnboardingView: View {
     case checking
     case connected(Health)
     case failed(String)
+  }
+
+  enum ConnectStage {
+    case find, pair
   }
 
   init(again: Bool = false, onDone: @escaping () -> Void) {
@@ -83,14 +96,20 @@ struct OnboardingView: View {
             .padding(.bottom, Space.md)
           Rule()
         }
-        ScrollView {
-          content
-            .padding(.horizontal, Space.xl)
-            .padding(.vertical, Space.xl)
-            .frame(maxWidth: 560)
-            .frame(maxWidth: .infinity)
+        // The ZStack is what lets the outgoing and incoming pages overlap
+        // while they slide, rather than stack up in the column.
+        ZStack {
+          ScrollView {
+            content
+              .padding(.horizontal, Space.xl)
+              .padding(.vertical, Space.xl)
+              .frame(maxWidth: 560)
+              .frame(maxWidth: .infinity)
+          }
+          .scrollDismissesKeyboard(.interactively)
+          .id(step)
+          .transition(reduceMotion ? .opacity : .push(from: forward ? .trailing : .leading))
         }
-        .scrollDismissesKeyboard(.interactively)
         Rule()
         footer
           .padding(.horizontal, Space.xl)
@@ -101,9 +120,11 @@ struct OnboardingView: View {
       PairingScanner { link in settings.pair(with: link) }
     }
     .task(id: settings.pairedWith) {
-      // A code was just scanned, or handed over by the Camera app: say whether
-      // the server it named answers, without waiting to be asked.
-      if settings.pairedWith != nil { await check() }
+      // A code was just scanned, or handed over by the Camera app: move to the
+      // pairing look and run the handshake without waiting to be asked.
+      guard settings.pairedWith != nil else { return }
+      goStage(.pair)
+      await check()
     }
     .task {
       // Browsing raises the local network prompt, and it is better raised here,
@@ -111,11 +132,18 @@ struct OnboardingView: View {
       discovery.start()
       intelligence.refresh()
       microphone = Recorder.permission
+      // A phone already pointed at a server has been through the finding.
+      if settings.endpoint(found: nil) != nil { stage = .pair }
       // Already set up and opened again: say straight away whether it still works.
       if again, settings.endpoint(found: nil) != nil { await check() }
     }
+    .onChange(of: discovery.found) { _, found in
+      // A server that went away cannot stay picked.
+      if let picked = chosen, !found.contains(picked) { chosen = nil }
+    }
     .onAppear { settings.inSetup = true }
     .onDisappear { settings.inSetup = false }
+    .sensoryFeedback(.selection, trigger: step)
     .onOpenURL { url in
       // Any web page can open a parlour:// link, so, as on the tab bar, nothing
       // is taken until the person has seen which server it names.
@@ -194,8 +222,11 @@ struct OnboardingView: View {
       Button("Get started") { go(.connect) }
         .buttonStyle(.hearth)
     case .connect:
-      if connected {
+      if connected, stage == .pair {
         Button("Continue") { next() }
+          .buttonStyle(.hearth)
+      } else if stage == .find, let chosen {
+        Button("Pair with \(chosen.name)") { pick(chosen) }
           .buttonStyle(.hearth)
       } else {
         Button {
@@ -237,8 +268,8 @@ struct OnboardingView: View {
       }
 
       VStack(spacing: Space.sm) {
-        outline(1, "Connect", "Pair with the Parlour running on your Mac.")
-        outline(2, "Voice", "Allow the microphone, and say which room this is.")
+        outline(1, "Connect", "Find the Parlour running on your Mac, then pair with it.")
+        outline(2, "Voice", "Allow the microphone, so the phone can hear you.")
         if intelligence.state.usable {
           outline(3, "Extras", "Answers on this phone for when home is out of reach.")
         }
@@ -273,117 +304,230 @@ struct OnboardingView: View {
 
   // MARK: - Connect
 
+  /// Finding and pairing are two looks at the one step: first the servers
+  /// Bonjour can see, so it is plain whether there is anything to pair with,
+  /// then the handshake with the one that was picked.
   private var connect: some View {
-    @Bindable var settings = settings
-    return VStack(alignment: .leading, spacing: Space.xl) {
-      Heading(
-        "Connect to your Mac",
-        detail:
-          "On the Mac, open Parlour and look under On the network on the Status tab, "
-          + "or run parlour pair. Scan the code it shows."
-      )
-
-      if !isUntried {
-        Panel { connectionRow }
-      }
-
-      Reveal("Set it up by hand", isOpen: $byHand) {
-        VStack(alignment: .leading, spacing: Space.lg) {
-          if !discovery.found.isEmpty {
-            VStack(alignment: .leading, spacing: Space.xs) {
-              caption("Found on this network")
-              ForEach(discovery.found) { server in
-                Button {
-                  settings.serverURL = server.url.absoluteString
-                } label: {
-                  HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                      Text(server.name)
-                        .font(Ramp.body)
-                        .foregroundStyle(Palette.ink)
-                      Text(server.url.absoluteString)
-                        .font(Ramp.mono(ParlourTokens.Text.micro))
-                        .foregroundStyle(Palette.bracken)
-                    }
-                    Spacer()
-                    if settings.serverURL == server.url.absoluteString {
-                      Image(systemName: "checkmark")
-                        .foregroundStyle(Palette.hearth)
-                    } else {
-                      Text("use")
-                        .font(Ramp.small)
-                        .foregroundStyle(Palette.hearth)
-                    }
-                  }
-                  .padding(.vertical, Space.sm)
-                }
-                .buttonStyle(.plain)
-                Rule()
-              }
-            }
-          } else if let failure = discovery.failure {
-            Text(failure)
-              .font(Ramp.small)
-              .foregroundStyle(Palette.alarm)
-          }
-
-          VStack(alignment: .leading, spacing: Space.xs) {
-            caption("Address")
-            TextField("den.local:8765", text: $settings.serverURL)
-              .font(Ramp.body)
-              .textFieldStyle(.plain)
-              .textInputAutocapitalization(.never)
-              .autocorrectionDisabled()
-              .keyboardType(.URL)
-            Rule()
-          }
-
-          VStack(alignment: .leading, spacing: Space.xs) {
-            caption("Token")
-            SecureField("PARLOUR_TOKEN, from parlour secrets", text: $settings.token)
-              .font(Ramp.mono(ParlourTokens.Text.body))
-              .textFieldStyle(.plain)
-            Rule()
-            Text("Kept in the keychain on this phone, never in a backup.")
-              .font(Ramp.micro)
-              .foregroundStyle(Palette.bracken)
-          }
-
-          Button("Check the connection") { Task { await check() } }
-            .font(Ramp.small)
-            .disabled(isChecking)
-        }
+    ZStack {
+      switch stage {
+      case .find:
+        find
+          .transition(stageTransition)
+      case .pair:
+        pair
+          .transition(stageTransition)
       }
     }
   }
 
+  private var stageTransition: AnyTransition {
+    reduceMotion ? .opacity : .push(from: stageForward ? .trailing : .leading)
+  }
+
+  // MARK: - Connect, finding
+
+  private var find: some View {
+    VStack(alignment: .leading, spacing: Space.xl) {
+      Heading(
+        "Find your Mac",
+        detail:
+          "Parlour announces itself on the home network. Open it on the Mac "
+          + "and it appears here; pick it, then pair."
+      )
+
+      Panel {
+        VStack(alignment: .leading, spacing: 0) {
+          if discovery.found.isEmpty {
+            HStack(alignment: .top, spacing: Space.md) {
+              ProgressView()
+                .tint(Palette.bracken)
+              VStack(alignment: .leading, spacing: 2) {
+                Text(discovery.browsing ? "Looking on this network" : "Not looking yet")
+                  .font(Ramp.body)
+                  .foregroundStyle(Palette.ink)
+                Text("Nothing seen so far. The Mac needs to be awake, on the same network, with Parlour running.")
+                  .font(Ramp.small)
+                  .foregroundStyle(Palette.bracken)
+              }
+              Spacer(minLength: 0)
+            }
+            .padding(.vertical, Space.sm)
+          } else {
+            ForEach(discovery.found) { server in
+              found(server)
+              if server.id != discovery.found.last?.id { Rule() }
+            }
+          }
+          if let failure = discovery.failure {
+            Text(failure)
+              .font(Ramp.small)
+              .foregroundStyle(Palette.alarm)
+              .padding(.top, Space.sm)
+          }
+        }
+      }
+      .animation(.smooth(duration: ParlourTokens.Motion.settle), value: discovery.found)
+
+      Reveal("Set it up by hand", isOpen: $byHand) {
+        byHandFields
+      }
+    }
+  }
+
+  /// One discovered server, picked with the native mark rather than taken
+  /// automatically: a server must be chosen before anything is sent its way.
+  private func found(_ server: FoundServer) -> some View {
+    Button {
+      withAnimation(.snappy(duration: ParlourTokens.Motion.quick)) {
+        chosen = chosen == server ? nil : server
+      }
+    } label: {
+      HStack(spacing: Space.md) {
+        Image(systemName: chosen == server ? "checkmark.circle.fill" : "circle")
+          .font(.system(size: 20))
+          .foregroundStyle(chosen == server ? Palette.hearth : Palette.rule)
+          .contentTransition(.symbolEffect(.replace))
+        VStack(alignment: .leading, spacing: 2) {
+          Text(server.name)
+            .font(Ramp.body)
+            .foregroundStyle(Palette.ink)
+          Text(server.url.absoluteString)
+            .font(Ramp.mono(ParlourTokens.Text.micro))
+            .foregroundStyle(Palette.bracken)
+        }
+        Spacer(minLength: 0)
+      }
+      .padding(.vertical, Space.sm)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityAddTraits(chosen == server ? .isSelected : [])
+  }
+
+  private var byHandFields: some View {
+    @Bindable var settings = settings
+    return VStack(alignment: .leading, spacing: Space.lg) {
+      VStack(alignment: .leading, spacing: Space.xs) {
+        caption("Address")
+        TextField("den.local:8765", text: $settings.serverURL)
+          .font(Ramp.body)
+          .textFieldStyle(.plain)
+          .textInputAutocapitalization(.never)
+          .autocorrectionDisabled()
+          .keyboardType(.URL)
+        Rule()
+      }
+
+      VStack(alignment: .leading, spacing: Space.xs) {
+        caption("Token")
+        SecureField("PARLOUR_TOKEN, from parlour secrets", text: $settings.token)
+          .font(Ramp.mono(ParlourTokens.Text.body))
+          .textFieldStyle(.plain)
+        Rule()
+        Text("Kept in the keychain on this phone, never in a backup.")
+          .font(Ramp.micro)
+          .foregroundStyle(Palette.bracken)
+      }
+
+      if case .failed(let reason) = connection {
+        Text(reason)
+          .font(Ramp.small)
+          .foregroundStyle(Palette.alarm)
+      }
+
+      Button("Pair") { Task { await check() } }
+        .font(Ramp.small)
+        .disabled(isChecking)
+    }
+  }
+
+  // MARK: - Connect, pairing
+
+  private var pair: some View {
+    VStack(alignment: .leading, spacing: Space.xl) {
+      Heading(
+        "Pair with \(serverName)",
+        detail:
+          "On the Mac, look under On the network on the Status tab, or run "
+          + "parlour pair. Scan the code it shows: it carries the address and "
+          + "the token in one go."
+      )
+
+      Panel { handshake }
+
+      Reveal("Enter the token by hand", isOpen: $byToken) {
+        tokenField
+      }
+
+      Button {
+        goStage(.find)
+      } label: {
+        Label("Choose a different server", systemImage: "chevron.left")
+      }
+      .font(Ramp.small)
+    }
+  }
+
+  /// Where the handshake stands, in pairing words rather than checking ones.
   @ViewBuilder
-  private var connectionRow: some View {
+  private var handshake: some View {
     switch connection {
     case .untried:
-      EmptyView()
+      row(.stopped, serverName, "Not paired yet. Scan the code, and the handshake runs by itself.")
     case .checking:
-      row(.thinking, "Checking", "Asking the server whether it will let this phone in.")
+      HStack(alignment: .top, spacing: Space.md) {
+        ProgressView()
+          .tint(Palette.bracken)
+        VStack(alignment: .leading, spacing: 2) {
+          Text("Pairing with \(serverName)")
+            .font(Ramp.body)
+            .foregroundStyle(Palette.ink)
+          Text("Shaking hands, and checking the token opens the door.")
+            .font(Ramp.small)
+            .foregroundStyle(Palette.bracken)
+        }
+        Spacer(minLength: 0)
+      }
+      .padding(.vertical, Space.sm)
+      .accessibilityElement(children: .combine)
     case .connected(let health):
       row(
         .idle,
-        "Connected to \(serverName)",
+        "Paired with \(serverName)",
         "\(health.tools) tools, \(health.cloud ? "with the cloud behind it" : "local only")."
       )
     case .failed(let reason):
       VStack(alignment: .leading, spacing: Space.sm) {
-        row(.stopped, "Not connected", reason)
+        row(.stopped, "Could not pair", reason)
         Button("Try again") { Task { await check() } }
           .font(Ramp.small)
       }
     }
   }
 
+  private var tokenField: some View {
+    @Bindable var settings = settings
+    return VStack(alignment: .leading, spacing: Space.lg) {
+      VStack(alignment: .leading, spacing: Space.xs) {
+        caption("Token")
+        SecureField("PARLOUR_TOKEN, from parlour secrets", text: $settings.token)
+          .font(Ramp.mono(ParlourTokens.Text.body))
+          .textFieldStyle(.plain)
+        Rule()
+        Text("Kept in the keychain on this phone, never in a backup.")
+          .font(Ramp.micro)
+          .foregroundStyle(Palette.bracken)
+      }
+      Button("Pair") { Task { await check() } }
+        .font(Ramp.small)
+        .disabled(isChecking)
+    }
+  }
+
   // MARK: - Voice
 
   private var voice: some View {
-    @Bindable var settings = settings
-    return VStack(alignment: .leading, spacing: Space.xl) {
+    VStack(alignment: .leading, spacing: Space.xl) {
       Heading(
         "How it hears you",
         detail: "Hold the talk button and speak. The phone only listens while the button is held."
@@ -419,19 +563,6 @@ struct OnboardingView: View {
             }
           }
         }
-      }
-
-      VStack(alignment: .leading, spacing: Space.xs) {
-        caption("Room, optional")
-        TextField("kitchen", text: $settings.room)
-          .font(Ramp.body)
-          .textFieldStyle(.plain)
-          .textInputAutocapitalization(.never)
-          .autocorrectionDisabled()
-        Rule()
-        Text("Where this phone usually is, so \"lights off\" means the lights in here.")
-          .font(Ramp.micro)
-          .foregroundStyle(Palette.bracken)
       }
     }
   }
@@ -477,21 +608,15 @@ struct OnboardingView: View {
         case .connected:
           row(.idle, "Server", serverName)
         case .checking:
-          row(.thinking, "Server", "Checking.")
+          row(.thinking, "Server", "Pairing.")
         default:
-          row(.stopped, "Server", "Not connected.")
+          row(.stopped, "Server", "Not paired.")
         }
         Rule()
         row(
           microphone == .granted ? .idle : .stopped,
           "Microphone",
           microphone == .granted ? "Allowed." : "Not allowed. Typing still works."
-        )
-        Rule()
-        row(
-          settings.room.isEmpty ? .stopped : .idle,
-          "Room",
-          settings.room.isEmpty ? "Not set." : settings.room
         )
         if intelligence.state.usable {
           Rule()
@@ -548,15 +673,31 @@ struct OnboardingView: View {
     return false
   }
 
-  private var isUntried: Bool {
-    if case .untried = connection { return true }
-    return false
-  }
-
   private var serverName: String {
     settings.pairedWith
+      ?? chosen?.name
       ?? settings.endpoint(found: nil)?.host()
       ?? "your Mac"
+  }
+
+  /// Point the phone at the picked server, then move on to the handshake.
+  /// The address alone is not a pairing: that still takes the code or the token.
+  private func pick(_ server: FoundServer) {
+    settings.serverURL = server.url.absoluteString
+    connection = .untried
+    goStage(.pair)
+  }
+
+  private func goStage(_ next: ConnectStage) {
+    guard stage != next else { return }
+    stageForward = next == .pair
+    withAnimation(
+      reduceMotion
+        ? .easeInOut(duration: ParlourTokens.Motion.quick)
+        : .snappy(duration: ParlourTokens.Motion.settle * 2, extraBounce: 0)
+    ) {
+      stage = next
+    }
   }
 
   /// The step before or after this one, among the ones this phone shows.
@@ -573,7 +714,12 @@ struct OnboardingView: View {
   }
 
   private func go(_ next: Step) {
-    withAnimation(.easeInOut(duration: ParlourTokens.Motion.settle)) {
+    forward = next > step
+    withAnimation(
+      reduceMotion
+        ? .easeInOut(duration: ParlourTokens.Motion.quick)
+        : .snappy(duration: ParlourTokens.Motion.settle * 2, extraBounce: 0)
+    ) {
       step = next
       if next > reached { reached = next }
     }
@@ -593,6 +739,9 @@ struct OnboardingView: View {
     connection = .checking
     do {
       connection = .connected(try await ParlourClient(base: base, token: settings.token).connect())
+      // A handshake that worked from the finding look, by hand, still deserves
+      // the paired page.
+      if stage == .find { goStage(.pair) }
     } catch {
       connection = .failed(error.localizedDescription)
     }
