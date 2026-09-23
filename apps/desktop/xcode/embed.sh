@@ -9,8 +9,10 @@
 set -euo pipefail
 
 # A build phase gets Xcode's PATH, which has none of the tools; these are where
-# ci_scripts/ci_post_clone.sh, or a person with Homebrew and rustup, put them.
-export PATH="$HOME/.cargo/bin:/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+# ci_scripts/ci_post_clone.sh puts them in Xcode Cloud, and where Homebrew and
+# rustup put them on a person's Mac.
+tools="$HOME/.parlour-tools"
+export PATH="$tools/node/bin:$tools/cmake/bin:$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 built="$("$here/../appstore/build.sh" | tail -1)"
