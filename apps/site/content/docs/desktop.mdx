@@ -34,7 +34,10 @@ A build from your checkout is unsigned, which is fine on the machine that made
 it. Copy `Parlour Server.app` into `/Applications` and right-click to open it the
 first time. A release dmg is signed with a Developer ID certificate and
 notarised, so it opens normally on any Mac with Apple silicon, which is what
-it is built for.
+it is built for. Each release is on
+[GitHub](https://github.com/mrprkr/parlour/releases/latest), and the newest
+dmg is always at
+[`releases/latest/download/Parlour-Server-arm64.dmg`](https://github.com/mrprkr/parlour/releases/latest/download/Parlour-Server-arm64.dmg).
 
 The app does not bundle Node or the package. It looks for `parlour` on your
 login shell's PATH, so nvm, fnm and volta installs are found, then in
@@ -51,7 +54,7 @@ to it holds the sentence macOS shows the user. ffmpeg does the recording, but
 macOS attributes the request to the app that started it, so both files belong
 to the app.
 
-The release workflow sets the Apple environment variables Tauri reads. Tauri
+The desktop release workflow sets the Apple environment variables Tauri reads. Tauri
 creates its own keychain for the certificate, signs the app, notarises
 `Parlour Server.app` and staples the ticket into it. It signs the dmg but does not
 notarise it, and macOS refuses a disk image without its own ticket. So
@@ -60,7 +63,7 @@ the dmg, then asks Gatekeeper to assess both and checks the app's signature
 carries the hardened runtime and the microphone entitlement. Run on a
 machine with no Apple credentials, it says so and stops.
 
-[`.github/workflows/release.yml`](https://github.com/mrprkr/parlour/blob/main/.github/workflows/release.yml)
+[`.github/workflows/desktop-release.yml`](https://github.com/mrprkr/parlour/blob/main/.github/workflows/desktop-release.yml)
 lists the six repository secrets behind it and what each one is.
 
 ## Setting up

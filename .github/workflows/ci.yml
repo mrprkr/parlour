@@ -41,7 +41,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      # Cheap, and it stands between a typo and a tag that fails after half an
+      # Cheap, and it stands between a typo and a release that fails after half an
       # hour of release build: the bundler reads these three at the very end,
       # when it signs, and a missing entitlements file is only a problem then.
       - name: Check the bundle's signing configuration
@@ -83,7 +83,7 @@ jobs:
     # Not on pull requests. A release build with lto on takes long enough that
     # running it per push would cost more than it catches, and cargo-check
     # above already covers the Rust. On main it is the release path rehearsed
-    # without the signing, so a tag is not the first time the bundler runs.
+    # without the signing, so a release is not the first time the bundler runs.
     if: github.event_name != 'pull_request'
     runs-on: macos-latest
     timeout-minutes: 45
@@ -131,7 +131,7 @@ jobs:
 
       # With no credentials this notarises nothing and says so. It runs anyway,
       # because finding exactly one dmg where the release expects one is worth
-      # knowing before a tag, and because the script is easier to break than
+      # knowing before a release, and because the script is easier to break than
       # it looks.
       - name: Check the release would find the dmg
         run: scripts/notarise.sh

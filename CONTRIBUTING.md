@@ -109,19 +109,29 @@ version into the desktop app's `tauri.conf.json`,
 `Cargo.toml` and `Cargo.lock`. You rarely run it yourself: on every push to
 main, [`.github/workflows/changesets.yml`](.github/workflows/changesets.yml)
 runs it and keeps a "Release the pending changesets" pull request up to date.
-Merge that, then push a `vX.Y.Z` tag on the merge commit: it
-publishes the package to npm and attaches the dmg to a GitHub release, with
-notes generated from the pull requests since the last tag. `pnpm version:set
-X.Y.Z` sets a version by hand when there are no changesets to go on.
+Merging it releases the Mac app: the version moving in `tauri.conf.json`
+starts [`.github/workflows/desktop-release.yml`](.github/workflows/desktop-release.yml),
+which builds, signs and notarises the dmg and publishes it as a GitHub release
+tagged `desktop-vX.Y.Z`, with the changelog entry and the pull requests since
+the last release as its notes. The newest dmg is always at
+`https://github.com/mrprkr/parlour/releases/latest/download/Parlour-Server-arm64.dmg`.
+The CLI stays on npm: push a `vX.Y.Z` tag on the merge commit and
+[`.github/workflows/release.yml`](.github/workflows/release.yml) publishes the
+package, with no GitHub release of its own. `pnpm version:set X.Y.Z` sets a
+version by hand when there are no changesets to go on.
+
+The iOS app and the Mac App Store build are not on GitHub releases: an iPhone
+installs only from the App Store or TestFlight, and Xcode Cloud archives and
+uploads both.
 
 The dmg is signed with a Developer ID certificate and notarised, so it opens
 on a machine that has never seen this repository. That rests on six
 repository secrets, which
-[`.github/workflows/release.yml`](.github/workflows/release.yml) lists and
+[`.github/workflows/desktop-release.yml`](.github/workflows/desktop-release.yml) lists and
 explains: the certificate and its password, the signing identity, and an
 Apple ID with an app-specific password and a team. The workflow checks all
-six before it builds anything, because a tag that fails is better than a
-release nobody can open. The certificate lasts five years and the
+six before it builds anything, because a release that fails is better than
+one nobody can open. The certificate lasts five years and the
 app-specific password until somebody revokes it, so both will eventually be
 the reason a release stops.
 
@@ -131,8 +141,9 @@ Gatekeeper about both. Run it by hand against a build of your own if you ever
 need to check the signing outside a release.
 
 The preflight only sees whether each secret is set, not whether it is right,
-so run the release workflow by hand (Actions, Release, Run workflow) after
-setting or rotating any of them. A manual run builds, signs and notarises the
-app and stops: nothing goes to npm and no release is created, which makes it
-a rehearsal you can spend freely rather than a version number you cannot get
-back.
+so run the desktop release workflow by hand (Actions, Desktop release, Run
+workflow) after setting or rotating any of them. A manual run builds, signs
+and notarises the app and stops: no release is created, which makes it a
+rehearsal you can spend freely. Tick "publish" to also release the current
+version if it has no release yet, which is how a release that failed part way
+is finished.
