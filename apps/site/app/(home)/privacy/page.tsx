@@ -28,8 +28,8 @@ export default function Privacy() {
         <ul>
           <li>We do not run a server that your voice, your requests or your house data pass through.</li>
           <li>
-            We have no accounts, no advertising and nothing to sell, and no tracking beyond the cookieless visit
-            counts on this site.
+            We have no accounts, no advertising and nothing to sell, and no tracking beyond the cookieless
+            visit counts on this site.
           </li>
           <li>The iOS app talks to your own Mac, and to nothing of ours.</li>
           <li>
