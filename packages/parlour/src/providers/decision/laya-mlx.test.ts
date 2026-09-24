@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { flattenInstructions, prepareQuestions } from "./laya-mlx.ts";
+import { defaultPython, flattenInstructions, prepareQuestions } from "./laya-mlx.ts";
 
 test("flattenInstructions keeps a plain string", () => {
   assert.equal(flattenInstructions("Is this urgent?"), "Is this urgent?");
@@ -39,4 +42,16 @@ test("prepareQuestions flattens instructions and keeps criteria by type", () => 
   assert.match(String(prepared.needs_cloud?.instructions), /Needs cloud\?/);
   assert.deepEqual(prepared.intent?.criteria, { house: "devices", chat: "talk" });
   assert.deepEqual(prepared.urgency?.criteria, ["low", "high"]);
+});
+
+test("defaultPython prefers the checkout's packages/laya environment", () => {
+  const packages = mkdtempSync(join(tmpdir(), "parlour-laya-"));
+  const here = join(packages, "parlour", "src", "providers", "decision");
+  mkdirSync(here, { recursive: true });
+  assert.equal(defaultPython(here), "python3");
+
+  const bin = join(packages, "laya", ".venv", "bin");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, "python"), "");
+  assert.equal(defaultPython(here), join(bin, "python"));
 });

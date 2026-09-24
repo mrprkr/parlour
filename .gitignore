@@ -51,7 +51,9 @@ packages/*/pnpm-lock.yaml
 .agents/
 .codex/
 .claude/agents/
-.claude/skills/
+.claude/skills/*
+# Except the skill for Laya, which Parlour depends on and ships in packages/laya.
+!.claude/skills/deciding-with-laya/
 .github/agents/
 .github/hooks/
 .github/skills/

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "laya": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "--directory", "packages/laya", "python", "mcp_server.py"]
+    }
+  }
+}

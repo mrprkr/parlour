@@ -23,6 +23,7 @@ pnpm build:ios                               # the iOS app for the simulator (nx
 pnpm build:all                               # all of the above
 pnpm dev:desktop | dev:site | dev:ios        # the app window, the site, or the Xcode project
 pnpm emit / pnpm icons                       # design tokens and icons into every surface
+pnpm exec nx run laya:setup                  # the pinned laya-mlx environment in packages/laya (needs uv)
 pnpm exec nx run-many -t typecheck lint test build   # what CI runs (macOS), then pnpm cargo-check
 pnpm exec nx run parlour:test                # one project, one target
 pnpm exec biome check --write .              # fix what lint can fix
@@ -67,6 +68,12 @@ iOS app (`apps/ios`, SwiftUI): a client of the server's `/health`, `/voice` and 
 Bonjour discovery and Apple's on-device model. The Xcode project is generated from `project.yml`, so
 `brew install xcodegen` then `pnpm exec nx run ios:app`. There is no iOS job in CI; build it by hand
 with `nx run ios:xcodebuild` and `nx run ios:xcodetest`. `apps/ios/README.md` has the detail.
+
+Laya (`packages/laya`): a uv project pinning `laya-mlx`, the Python the `laya-mlx` decision provider
+runs its worker with when `decision.python` is unset and the checkout has `packages/laya/.venv`.
+`mcp_server.py` in it is the `laya` server in `.mcp.json`, which gives Claude Code the same on-device
+decisions; `.claude/skills/deciding-with-laya` says when they are worth trusting. It has no CI
+targets, so CI never needs uv; bump the pin in `pyproject.toml` and run `uv lock` together.
 
 Design system (`packages/design`): `src/tokens.ts` is the one palette, type ramp and session-state
 vocabulary, and `src/emit.ts` writes it into the site, the app, the phone page and iOS. Never edit a
