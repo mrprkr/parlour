@@ -156,13 +156,14 @@ struct ParlourClient: Sendable {
     return call
   }
 
+  /// A refusal carries its reason, which says more than the status number does.
+  private struct Refusal: Decodable { let error: String }
+
   private func decode<T: Decodable>(_ call: URLRequest) async throws -> T {
     let (data, response) = try await Self.session.data(for: call)
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
     if status == 401 { throw ClientError.unauthorised }
     guard (200..<300).contains(status) else {
-      // A refusal carries its reason, which says more than the number does.
-      struct Refusal: Decodable { let error: String }
       if let refusal = try? JSONDecoder().decode(Refusal.self, from: data) {
         throw ClientError.refused(refusal.error)
       }
