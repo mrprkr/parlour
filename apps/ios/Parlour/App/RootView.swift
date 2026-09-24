@@ -16,7 +16,7 @@ struct RootView: View {
   @State private var offered: PairingLink?
 
   private enum Screen: Hashable {
-    case talk, house, settings
+    case talk, house, server, settings
   }
 
   var body: some View {
@@ -26,6 +26,9 @@ struct RootView: View {
       }
       Tab("House", systemImage: "house", value: Screen.house) {
         HouseView()
+      }
+      Tab("Server", systemImage: "desktopcomputer", value: Screen.server) {
+        ServerView()
       }
       Tab("Settings", systemImage: "gearshape", value: Screen.settings) {
         SettingsView()

@@ -10,6 +10,8 @@ import {
   onAgentError,
   onAgentLog,
   onAgentStatus,
+  onQuitRequested,
+  quitApp,
   type Status,
   startAgent,
   stopAgent,
@@ -82,6 +84,8 @@ export function App(): JSX.Element {
    */
   const [toolsKey, setToolsKey] = useState(0);
   const [testKey, setTestKey] = useState(0);
+  /** The tray's Quit, waiting on an answer, and then on the services stopping. */
+  const [quit, setQuit] = useState<"asking" | "stopping" | null>(null);
 
   // A new array each time, because the log panel follows the tail by identity.
   const append = useCallback((line: string) => {
@@ -112,6 +116,9 @@ export function App(): JSX.Element {
         if (!live) return;
         append(message);
         setTab("logs");
+      }),
+      onQuitRequested(() => {
+        if (live) setQuit((current) => current ?? "asking");
       }),
     ];
 
@@ -156,7 +163,19 @@ export function App(): JSX.Element {
     }
   }
 
-  const state = status.state || "stopped";
+  /** Stops everything and quits. The app is gone when this succeeds, so only a failure comes back. */
+  async function confirmQuit(): Promise<void> {
+    setQuit("stopping");
+    try {
+      await quitApp();
+    } catch (error) {
+      setQuit(null);
+      append(`could not quit: ${String(error)}`);
+      setTab("logs");
+    }
+  }
+
+  const state = status.restarting ? "restarting" : status.state || "stopped";
 
   return (
     <div className="flex h-full flex-col">
@@ -233,6 +252,45 @@ export function App(): JSX.Element {
           </TabsContent>
         </div>
       </Tabs>
+
+      {quit && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="quit-title"
+          aria-describedby="quit-detail"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-6"
+        >
+          <div className="w-full max-w-sm rounded-xl border bg-card p-5 text-card-foreground shadow-sm">
+            <h2 id="quit-title" className="text-[15px] font-semibold">
+              Quit Parlour Server?
+            </h2>
+            <p id="quit-detail" className="mt-2 text-muted-foreground">
+              Quitting also stops the agent and the services it keeps running: whisper and the local model.
+              Phones, satellites and the iPhone app get no answer until Parlour starts again, when you open
+              the app or at the next login.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={quit === "stopping"}
+                onClick={() => setQuit(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                autoFocus
+                disabled={quit === "stopping"}
+                onClick={() => void confirmQuit()}
+              >
+                {quit === "stopping" ? "Stopping services..." : "Stop services and quit"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mounted whether or not it is showing: it decides for itself whether the
           machine still needs setting up, and it draws nothing until it does. */}

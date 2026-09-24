@@ -3,21 +3,39 @@ import { dirname, resolve } from "node:path";
 import { loadConfig } from "../core/config.ts";
 import type { Paths } from "../core/paths.ts";
 import type { ServiceSpec, ServiceState } from "../core/ports.ts";
-import { leftoverServices, serviceSpecs } from "../core/services.ts";
+import { AGENT_LABEL, LLM_LABEL, leftoverServices, serviceSpecs, WHISPER_LABEL } from "../core/services.ts";
 import { pickServiceManager } from "../providers/service/index.ts";
-import { type Command, parseCli, subcommand } from "./args.ts";
+import { type Command, parseCli, subcommand, UsageError } from "./args.ts";
 import { table } from "./output.ts";
 
 const USAGE = [
-  "parlour service install            start at login, and come back after a crash",
-  "parlour service uninstall          stop, and forget",
-  "parlour service stop               stop now, and start again at login",
-  "parlour service restart",
+  "parlour service install                   start at login, and come back after a crash",
+  "parlour service uninstall                 stop, and forget",
+  "parlour service start [agent|llm|whisper] start what was stopped, or one of them",
+  "parlour service stop [agent|llm|whisper]  stop now, and start again at login",
+  "parlour service restart [agent|llm|whisper]",
   "parlour service status",
-  "parlour service logs [--lines N]   the last N lines (40) of each log",
+  "parlour service logs [agent|llm|whisper] [--lines N]   the last N lines (40) of each log",
 ];
 
-const SUBCOMMANDS = ["install", "uninstall", "stop", "restart", "status", "logs"] as const;
+const SUBCOMMANDS = ["install", "uninstall", "start", "stop", "restart", "status", "logs"] as const;
+
+/** The names a person uses for the services, and the labels launchd knows them by. */
+const TARGETS: Record<string, string> = { agent: AGENT_LABEL, llm: LLM_LABEL, whisper: WHISPER_LABEL };
+
+/** The specs one target names, or all of them when none is named. */
+function only<T extends { label: string }>(specs: T[], target: string | undefined): T[] {
+  if (!target) return specs;
+  const label = TARGETS[target];
+  if (!label) throw new UsageError(`no service called ${target}; try ${Object.keys(TARGETS).join(", ")}`);
+  const found = specs.filter((spec) => spec.label === label);
+  if (!found.length) {
+    throw new UsageError(
+      `this config runs no ${target}: nothing uses it, its model is missing, or it is too big for this Mac`,
+    );
+  }
+  return found;
+}
 
 /**
  * The `parlour` that is running now, as the command for the service to run
@@ -75,6 +93,7 @@ export const command: Command = {
   async run({ paths, argv }) {
     const { positionals, values } = parseCli(argv, { lines: { type: "string" } });
     const sub = subcommand(positionals, SUBCOMMANDS, USAGE);
+    const target = positionals[1];
     const { config } = loadConfig(paths);
     const specs = await serviceSpecs(config, paths, parlourBin());
     // What an earlier config installed and this one would not: a server that
@@ -88,8 +107,19 @@ export const command: Command = {
         print(await manager.install(specs));
         return;
       case "stop":
-        print(await manager.stop([...specs, ...leftovers]));
+        print(await manager.stop(only([...specs, ...leftovers], target)));
         return;
+      case "start": {
+        // launchd has no start for a job it was told to stop, only loading it
+        // again, which is what restart does for anything installed.
+        const states = await manager.restart(only(specs, target));
+        if (!states.some((state) => state.installed)) {
+          process.stdout.write("Nothing is installed to start. parlour service install sets it up.\n");
+          return;
+        }
+        print(states);
+        return;
+      }
       case "uninstall": {
         const removed = await manager.uninstall([...specs, ...leftovers].map((spec) => spec.label));
         process.stdout.write(
@@ -98,7 +128,7 @@ export const command: Command = {
         return;
       }
       case "restart":
-        print(await manager.restart(specs));
+        print(await manager.restart(only(specs, target)));
         return;
       case "status": {
         // A leftover that is neither installed nor running is only noise.
@@ -108,7 +138,7 @@ export const command: Command = {
       }
       case "logs": {
         const lines = Math.max(1, Number(values.lines) || 40);
-        for (const spec of specs) {
+        for (const spec of only(specs, target)) {
           process.stdout.write(
             `== ${spec.what} (${spec.logPath})\n${await manager.tail(spec.logPath, lines)}\n\n`,
           );

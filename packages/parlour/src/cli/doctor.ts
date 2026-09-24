@@ -8,7 +8,7 @@ import type { Check, Diagnosable } from "../core/ports.ts";
 import { type ProviderContextFactory, type ProviderKind, resolveProvider } from "../core/providers.ts";
 import { sandboxed } from "../core/sandbox.ts";
 import { loadSecrets, type Secrets } from "../core/secrets.ts";
-import { AGENT_LABEL, serviceSpecs } from "../core/services.ts";
+import { AGENT_LABEL, localModelMemory, serviceSpecs } from "../core/services.ts";
 import { connectorStore } from "../integrations/connectors/store.ts";
 import { pickServiceManager } from "../providers/service/index.ts";
 import { findServer } from "../server/discovery.ts";
@@ -72,6 +72,8 @@ async function server(config: Config, secrets: Secrets, paths: Paths): Promise<C
     });
   }
   checks.push(...(await forgottenConnectors(config, paths)));
+  const memory = localModelMemory(config, paths);
+  if (memory) checks.push(memory);
   try {
     const agent = await buildAgent(config, secrets, paths, { audio: false });
     try {

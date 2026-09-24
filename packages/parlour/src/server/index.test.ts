@@ -7,11 +7,19 @@ import { join } from "node:path";
 import { type TestContext, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
+import { Admin } from "../core/admin.ts";
 import { type Config, parseConfig } from "../core/config.ts";
+import { resolvePaths } from "../core/paths.ts";
 import { ToolRegistry } from "../core/registry.ts";
 import { Router } from "../core/router.ts";
 import type { Completion } from "../core/types.ts";
-import { FakeChatModel, FakeSpeechToText, FakeTextToSpeech, FakeWakeWordEngine } from "../testing/index.ts";
+import {
+  FakeChatModel,
+  FakeServiceManager,
+  FakeSpeechToText,
+  FakeTextToSpeech,
+  FakeWakeWordEngine,
+} from "../testing/index.ts";
 import { type ServerDeps, startServer } from "./index.ts";
 
 const say = (text: string): Completion => ({ text, toolCalls: [] });
@@ -47,14 +55,19 @@ interface ServeOptions {
   token?: string;
   host?: string;
   agent?: ServerDeps["agent"];
+  admin?: Admin | null;
+  /** `server.admin` in config. */
+  adminEnabled?: boolean;
 }
 
 /** Starts a server for one test and closes it when the test ends. */
 async function serve(t: TestContext, options: ServeOptions = {}) {
+  const config = testConfig(options.host ?? "127.0.0.1");
   const server = await startServer({
-    config: testConfig(options.host ?? "127.0.0.1"),
+    config: { ...config, server: { ...config.server, admin: options.adminEnabled ?? true } },
     token: options.token,
     agent: options.agent ?? fakeAgent(),
+    admin: options.admin,
   });
   assert.ok(server, "the server should start when server.enabled is true");
   t.after(() => server.close());
@@ -499,5 +512,90 @@ test("two satellites that claim the same name do not end up in one conversation"
   assert.deepEqual(
     second.messages.filter((m) => m.type === "reply"),
     [{ type: "reply", text: "two", via: "local" }],
+  );
+});
+
+/** An admin over a scratch home and a fake service manager, restarting nothing. */
+function fakeAdmin(t: TestContext) {
+  const dir = mkdtempSync(join(tmpdir(), "parlour-server-admin-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const manager = new FakeServiceManager();
+  const restarts: number[] = [];
+  const admin = new Admin({
+    config: parseConfig({}),
+    paths: resolvePaths({ HOME: dir, PARLOUR_HOME: dir }, "darwin"),
+    manager,
+    specs: [],
+    companions: null,
+    doctor: async () => [{ name: "wake", status: "ok", detail: "fine" }],
+    restartSelf: () => restarts.push(Date.now()),
+  });
+  return { admin, manager, restarts };
+}
+
+test("the admin routes need the token, like everything else that reaches the agent", async (t) => {
+  const { admin } = fakeAdmin(t);
+  const { url } = await serve(t, { token: "secret", admin });
+  assert.equal((await fetch(`${url}/admin`)).status, 401);
+  const status = await fetch(`${url}/admin`, { headers: { authorization: "Bearer secret" } });
+  assert.equal(status.status, 200);
+  const body = (await status.json()) as { pipeline: { triage: string }; services: { name: string }[] };
+  assert.equal(body.pipeline.triage, "auto");
+  assert.deepEqual(
+    body.services.map((service) => service.name),
+    ["llm", "whisper"],
+  );
+});
+
+test("an admin refusal reaches the client with its own status and sentence", async (t) => {
+  const { admin } = fakeAdmin(t);
+  const { url } = await serve(t, { token: "secret", admin });
+  const unknown = await post(`${url}/admin/service`, { service: "agent", action: "stop" }, "secret");
+  assert.equal(unknown.status, 404);
+  assert.match(((await unknown.json()) as { error: string }).error, /no service called agent/);
+
+  const bounds = await post(`${url}/admin/pipeline`, { concurrency: 99 }, "secret");
+  assert.equal(bounds.status, 400);
+  assert.match(((await bounds.json()) as { error: string }).error, /concurrency/);
+});
+
+test("a pipeline change is saved over the network, and the agent is told to restart", async (t) => {
+  const { admin, restarts } = fakeAdmin(t);
+  const { url } = await serve(t, { token: "secret", admin });
+  const saved = await post(`${url}/admin/pipeline`, { maxTasks: 2 }, "secret");
+  assert.equal(saved.status, 200);
+  const body = (await saved.json()) as { pipeline: { maxTasks: number }; restart: string };
+  assert.equal(body.pipeline.maxTasks, 2);
+  assert.equal(body.restart, "scheduled");
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  assert.equal(restarts.length, 1);
+});
+
+test("the maintenance commands answer over the network", async (t) => {
+  const { admin } = fakeAdmin(t);
+  const { url } = await serve(t, { token: "secret", admin });
+  const doctor = await post(`${url}/admin/doctor`, {}, "secret");
+  assert.deepEqual(
+    ((await doctor.json()) as { checks: { name: string }[] }).checks.map((c) => c.name),
+    ["wake"],
+  );
+  const logs = await fetch(`${url}/admin/logs?service=agent&lines=5`, {
+    headers: { authorization: "Bearer secret" },
+  });
+  assert.equal(logs.status, 200);
+  assert.equal(((await logs.json()) as { service: string }).service, "agent");
+  const restart = await post(`${url}/admin/restart`, {}, "secret");
+  assert.equal(restart.status, 202);
+});
+
+test("with server.admin off, or no admin at all, the routes are refused", async (t) => {
+  const { admin } = fakeAdmin(t);
+  const off = await serve(t, { token: "secret", admin, adminEnabled: false });
+  const refused = await fetch(`${off.url}/admin`, { headers: { authorization: "Bearer secret" } });
+  assert.equal(refused.status, 403);
+  const none = await serve(t, { token: "secret" });
+  assert.equal(
+    (await fetch(`${none.url}/admin`, { headers: { authorization: "Bearer secret" } })).status,
+    403,
   );
 });

@@ -4,7 +4,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::settings::{parlour_command, Settings};
 
@@ -26,6 +26,9 @@ pub struct Status {
     pub tools: u32,
     pub cloud: bool,
     pub error: Option<String>,
+    /// Parlour said it is about to exit so as to be started again, because a
+    /// client changed its settings or asked for a restart.
+    pub restarting: bool,
 }
 
 pub struct Supervisor {
@@ -119,15 +122,49 @@ impl Supervisor {
             // The stream closing is how a crash announces itself, so only the
             // stdout thread reports it and stderr just stops.
             if structured {
-                let mut status = status.lock().unwrap();
-                status.running = false;
-                status.state = "stopped".into();
-                let _ = app.emit("agent://status", status.clone());
+                let again = {
+                    let mut status = status.lock().unwrap();
+                    status.running = false;
+                    status.state = "stopped".into();
+                    let _ = app.emit("agent://status", status.clone());
+                    std::mem::take(&mut status.restarting)
+                };
+                // A restart a client asked for: Parlour exits, and the app is
+                // what starts it again, as launchd would outside the app.
+                if again {
+                    let state = app.state::<crate::AppState>();
+                    let settings = state.settings();
+                    let mut supervisor = state.supervisor.lock().unwrap();
+                    supervisor.reap();
+                    if let Err(error) = supervisor.start(&app, &settings) {
+                        let _ = app.emit("agent://error", error);
+                    }
+                }
             }
         });
     }
 
+    /// Waits for a child that is on its way out, so the next one finds the
+    /// port free, and forgets it.
+    fn reap(&mut self) {
+        let Some(child) = self.child.as_mut() else {
+            return;
+        };
+        for _ in 0..50 {
+            if let Ok(Some(_)) = child.try_wait() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+        self.child = None;
+    }
+
     pub fn stop(&mut self) {
+        // A stop wins over a restart that was on its way, or the agent would
+        // come straight back after the button said it had stopped.
+        self.status.lock().unwrap().restarting = false;
         let Some(child) = self.child.as_mut() else {
             return;
         };
@@ -190,6 +227,7 @@ fn apply(status: &Arc<Mutex<Status>>, event: &serde_json::Value) {
             status.via = text("via");
         }
         Some("error") => status.error = text("message"),
+        Some("restarting") => status.restarting = true,
         _ => {}
     }
 }
@@ -198,6 +236,13 @@ fn apply(status: &Arc<Mutex<Status>>, event: &serde_json::Value) {
 mod tests {
     use super::*;
     use std::ffi::OsStr;
+
+    #[test]
+    fn a_restarting_event_marks_the_status_so_the_exit_is_followed_by_a_start() {
+        let status = Arc::new(Mutex::new(Status::default()));
+        apply(&status, &serde_json::json!({ "type": "restarting" }));
+        assert!(status.lock().unwrap().restarting);
+    }
 
     #[test]
     fn agent_command_leaves_log_level_to_secrets_env() {

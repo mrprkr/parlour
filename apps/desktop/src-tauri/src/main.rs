@@ -14,7 +14,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, State, WindowEvent};
 
 use settings::{detect_parlour, found, parlour_command, Settings};
 use setup::Readiness;
@@ -70,6 +70,58 @@ fn start_agent(app: AppHandle, state: State<'_, AppState>) -> Result<(), String>
 fn stop_agent(app: AppHandle, state: State<'_, AppState>) {
     state.supervisor.lock().unwrap().stop();
     let _ = app.emit("agent://status", status(state));
+}
+
+/// Quitting asks first, in the window, because it is more than closing an
+/// app: the house stops answering. The window says so and calls `quit_app`.
+fn ask_to_quit(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    let _ = app.emit("app://confirm-quit", ());
+}
+
+/// Everything Parlour runs, stopped, then the app gone: the agent this app
+/// started, and whatever launchd keeps warm for it (whisper, the local
+/// model), which would otherwise go on holding gigabytes of memory for a
+/// server nobody can reach. `parlour stop` leaves the LaunchAgents
+/// installed, so they come back at the next login as before.
+#[tauri::command]
+async fn quit_app(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    state.supervisor.lock().unwrap().stop();
+    let settings = state.settings();
+    tauri::async_runtime::spawn_blocking(move || stop_services(&settings))
+        .await
+        .map_err(|e| e.to_string())?;
+    app.exit(0);
+    Ok(())
+}
+
+/// `parlour stop`, given half a minute: launchd waits for a model server to
+/// let go of its memory, and a quit that never finishes is worse than one
+/// that leaves something for the next login to tidy.
+fn stop_services(settings: &Settings) {
+    if !settings.looks_valid() {
+        return;
+    }
+    let Ok(mut child) = parlour_command(settings)
+        .arg("stop")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return;
+    };
+    for _ in 0..300 {
+        if let Ok(Some(_)) = child.try_wait() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 #[tauri::command]
@@ -415,12 +467,7 @@ fn main() {
                             }
                         }
                         "stop" => state.supervisor.lock().unwrap().stop(),
-                        "quit" => {
-                            // Stop Parlour first, or the microphone stays
-                            // held by an orphaned ffmpeg.
-                            state.supervisor.lock().unwrap().stop();
-                            app.exit(0);
-                        }
+                        "quit" => ask_to_quit(app),
                         _ => {}
                     }
                 })
@@ -453,7 +500,17 @@ fn main() {
             audio_devices,
             login::login_item,
             login::set_login_item,
+            quit_app,
         ])
-        .run(tauri::generate_context!())
-        .expect("could not start the app");
+        .build(tauri::generate_context!())
+        .expect("could not start the app")
+        .run(|app, event| {
+            // However the app ends (the confirmed Quit, a logout, a shutdown),
+            // the agent it started goes with it, or the microphone stays held
+            // by an orphaned ffmpeg. A logout is not asked about: macOS would
+            // take a question here as the app refusing to quit.
+            if let RunEvent::Exit = event {
+                app.state::<AppState>().supervisor.lock().unwrap().stop();
+            }
+        });
 }

@@ -5,6 +5,7 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
+import { type Admin, AdminError } from "../core/admin.ts";
 import type { Agent } from "../core/agent.ts";
 import { decodeToWav, FRAME_MS, FRAME_SAMPLES, FrameCutter, wavToFrames } from "../core/audio.ts";
 import type { Config } from "../core/config.ts";
@@ -24,8 +25,26 @@ const MAX_CLIENT_ID = 64;
 /** A room name goes into the system prompt, so it is a room and not a paragraph. */
 const MAX_ROOM = 40;
 
+/** The routes that manage the server rather than ask it anything. */
+const ADMIN_ROUTES = new Set([
+  "GET /admin",
+  "POST /admin/pipeline",
+  "POST /admin/service",
+  "GET /admin/logs",
+  "POST /admin/doctor",
+  "POST /admin/restart",
+]);
+
 /** The routes that reach the agent, and so need the token. Everything else is the page. */
-const API_ROUTES = new Set(["POST /ask", "POST /voice", "GET /v1/models", "POST /v1/chat/completions"]);
+const API_ROUTES = new Set([
+  "POST /ask",
+  "POST /voice",
+  "GET /v1/models",
+  "POST /v1/chat/completions",
+  ...ADMIN_ROUTES,
+]);
+
+const ServiceBody = z.object({ service: z.string(), action: z.string() });
 
 const AskBody = z.object({
   text: z.string().min(1),
@@ -46,6 +65,8 @@ export interface ServerDeps {
   token: string | undefined;
   /** The parts of the assembled agent the network reaches. The microphone is not one of them. */
   agent: Pick<Agent, "router" | "wake" | "stt" | "tts" | "gate" | "status">;
+  /** The /admin routes. Null, or `server.admin` off, and they answer 403. */
+  admin?: Admin | null;
 }
 
 export interface RunningServer {
@@ -91,7 +112,7 @@ export async function startServer(deps: ServerDeps): Promise<RunningServer | nul
 
   const server = createServer((request, response) => {
     handle(request, response, deps, token).catch((error) => {
-      if (error instanceof RequestError) {
+      if (error instanceof RequestError || error instanceof AdminError) {
         send(response, error.status, { error: error.message });
         return;
       }
@@ -205,6 +226,8 @@ async function handle(
     send(response, 401, { error: "a bearer token is required" });
     return;
   }
+
+  if (ADMIN_ROUTES.has(route)) return admin(request, response, deps, route, url);
 
   switch (route) {
     case "POST /ask":
@@ -335,6 +358,44 @@ async function completions(
   chunk({ role: "assistant", content: answer.text }, null);
   chunk({}, "stop");
   response.end("data: [DONE]\n\n");
+}
+
+/**
+ * Managing the server from a client: its status, the pipeline's settings,
+ * the model servers and the maintenance commands. What is allowed is decided
+ * in `core/admin.ts`; this only moves it on and off the wire.
+ */
+async function admin(
+  request: IncomingMessage,
+  response: ServerResponse,
+  deps: ServerDeps,
+  route: string,
+  url: URL,
+): Promise<void> {
+  const control = deps.config.server.admin ? deps.admin : null;
+  if (!control) return send(response, 403, { error: "remote management is switched off on this server" });
+
+  switch (route) {
+    case "GET /admin":
+      return send(response, 200, await control.status());
+    case "POST /admin/pipeline": {
+      const patch = await json(request, z.record(z.string(), z.unknown()));
+      const apply = url.searchParams.get("apply") !== "false";
+      return send(response, 200, await control.setPipeline(patch, { apply }));
+    }
+    case "POST /admin/service": {
+      const body = await json(request, ServiceBody);
+      return send(response, 200, await control.service(body.service, body.action));
+    }
+    case "GET /admin/logs": {
+      const lines = Number(url.searchParams.get("lines") ?? 50);
+      return send(response, 200, await control.logs(url.searchParams.get("service") ?? "agent", lines));
+    }
+    case "POST /admin/doctor":
+      return send(response, 200, { checks: await control.doctor() });
+    default:
+      return send(response, 202, control.restart());
+  }
 }
 
 // ------------------------------------------------------------------- sockets

@@ -1,11 +1,12 @@
 import { execFile } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { Config } from "./config.ts";
+import { memoryVerdict, programMemoryVerdict, threadBudget } from "./guardrails.ts";
 import { installedLocalModel, MANAGED_LLM_PORT } from "./localmodel.ts";
 import type { Paths } from "./paths.ts";
-import type { ServiceSpec } from "./ports.ts";
+import type { Check, ServiceSpec } from "./ports.ts";
 import { sandboxed } from "./sandbox.ts";
 
 /**
@@ -107,13 +108,14 @@ export async function serviceSpecs(
           "--language",
           stt.language ?? "en",
           "--threads",
-          "6",
+          String(threadBudget()),
           "--no-timestamps",
           "--convert",
         ],
         // whisper-server shells out to ffmpeg for --convert.
         env: { PATH: toolPath(whisper, await which("ffmpeg")) },
         logPath: join(paths.logsDir, "whisper.log"),
+        lowPriority: true,
       });
     }
   }
@@ -127,7 +129,12 @@ export async function serviceSpecs(
     const local = config.llm.local as { managed?: boolean; model?: string; baseUrl?: string };
     const server = await which("llama-server");
     const model = installedLocalModel(paths.modelsDir, local.model);
-    if (local.managed && server && model) {
+    // A model too big for the machine is left out rather than started: loading
+    // it would page the whole Mac into the ground, and the agent answers
+    // without a local model (through the cloud one, or by saying so) far
+    // better than a frozen machine does. The doctor says which and why.
+    const fits = model ? programMemoryVerdict(["--model", model.file])?.status !== "refuse" : false;
+    if (local.managed && server && model && fits) {
       out.push({
         label: LLM_LABEL,
         what: "the local model",
@@ -155,6 +162,13 @@ export async function serviceSpecs(
           JSON.stringify({ enable_thinking: false }),
           "--ctx-size",
           "8192",
+          // One conversation's worth of context. llama.cpp otherwise sizes the
+          // cache for several at once, which multiplies the memory the context
+          // takes for a house that asks one question at a time.
+          "--parallel",
+          "1",
+          "--threads",
+          String(threadBudget()),
           // Everything on the GPU where there is one. llama.cpp ignores this
           // on a machine without, so it is safe on an Intel Mac.
           "--n-gpu-layers",
@@ -162,11 +176,34 @@ export async function serviceSpecs(
         ],
         env: { PATH: toolPath(server) },
         logPath: join(paths.logsDir, "llm.log"),
+        lowPriority: true,
       });
     }
   }
 
   return out;
+}
+
+/**
+ * Whether the local model Parlour runs fits this Mac, for the doctor. Null
+ * when Parlour runs no model of its own. A model too big is left out of
+ * `serviceSpecs`, so this is the only place that says why it is not running.
+ */
+export function localModelMemory(config: Config, paths: Paths, total?: number): Check | null {
+  if (config.role !== "server" || config.llm.local.provider !== "openai-compatible") return null;
+  const local = config.llm.local as { managed?: boolean; model?: string };
+  if (!local.managed) return null;
+  const model = installedLocalModel(paths.modelsDir, local.model);
+  if (!model) return null;
+  let bytes: number;
+  try {
+    bytes = statSync(model.file).size;
+  } catch {
+    return null;
+  }
+  const verdict = memoryVerdict(bytes, total);
+  const status = verdict.status === "refuse" ? "fail" : verdict.status;
+  return { name: "local model memory", status, detail: `${model.id}: ${verdict.detail}` };
 }
 
 /** The port out of a base url, for a config that moved the bundled server. */

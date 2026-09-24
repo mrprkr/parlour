@@ -1,8 +1,9 @@
 import { setTimeout as delay } from "node:timers/promises";
+import { Admin, RESTART_EXIT_CODE } from "../core/admin.ts";
 import { type Agent, buildAgent } from "../core/agent.ts";
 import { type Companions, startCompanions } from "../core/companions.ts";
 import { loadConfig } from "../core/config.ts";
-import { enableEvents } from "../core/events.ts";
+import { emit, enableEvents } from "../core/events.ts";
 import { logger } from "../core/logger.ts";
 import type { AudioSource } from "../core/ports.ts";
 import { onShutdown } from "../core/process.ts";
@@ -10,6 +11,7 @@ import { sandboxed } from "../core/sandbox.ts";
 import { loadSecrets } from "../core/secrets.ts";
 import { AGENT_LABEL, serviceSpecs } from "../core/services.ts";
 import { LocalVoice, VoiceSession } from "../core/session.ts";
+import { pickServiceManager } from "../providers/service/index.ts";
 import { type RunningServer, startServer } from "../server/index.ts";
 import { runSatellite } from "../server/satellite.ts";
 import { type Command, parseCli } from "./args.ts";
@@ -44,12 +46,13 @@ export const command: Command = {
     // Inside the App Store sandbox there is no launchd keeping whisper and the
     // local model warm, so they start here, before the agent that talks to
     // them, and stop when it does.
+    const specs = await serviceSpecs(config, paths, parlourBin());
     let companions: Companions | null = null;
     if (sandboxed()) {
-      const specs = (await serviceSpecs(config, paths, parlourBin())).filter(
-        (spec) => spec.label !== AGENT_LABEL,
+      companions = startCompanions(
+        specs.filter((spec) => spec.label !== AGENT_LABEL),
+        { log },
       );
-      companions = startCompanions(specs, { log });
     }
 
     const agent = await buildAgent(config, secrets, paths).catch((error) => {
@@ -60,9 +63,31 @@ export const command: Command = {
     // closes the agent, whose connectors would otherwise keep the process
     // alive after the error has been printed.
     let server: RunningServer | null = null;
+    const abort = new AbortController();
+    // Something brings the agent back when it exits with RESTART_EXIT_CODE:
+    // launchd, whose KeepAlive restarts a job that exits unsuccessfully, or
+    // the app, which is what reads --events. Started in a terminal, nothing
+    // would, so a client is told to ask there instead.
+    const supervised = process.env.XPC_SERVICE_NAME === AGENT_LABEL || Boolean(values.events);
+    const admin = new Admin({
+      config,
+      paths,
+      manager: pickServiceManager(),
+      specs,
+      companions,
+      doctor: () => agent.doctor(),
+      restartSelf: supervised
+        ? () => {
+            log.info("restarting, as a client asked");
+            emit({ type: "restarting" });
+            process.exitCode = RESTART_EXIT_CODE;
+            abort.abort();
+          }
+        : null,
+    });
     try {
-      server = await startServer({ config, token: secrets.token, agent });
-      await micMode(agent);
+      server = await startServer({ config, token: secrets.token, agent, admin });
+      await micMode(agent, abort);
     } finally {
       await server?.close();
       await agent.close();
@@ -72,9 +97,8 @@ export const command: Command = {
 };
 
 /** The microphone attached to this machine, until Ctrl-C or launchd says stop. */
-async function micMode(agent: Agent): Promise<void> {
+async function micMode(agent: Agent, abort: AbortController): Promise<void> {
   const { config } = agent;
-  const abort = new AbortController();
   // Stop talking and stop listening; the loop below ends when the source
   // does, and the caller closes the rest. SIGTERM and SIGHUP take the same
   // path as Ctrl-C, or launchd's stop would leave ffmpeg holding the microphone.

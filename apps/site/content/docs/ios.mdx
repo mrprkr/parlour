@@ -107,6 +107,25 @@ room the phone is in, so a follow-up lands in the right one.
 Browsing is also what raises the local network prompt. So the prompt appears
 as the app opens, not while someone is trying to say something.
 
+## Managing the server
+
+The Server tab manages the Mac from the phone, over the routes in
+[Managing the server](/docs/clients#managing-the-server):
+
+- **Model servers.** Whether the local model and whisper are running, with
+  buttons to start, stop and restart them. Stopping one asks first, because
+  the house cannot answer the same way without it.
+- **Pipeline.** How many requests run at once, how many can wait per room,
+  how many tasks one request can become, when to give up, and whether to read
+  requests first. Saving restarts the agent so the change takes effect, and
+  the steppers stop at the same limits the server enforces.
+- **Maintenance.** Runs the doctor, shows the end of any of the three logs,
+  and restarts the agent.
+
+The server has the final say on every change and explains any refusal in its
+own words. For example, it refuses to start a model that is too big for the
+Mac, or to restart something that was restarted a moment ago.
+
 ## The model on the phone
 
 The app can answer on its own using Apple's Foundation Models, which need

@@ -1,6 +1,8 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { closeSync, mkdirSync, openSync, renameSync, statSync, writeSync } from "node:fs";
+import { setPriority } from "node:os";
 import { dirname } from "node:path";
+import { RestartBackoff } from "./guardrails.ts";
 import type { Logger } from "./logger.ts";
 import type { ServiceSpec } from "./ports.ts";
 import { killOnExit } from "./process.ts";
@@ -85,22 +87,40 @@ export interface CompanionOptions {
   log: Logger;
   /** Replaceable so a test can watch the calls without running anything. */
   spawn?: Spawn;
-  /** How long a dead companion waits before it is started again. */
-  restartMs?: number;
+  /** How long a dead companion waits before it is started again, per crash in a row. */
+  restartMs?: number[];
+  /** How many crashes in ten minutes before a companion is left down. */
+  crashLimit?: number;
+}
+
+export interface CompanionState {
+  label: string;
+  what: string;
+  running: boolean;
+  pid: number | null;
+  /** Stopped on purpose, or left down after crashing too often. */
+  held: boolean;
 }
 
 export interface Companions {
   stop(): void;
+  /** One companion, by label, as a client asked. False when no companion has that label. */
+  control(label: string, action: "start" | "stop" | "restart"): boolean;
+  states(): CompanionState[];
 }
 
 const defaultSpawn: Spawn = (command, args, env) =>
   spawn(command, args, { env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
 
 export function startCompanions(specs: ServiceSpec[], options: CompanionOptions): Companions {
-  const { log, restartMs = 5000 } = options;
+  const { log } = options;
   const run = options.spawn ?? defaultSpawn;
-  const children = new Set<ChildProcess>();
-  const timers = new Set<ReturnType<typeof setTimeout>>();
+  const running = new Map<ServiceSpec, ChildProcess>();
+  const timers = new Map<ServiceSpec, ReturnType<typeof setTimeout>>();
+  // Held companions are not started again when they exit: one a client
+  // stopped, and one that crashed too often to be worth another go.
+  const held = new Set<ServiceSpec>();
+  const backoff = new Map<ServiceSpec, RestartBackoff>();
   let stopped = false;
 
   // One log per companion for its whole life, restarts included, so a child
@@ -111,15 +131,23 @@ export function startCompanions(specs: ServiceSpec[], options: CompanionOptions)
   const logs = new Map<ServiceSpec, BoundedLog>();
   for (const spec of specs) {
     logs.set(spec, new BoundedLog(spec.logPath, (message) => log.warn(`${spec.what} log: ${message}`)));
+    backoff.set(spec, new RestartBackoff({ delaysMs: options.restartMs, limit: options.crashLimit }));
   }
 
   const start = (spec: ServiceSpec) => {
     const [command, ...args] = spec.program;
-    if (!command) return;
+    if (!command || running.has(spec)) return;
     log.info(`starting ${spec.what}`);
     const child = run(command, args, spec.env);
-    children.add(child);
+    running.set(spec, child);
     killOnExit(child);
+    // A model server yields to whatever the person at the Mac is doing, as
+    // launchd's Nice does for the same server outside the sandbox.
+    if (spec.lowPriority && child.pid) {
+      try {
+        setPriority(child.pid, 5);
+      } catch {}
+    }
 
     const file = logs.get(spec);
     const write = (chunk: Buffer) => file?.write(chunk);
@@ -128,15 +156,32 @@ export function startCompanions(specs: ServiceSpec[], options: CompanionOptions)
 
     child.on("error", (error) => log.warn(`${spec.what}: ${error.message}`));
     child.on("exit", (code, signal) => {
-      children.delete(child);
-      if (stopped) return;
-      log.warn(`${spec.what} exited (${signal ?? code}), starting it again`);
+      if (running.get(spec) === child) running.delete(spec);
+      if (stopped || held.has(spec)) return;
+      const wait = backoff.get(spec)?.crashed() ?? null;
+      if (wait === null) {
+        held.add(spec);
+        log.error(
+          `${spec.what} keeps exiting (${signal ?? code}), so it is left stopped. ` +
+            "parlour service logs says why; starting it again from a client tries once more.",
+        );
+        return;
+      }
+      log.warn(`${spec.what} exited (${signal ?? code}), starting it again in ${Math.round(wait / 1000)}s`);
       const timer = setTimeout(() => {
-        timers.delete(timer);
-        if (!stopped) start(spec);
-      }, restartMs);
-      timers.add(timer);
+        timers.delete(spec);
+        if (!stopped && !held.has(spec)) start(spec);
+      }, wait);
+      timers.set(spec, timer);
     });
+  };
+
+  const halt = (spec: ServiceSpec) => {
+    held.add(spec);
+    const timer = timers.get(spec);
+    if (timer) clearTimeout(timer);
+    timers.delete(spec);
+    running.get(spec)?.kill("SIGTERM");
   };
 
   for (const spec of specs) start(spec);
@@ -145,8 +190,43 @@ export function startCompanions(specs: ServiceSpec[], options: CompanionOptions)
     stop() {
       stopped = true;
       for (const file of logs.values()) file.close();
-      for (const timer of timers) clearTimeout(timer);
-      for (const child of children) child.kill("SIGTERM");
+      for (const timer of timers.values()) clearTimeout(timer);
+      for (const child of running.values()) child.kill("SIGTERM");
+    },
+
+    control(label, action) {
+      const spec = specs.find((candidate) => candidate.label === label);
+      if (!spec || stopped) return false;
+      if (action === "stop") {
+        halt(spec);
+        return true;
+      }
+      const begin = () => {
+        held.delete(spec);
+        backoff.get(spec)?.reset();
+        start(spec);
+      };
+      const child = running.get(spec);
+      if (action === "restart" && child) {
+        // Started again once the old one has let go of its port.
+        child.once("exit", () => {
+          if (!stopped) begin();
+        });
+        halt(spec);
+        return true;
+      }
+      begin();
+      return true;
+    },
+
+    states() {
+      return specs.map((spec) => ({
+        label: spec.label,
+        what: spec.what,
+        running: running.has(spec),
+        pid: running.get(spec)?.pid ?? null,
+        held: held.has(spec),
+      }));
     },
   };
 }

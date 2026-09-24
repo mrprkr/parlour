@@ -31,6 +31,8 @@ export interface Status {
   tools: number;
   cloud: boolean;
   error?: string | null;
+  /** A client asked for a restart; the app starts it again when it exits. */
+  restarting?: boolean;
 }
 
 /** What `parlour secrets status --json` prints: which are set, never their values. */
@@ -144,6 +146,8 @@ export const getStatus = () => invoke<Status>("status");
 export const startAgent = () => invoke<void>("start_agent");
 export const stopAgent = () => invoke<void>("stop_agent");
 export const getLogs = () => invoke<string[]>("logs");
+/** Stops the agent and everything it keeps running, then quits the app. */
+export const quitApp = () => invoke<void>("quit_app");
 
 const run = (args: string[], stdin?: string) => invoke<CliOutput>("parlour", { args, stdin: stdin ?? null });
 
@@ -245,6 +249,10 @@ export const onAgentLog = (fn: (line: string) => void): Promise<UnlistenFn> =>
 
 export const onAgentError = (fn: (message: string) => void): Promise<UnlistenFn> =>
   listen<string>("agent://error", (event) => fn(String(event.payload)));
+
+/** The tray's Quit, which the window confirms before anything is stopped. */
+export const onQuitRequested = (fn: () => void): Promise<UnlistenFn> =>
+  listen("app://confirm-quit", () => fn());
 
 export const onSetupEvent = (fn: (event: SetupEvent) => void): Promise<UnlistenFn> =>
   listen<SetupEvent>("setup://event", (event) => fn(event.payload));
