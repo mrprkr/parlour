@@ -65,8 +65,8 @@ runs. Vercel builds it with the Next.js builder, Root Directory `apps/site`.
 
 iOS app (`apps/ios`, SwiftUI): a client of the server's `/health`, `/voice` and `/ask`, with HomeKit,
 Bonjour discovery and Apple's on-device model. The Xcode project is generated from `project.yml`, so
-`brew install xcodegen` then `pnpm exec nx run ios:app`. There is no iOS job in CI; build it by hand
-with `nx run ios:xcodebuild` and `nx run ios:xcodetest`. `apps/ios/README.md` has the detail.
+`brew install xcodegen` then `pnpm exec nx run ios:app`. `.github/workflows/ios.yml` builds and tests it
+on any change under `apps/ios`; locally, `nx run ios:xcodebuild` and `nx run ios:xcodetest`. `apps/ios/README.md` has the detail.
 
 Design system (`packages/design`): `src/tokens.ts` is the one palette, type ramp and session-state
 vocabulary, and `src/emit.ts` writes it into the site, the app, the phone page and iOS. Never edit a

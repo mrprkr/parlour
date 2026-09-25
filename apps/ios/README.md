@@ -21,8 +21,9 @@ Signing is left to you: set `PARLOUR_DEVELOPMENT_TEAM` in your environment
 before generating, or pick a team in Xcode once. HomeKit and the local network
 both need a real device, and the app icon slot is empty until someone draws one.
 
-There is no iOS job in CI. The repository's CI runs on a macOS runner but
-without Xcode's simulators or `xcodegen`, so the app is built by hand for now:
+`.github/workflows/ios.yml` generates the project, builds the app and runs
+`ParlourTests` on a simulator whenever something under `apps/ios` changes. To do
+the same by hand:
 
 ```sh
 pnpm exec nx run ios:xcodebuild   # compile for the simulator
