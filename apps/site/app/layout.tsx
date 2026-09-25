@@ -3,6 +3,7 @@ import { RootProvider } from "fumadocs-ui/provider/next";
 import type { Metadata, Viewport } from "next";
 import { Alegreya, Geist } from "next/font/google";
 import type { ReactNode } from "react";
+import { description, siteName, siteUrl, tagline } from "@/lib/site";
 import "./globals.css";
 
 // Two faces. Alegreya gives the headings their character; Geist does
@@ -21,19 +22,22 @@ const geist = Geist({
   variable: "--font-sans",
 });
 
-const description =
-  "Parlour turns the Mac you already own into a private voice assistant for Home Assistant. Talk to it from any room. The wake word, the transcription, the model and the voice all stay on your Mac. Free and open source.";
-
+// The defaults. Every page adds its own canonical address and card through
+// pageMetadata in lib/site.ts.
 export const metadata: Metadata = {
-  metadataBase: new URL("https://heyparlour.app"),
-  title: { default: "Parlour", template: "%s - Parlour" },
+  metadataBase: new URL(siteUrl),
+  title: { default: `${siteName}: a private voice assistant for your home`, template: `%s - ${siteName}` },
   description,
+  applicationName: siteName,
   openGraph: {
-    title: "Parlour",
-    description: "A voice for your home. Private by design.",
+    title: siteName,
+    description: tagline,
     type: "website",
-    url: "https://heyparlour.app/",
+    siteName,
+    locale: "en_GB",
+    url: "/",
   },
+  twitter: { card: "summary_large_image", title: siteName, description: tagline },
 };
 
 export const viewport: Viewport = {

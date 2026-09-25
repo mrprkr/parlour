@@ -207,6 +207,25 @@ body {
   margin: 0;
 }
 
+/* The badge keeps its own box, so the folio never moves while it loads. */
+.folio-badge {
+  display: inline-block;
+  line-height: 0;
+}
+
+.folio-badge img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.folio-links {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.4rem;
+}
+
 /* -------------------------------------------------------------- book */
 
 .book {

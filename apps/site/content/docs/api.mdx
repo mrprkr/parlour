@@ -1,0 +1,50 @@
+---
+title: HTTP API
+description: The routes a Parlour server answers, and the machine-readable descriptions of this site for agents.
+---
+
+Every Parlour server answers on port 8765 of the Mac it runs on. There is no
+hosted API: the server is yours, on your network, and nothing here reaches it.
+[`/openapi.json`](/openapi.json) describes it in OpenAPI 3.1, for tools that
+generate a client or for an agent calling it on your behalf.
+
+## Authentication
+
+Without `PARLOUR_TOKEN` the server answers its own Mac only. With it set, send
+it as `Authorization: Bearer <token>` on every route but `/health`. Clients
+that cannot set a header can add `?token=` to the address instead.
+[The token](/docs/clients#the-token) says how to make one.
+
+## Routes
+
+| Route | What it does |
+| --- | --- |
+| `GET /health` | Whether the server is up, what it runs, and what is in flight. No token needed. |
+| `POST /ask` | Text in, text out: `{"text", "client"?, "room"?}` returns `{"reply", "via"}`. What automations use. |
+| `POST /voice?client=&room=` | One recording in, `{"heard", "reply", "via", "audio"}` back, where `audio` is a base64 WAV. What the phone page uses. |
+| `POST /v1/chat/completions` | The OpenAI chat completions shape, streamed or not. How Home Assistant reaches Parlour. |
+| `GET /v1/models` | The one model, `parlour`. |
+| `GET /listen` | A WebSocket of raw 16 kHz PCM, for satellites and custom hardware. See [custom hardware](/docs/clients#custom-hardware). |
+| `/admin/*` | Pipeline settings, the model servers, doctor, logs and restart, for the household's own apps. See [managing the server](/docs/clients#managing-the-server). |
+
+```sh
+curl -s http://localhost:8765/ask \
+  -H "authorization: Bearer $PARLOUR_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"text": "is the back door locked"}'
+```
+
+## For agents
+
+This site is written to be read by agents as well as people, and none of it
+needs a sign-in.
+
+- [`/llms.txt`](/llms.txt) lists every page, and
+  [`/llms-full.txt`](/llms-full.txt) is all of the docs in one file.
+- Every page has a markdown twin: add `.md` to its address, or ask for the page
+  with `Accept: text/markdown`.
+- `https://heyparlour.app/mcp` is a read-only MCP server over these docs
+  (streamable HTTP, no auth) with `search`, `list_pages` and `get_page`. Add it
+  to Claude or ChatGPT as a custom connector.
+- [`/.well-known/agents.md`](/.well-known/agents.md) is a short guide for an
+  agent acting for someone.
