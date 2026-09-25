@@ -45,7 +45,11 @@ The camera is asked for only when a pairing code is scanned.
 | Camera | Scanning the pairing code `parlour pair` shows | Tapping Scan pairing code |
 
 HomeKit and multicast are entitlements as well as prompts, in
-`Parlour/Resources/Parlour.entitlements`. Plain HTTP to the house is allowed by
+`Parlour/Resources/Parlour.entitlements`. Multicast is granted to the team by
+Apple, so signing with another team means leaving it out or asking for your
+own. iOS asks about the local network once: after a no, the browser waits on
+`PolicyDenied`, and Settings and setup offer Open Settings rather than an Ask
+that would do nothing. Plain HTTP to the house is allowed by
 `NSAllowsLocalNetworking`, which is scoped to the local network and nothing
 else, because the server is on a private address and speaks HTTP.
 

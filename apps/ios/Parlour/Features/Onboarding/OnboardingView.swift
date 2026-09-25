@@ -363,6 +363,13 @@ struct OnboardingView: View {
               .font(Ramp.small)
               .foregroundStyle(Palette.alarm)
               .padding(.top, Space.sm)
+            if discovery.denied {
+              Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+              }
+              .font(Ramp.small)
+              .padding(.top, Space.xs)
+            }
           }
         }
       }

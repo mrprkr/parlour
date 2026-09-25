@@ -26,6 +26,12 @@
   <!--
     The server the phone page, the iOS app and satellites talk to, Bonjour so
     they can find it, and whisper and the local model on loopback.
+
+    There is no multicast entitlement to add here, though the team has one:
+    com.apple.developer.networking.multicast is iOS only, and on macOS a
+    restricted key the profile cannot vouch for gets the app killed at launch.
+    Bonjour's multicast is covered by these two keys plus the local network
+    prompt, which NSLocalNetworkUsageDescription in Info.plist words.
   -->
   <key>com.apple.security.network.server</key>
   <true/>

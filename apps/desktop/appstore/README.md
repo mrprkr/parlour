@@ -98,7 +98,9 @@ xcodebuild archive -project ParlourServer.xcodeproj -scheme ParlourServer \
   That is what it is for, it lives in the menu bar, and quitting from the menu
   stops everything it started.
 - **The microphone and the local network.** Both have usage strings in
-  `Info.plist`. The review notes should say what the wake word is and that
+  `Info.plist`. The local network needs no entitlement beyond network client
+  and server: the multicast one is iOS only, so it stays out of
+  `AppStore.entitlements`. The review notes should say what the wake word is and that
   audio never leaves the Mac unless the cloud model is on.
 - **Plugins.** `config.plugins` loads npm packages. Nothing in the sandbox can
   install one, so in this build it is effectively off. The review notes should

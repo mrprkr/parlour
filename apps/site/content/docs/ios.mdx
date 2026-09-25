@@ -69,7 +69,11 @@ what the permission gives you.
 | Speech recognition | Understanding a request on the phone when the server cannot be reached | The phone first has to answer by itself, with the on-device answer switched on |
 | Camera | Scanning the pairing code on the Mac | You tap **Scan pairing code**, in setup or in Settings |
 
-HomeKit is an entitlement as well as a prompt. `NSAllowsLocalNetworking`
+HomeKit and multicast networking are entitlements as well as prompts. Apple
+grants multicast to the team, so a build signed with another team needs it
+left out of `Parlour.entitlements` or its own grant. If you say no to the
+local network, iOS does not ask again, so Settings and setup offer
+**Open Settings**, where the Local Network switch is. `NSAllowsLocalNetworking`
 allows plain HTTP to the house, and only on the local network, because the
 server sits on a private address and speaks HTTP. The phone page makes the
 same trade. It is also why a reverse proxy is worth having if you want to

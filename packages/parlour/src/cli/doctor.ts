@@ -11,7 +11,7 @@ import { loadSecrets, type Secrets } from "../core/secrets.ts";
 import { AGENT_LABEL, localModelMemory, serviceSpecs } from "../core/services.ts";
 import { connectorStore } from "../integrations/connectors/store.ts";
 import { pickServiceManager } from "../providers/service/index.ts";
-import { findServer } from "../server/discovery.ts";
+import { findServer, localNetworkCheck } from "../server/discovery.ts";
 import { type Command, parseCli } from "./args.ts";
 import { formatChecks, printJson } from "./output.ts";
 import { describeState, parlourBin } from "./service.ts";
@@ -70,6 +70,7 @@ async function server(config: Config, secrets: Secrets, paths: Paths): Promise<C
         ? `PARLOUR_TOKEN is set, so the house can reach port ${config.server.port}`
         : `PARLOUR_TOKEN is not set, so the server answers this machine only. parlour secrets set PARLOUR_TOKEN`,
     });
+    if (config.discovery.enabled) checks.push(await localNetworkCheck());
   }
   checks.push(...(await forgottenConnectors(config, paths)));
   const memory = localModelMemory(config, paths);
@@ -137,6 +138,7 @@ async function satellite(config: Config, secrets: Secrets, paths: Paths): Promis
   await ask("audioSource", config.audio.source, config.audio);
   await ask("audioSink", config.audio.sink, config.audio);
   if (config.satellite.localWake) await ask("wake", config.wake.provider, config.wake);
+  checks.push(await localNetworkCheck());
 
   const target = config.satellite.serverUrl || (await findServer(4000))?.url;
   const up = Boolean(target) && (await reachable(`${target}/health`));

@@ -162,7 +162,7 @@ copy. The dev build and the installed `Parlour Server.app` share this settings f
 so when you are done, put the global path back, or delete the file and let the
 app find `parlour` again.
 
-## Two things to know
+## Three things to know
 
 - **Use the app or the LaunchAgent, not both.** Two copies of Parlour means
   two processes fighting over one microphone and one port. `parlour init` asks
@@ -178,6 +178,15 @@ app find `parlour` again.
   instead of asking. The grant is tied to the bundle identifier, so it
   survives rebuilds, and it covers Parlour as the app's child. A LaunchAgent
   needs its own grant and asks the first time it runs.
+- **So does the local network.** Since macOS 15, a process has to be allowed
+  onto the local network before phones, satellites and Home Assistant can
+  find or reach it, and until then Bonjour fails with "no route to host". The
+  doctor sends one Bonjour question, which brings up the prompt during setup
+  rather than when the phone first looks, and fails with the way to the
+  switch if it was refused: System Settings, Privacy & Security, Local
+  Network. The bundle carries `NSLocalNetworkUsageDescription` for it. The
+  Mac has no multicast entitlement to add: Apple's is for iOS, and on macOS
+  the permission is the whole story.
 
 ## Deliberate choices
 
