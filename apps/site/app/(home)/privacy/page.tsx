@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { pageMetadata } from "@/lib/site";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
+  path: "/privacy",
   title: "Privacy policy",
   description:
     "What Parlour, the iOS app and this site collect, where it goes, and how a future, opt-in Parlour Cloud would handle your data.",
-  alternates: { canonical: "/privacy" },
-};
+  markdown: false,
+});
 
 // Changing what this page promises means changing this date, and saying so on the page.
 const updated = "24 September 2026";

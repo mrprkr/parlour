@@ -14,7 +14,8 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}${live}`,
   `style-src 'self' 'unsafe-inline'${live}`,
-  `img-src 'self' data: blob:${live}${isPreview ? " https://vercel.com" : ""}`,
+  // The Stunt Double Index badge in the footer is the one image from elsewhere.
+  `img-src 'self' data: blob: https://index.stuntdouble.io${live}${isPreview ? " https://vercel.com" : ""}`,
   `font-src 'self'${live}${isPreview ? " https://assets.vercel.com" : ""}`,
   `connect-src 'self'${isDev ? " ws:" : ""}${isPreview ? " https://vercel.live wss://ws-us3.pusher.com" : ""}`,
   `frame-src ${isPreview ? "https://vercel.live" : "'none'"}`,
@@ -38,6 +39,24 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
+  },
+  // The agent documents live at the addresses agents look for them, served
+  // by plain route handlers so there is no dot directory under app/.
+  async rewrites() {
+    return [
+      { source: "/.well-known/agents.md", destination: "/agents.md" },
+      { source: "/.well-known/mcp/server-card.json", destination: "/mcp/server-card.json" },
+      { source: "/.well-known/mcp.json", destination: "/mcp/server-card.json" },
+      { source: "/.well-known/api-catalog", destination: "/api-catalog" },
+    ];
+  },
+  async redirects() {
+    return [
+      { source: "/developers", destination: "/docs/api", permanent: false },
+      { source: "/api-docs", destination: "/docs/api", permanent: false },
+      { source: "/support", destination: "/help", permanent: false },
+      { source: "/faq", destination: "/help", permanent: false },
+    ];
   },
 };
 

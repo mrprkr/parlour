@@ -1,10 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { application, downloadUrl, graph, pageMetadata } from "@/lib/site";
 import { InstallButton } from "../install-button";
+import { JsonLd } from "../json-ld";
 import { ConfigFile, DesktopSettings, PhoneHouse, PhoneTalk, PrivacyDiagram, RoomScene } from "./pictures";
 import { Topology } from "./topology";
 
-// The newest release's dmg. desktop-release.yml uploads it under this fixed name so the link never moves.
-const downloadUrl = "https://github.com/mrprkr/parlour/releases/latest/download/Parlour-Server-arm64.dmg";
+export const metadata: Metadata = pageMetadata({ path: "/" });
 
 // Things people actually say to it, set as type rather than listed.
 const asked = [
@@ -18,6 +20,7 @@ const asked = [
 export default function Home() {
   return (
     <main className="book">
+      <JsonLd data={graph(application)} />
       <section className="opening" aria-labelledby="offer">
         <div className="head">
           <h1 id="offer">
@@ -218,9 +221,14 @@ export default function Home() {
       <section className="sheet source" aria-labelledby="source-heading">
         <h2 id="source-heading">Free and open source</h2>
         <p>
-          Parlour is MIT licensed. Bug reports, questions and pull requests are all welcome on{" "}
-          <a href="https://github.com/mrprkr/parlour">GitHub</a>. The most helpful thing you can add is a
-          provider: a new voice, another speech engine, or a Linux service manager.
+          Parlour is free and MIT licensed. There is no account and no subscription: it costs $0 to install
+          and run, and <Link href="/pricing">pricing</Link> covers what the optional cloud services cost.
+        </p>
+        <p>
+          Bug reports, questions and pull requests are all welcome on{" "}
+          <a href="https://github.com/mrprkr/parlour">GitHub</a>, and <Link href="/help">help</Link> answers
+          the common questions. The most helpful thing you can add is a provider: a new voice, another speech
+          engine, or a Linux service manager.
         </p>
       </section>
     </main>
