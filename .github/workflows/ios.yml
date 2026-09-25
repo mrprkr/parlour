@@ -1,0 +1,71 @@
+name: iOS
+
+# Only when something the app is built from changes: a macOS runner with the
+# simulator is the dearest minute CI spends, and the rest of the repository
+# cannot break the Swift. packages/design writes Tokens.swift into apps/ios, so
+# a token change shows up here through that file.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/ios/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "apps/ios/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test the iOS app
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the Xcode project
+        working-directory: apps/ios
+        run: xcodegen generate
+
+      # The simulators a runner image carries change with its Xcode, so the
+      # test runs on whichever iPhone the newest iOS runtime has rather than
+      # one named here that a future image may not.
+      - name: Pick a simulator
+        id: simulator
+        run: |
+          udid="$(xcrun simctl list devices available --json | jq -r '
+            [.devices | to_entries[]
+              | select(.key | test("iOS"))
+              | .value[] | select(.name | startswith("iPhone"))]
+            | last | .udid // empty')"
+          if [ -z "$udid" ]; then
+            echo "No iPhone simulator on this runner." >&2
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      # Testing builds the app as well as ParlourTests, so this one step is the
+      # compile and the tests. Nothing is signed: the simulator does not need it,
+      # and the runner has no team to sign with.
+      - name: Build and run ParlourTests
+        working-directory: apps/ios
+        run: |
+          xcodebuild test \
+            -scheme Parlour \
+            -destination "id=${{ steps.simulator.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO
