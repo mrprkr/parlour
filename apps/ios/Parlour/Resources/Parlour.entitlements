@@ -6,5 +6,14 @@
 	<true/>
 	<key>com.apple.developer.homekit</key>
 	<true/>
+	<!--
+		Multicast and broadcast on the house network, which Apple has granted this
+		team. Browsing for _parlour._tcp through NWBrowser works without it, but
+		anything that talks to the LAN over raw UDP does not, and the App ID has to
+		carry it for automatic signing to put it in the profile. The local network
+		prompt still decides whether any of it gets through.
+	-->
+	<key>com.apple.developer.networking.multicast</key>
+	<true/>
 </dict>
 </plist>

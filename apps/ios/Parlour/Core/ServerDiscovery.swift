@@ -27,6 +27,9 @@ final class ServerDiscovery {
   /// Set when the browser itself fails, which on iOS almost always means the
   /// local network permission was refused.
   private(set) var failure: String?
+  /// The local network permission was refused. iOS asks only once, so from
+  /// here the way back is the switch in Settings, not another browse.
+  private(set) var denied = false
 
   private var browser: NWBrowser?
   private var resolvers: [String: NWConnection] = [:]
@@ -47,8 +50,11 @@ final class ServerDiscovery {
         guard let self, let browser, self.browser === browser else { return }
         switch state {
         case .ready:
+          // Also where a browser left waiting on a refusal lands once the
+          // switch in Settings is turned on, with nothing restarted.
           self.browsing = true
           self.failure = nil
+          self.denied = false
         case .failed(let error), .waiting(let error):
           if case .dns(let code) = error, code == DNSServiceErrorType(kDNSServiceErr_DefunctConnection) {
             // iOS severs the browser's connection to the Bonjour daemon when
@@ -59,6 +65,7 @@ final class ServerDiscovery {
             self.start()
           } else {
             self.browsing = false
+            self.denied = Self.isRefusal(error)
             self.failure = Self.explain(error)
           }
         case .cancelled:
@@ -138,9 +145,23 @@ final class ServerDiscovery {
     }
   }
 
-  private static func explain(_ error: NWError) -> String {
-    if case .posix(let code) = error, code == .EPERM || code == .EACCES {
-      return "iOS is not letting Parlour onto the local network. Turn it on in Settings, Privacy, Local Network."
+  /// A refused local network permission reaches a Bonjour browser as the DNS
+  /// service's PolicyDenied, while it is waiting, rather than as a POSIX error.
+  /// Both mean the same thing.
+  nonisolated static func isRefusal(_ error: NWError) -> Bool {
+    switch error {
+    case .dns(let code):
+      return code == DNSServiceErrorType(kDNSServiceErr_PolicyDenied)
+    case .posix(let code):
+      return code == .EPERM || code == .EACCES
+    default:
+      return false
+    }
+  }
+
+  nonisolated static func explain(_ error: NWError) -> String {
+    if isRefusal(error) {
+      return "iOS is not letting Parlour onto the local network. Turn on Local Network in Settings, Parlour."
     }
     return "Could not look for a server: \(error.localizedDescription)"
   }

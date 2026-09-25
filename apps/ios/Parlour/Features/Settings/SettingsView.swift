@@ -13,6 +13,7 @@ struct SettingsView: View {
   @Environment(AppSettings.self) private var settings
   @Environment(ServerDiscovery.self) private var discovery
   @Environment(LocalIntelligence.self) private var intelligence
+  @Environment(\.openURL) private var openURL
 
   @State private var health: Health?
   @State private var probe: String?
@@ -208,11 +209,14 @@ struct SettingsView: View {
         granted: microphone == .granted,
         ask: { microphone = (await Recorder.requestPermission()) ? .granted : .denied }
       )
+      // iOS asks about the local network once. After a no, browsing again
+      // changes nothing, so the button goes where the switch is instead.
       permission(
         "Local network",
         why: "Finding your server, and talking to it.",
         granted: discovery.browsing && discovery.failure == nil,
-        ask: { discovery.start() }
+        title: discovery.denied ? "Open Settings" : "Ask",
+        ask: { if discovery.denied { openSettings() } else { discovery.start() } }
       )
       permission(
         "HomeKit",
@@ -233,6 +237,7 @@ struct SettingsView: View {
     _ name: String,
     why: String,
     granted: Bool?,
+    title: String = "Ask",
     ask: (() async -> Void)?
   ) -> some View {
     HStack(alignment: .top, spacing: Space.md) {
@@ -248,12 +253,16 @@ struct SettingsView: View {
       }
       Spacer()
       if granted != true, let ask {
-        Button("Ask") { Task { await ask() } }
+        Button(title) { Task { await ask() } }
           .font(Ramp.small)
       }
     }
     .padding(.vertical, Space.sm)
     .overlay(alignment: .bottom) { Rule() }
+  }
+
+  private func openSettings() {
+    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
   }
 
   private func check() async {

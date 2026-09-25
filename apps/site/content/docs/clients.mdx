@@ -81,7 +81,8 @@ between attempts, doubling up to `satellite.retryMs`.
   is advertising, the log says so and the satellite stays put. You can also
   fill in the key by hand (`http://study-mac.local:8765`) if your network
   drops multicast, as some mesh systems and most guest VLANs do. Run
-  `parlour doctor` on the satellite to see whether it can find a server.
+  `parlour doctor` on the satellite to see whether it can find a server, and
+  whether macOS is letting it onto the local network at all.
 - **`localWake`** runs the wake word on the satellite and streams only what
   follows it. It saves a constant 32 KB/s on the network, but needs a copy of
   the models on that machine (`parlour models fetch` puts them there). It is
