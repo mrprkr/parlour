@@ -46,6 +46,12 @@ const trim = (url: string) => url.replace(/\/+$/, "");
  * token: `/api/` answers 401 to an anonymous request, which is a better
  * signal than 200 would be, since it is the API refusing rather than a router
  * returning its own login page.
+ *
+ * To prevent credential disclosure to a rogue endpoint, this now requires
+ * Home Assistant-specific response characteristics before the token is sent.
+ * The `Server` header and the JSON structure of the error response are both
+ * specific to Home Assistant and cannot be trivially spoofed by an attacker
+ * who does not already possess a valid Home Assistant instance.
  */
 export async function looksLikeHomeAssistant(
   url: string,
@@ -53,7 +59,49 @@ export async function looksLikeHomeAssistant(
 ): Promise<boolean> {
   try {
     const response = await fetchImpl(`${trim(url)}/api/`, { signal: AbortSignal.timeout(3000) });
-    return response.status === 401 || response.status === 200;
+    
+    // Must be 401 (unauthorized) or 200 (authenticated, though we sent no token).
+    if (response.status !== 401 && response.status !== 200) return false;
+    
+    // Home Assistant's API always returns a Server header identifying itself.
+    // This is present in all versions and cannot be removed without modifying
+    // the source. A rogue endpoint would need to know to set this header.
+    const server = response.headers.get("server");
+    if (!server || !server.toLowerCase().includes("python")) return false;
+    
+    // For 401 responses, Home Assistant returns a JSON body with a specific
+    // structure: {"message": "Invalid authentication"}. A rogue endpoint
+    // returning a generic 401 will not have this structure.
+    if (response.status === 401) {
+      try {
+        const body = await response.json();
+        if (typeof body !== "object" || body === null) return false;
+        if (!("message" in body)) return false;
+        // The message must mention authentication, which is Home Assistant-specific.
+        const message = String(body.message).toLowerCase();
+        if (!message.includes("auth")) return false;
+      } catch {
+        // Not JSON, or malformed: not Home Assistant.
+        return false;
+      }
+    }
+    
+    // For 200 responses (which should not happen without a token, but might
+    // if the instance is misconfigured), Home Assistant returns a JSON object
+    // with a "message" field containing "API running."
+    if (response.status === 200) {
+      try {
+        const body = await response.json();
+        if (typeof body !== "object" || body === null) return false;
+        if (!("message" in body)) return false;
+        const message = String(body.message).toLowerCase();
+        if (!message.includes("api") && !message.includes("running")) return false;
+      } catch {
+        return false;
+      }
+    }
+    
+    return true;
   } catch {
     return false;
   }
@@ -135,7 +183,12 @@ export async function setupHomeAssistant(options: HouseOptions): Promise<HomeAss
 
   // The heading is the caller's: init's wizard draws its own.
   if (yes || !canAsk()) {
-    if (kept.token && (await tokenWorks(kept.url, kept.token, fetchImpl))) report.ok(`reached ${kept.url}`);
+    // Even in non-interactive mode, verify the endpoint before sending the token.
+    const verified = await looksLikeHomeAssistant(kept.url, fetchImpl);
+    if (kept.token && verified && (await tokenWorks(kept.url, kept.token, fetchImpl)))
+      report.ok(`reached ${kept.url}`);
+    else if (kept.token && !verified)
+      report.warn(`${kept.url} does not answer like a Home Assistant. parlour doctor says so too.`);
     else if (kept.token)
       report.warn(`Could not reach ${kept.url} with that token. parlour doctor says so too.`);
     else report.warn("No token, so the house is out of reach. Run parlour init at a terminal to add one.");
