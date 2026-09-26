@@ -1,6 +1,6 @@
 {
   "name": "parlour",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "A local-first voice agent for the house: wake word, speech to text, a local model with tools, and a cloud model behind it",
   "license": "MIT",
   "type": "module",

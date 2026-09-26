@@ -1,5 +1,17 @@
 # parlour
 
+## 0.7.0
+
+### Minor Changes
+
+- 319c923: `parlour laya setup` makes the pinned laya-mlx environment, fetches its checkpoint, turns on the laya-mlx decision model in shadow mode and gives the house a `laya` MCP server and skill. `parlour models status` says which models are here, and `parlour models fetch --voice` downloads the Kokoro voice ahead of the first reply.
+
+### Patch Changes
+
+- 319c923: `parlour doctor --network` checks only whether macOS lets Parlour onto the local network, which the desktop app uses to ask for it during setup.
+- dea11a9: The laya-mlx decision provider uses the repository's pinned environment in packages/laya when run from a checkout, so `pip install laya-mlx` is only needed for an npm install.
+- 51fe3fb: The doctor checks whether macOS is letting Parlour onto the local network, and a refused or dropped Bonjour answer is logged instead of stopping the server.
+
 ## 0.6.0
 
 ### Minor Changes
