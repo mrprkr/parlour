@@ -16,10 +16,15 @@ import {
   deviceValue,
   getSettings,
   installCli,
+  type LayaStatus,
+  layaStatus,
+  type ModelsStatus,
   microphoneCheck,
   mintToken,
+  modelsStatus,
   onSetupEvent,
   openPrivacySettings,
+  parlourStream,
   type Readiness,
   readConfig,
   runDoctor,
@@ -34,6 +39,8 @@ import {
   writeConfig,
 } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
+import { LocalNetwork, useLocalNetwork } from "@/panels/onboarding/LocalNetwork";
+import { ELSEWHERE, type ModelJob, Models, modelWork } from "@/panels/onboarding/Models";
 import { PairPhone } from "@/panels/onboarding/PairPhone";
 import {
   Disclosure,
@@ -60,13 +67,14 @@ const WAKE_WORDS: { value: string; label: string }[] = [
   { value: "hey_mycroft", label: "hey mycroft" },
 ];
 
-type StepName = "install" | "voice" | "home" | "extras" | "tools" | "phone" | "test" | "finish";
+type StepName = "install" | "models" | "voice" | "home" | "extras" | "tools" | "phone" | "test" | "finish";
 
 /** The welcome is not a step: it asks nothing, so it has no place in the row along the top. */
 type Screen = "welcome" | StepName;
 
 const STEPS: StepMeta<StepName>[] = [
   { name: "install", label: "Install" },
+  { name: "models", label: "Models" },
   { name: "voice", label: "Voice" },
   { name: "home", label: "Home" },
   { name: "extras", label: "Extras" },
@@ -102,8 +110,8 @@ function nodeDetail(readiness: Readiness): string {
   return "Parlour runs on Node 22 or newer, and none was found.";
 }
 
-/** Which of the install's own jobs is running, so its row can spin. */
-type Job = "cli" | "setup" | null;
+/** Which of the install's or the models' jobs is running, so its row can spin. */
+type Job = "cli" | "setup" | ModelJob | null;
 
 export function Onboarding({
   open,
@@ -144,6 +152,14 @@ export function Onboarding({
   const [mic, setMic] = useState(DEVICE_DEFAULT);
   const [mics, setMics] = useState<{ value: string; label: string }[]>([]);
 
+  const [models, setModels] = useState<ModelsStatus | null>(null);
+  const [laya, setLaya] = useState<LayaStatus | null>(null);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  /** A catalogue id, or ELSEWHERE for a model server somebody already runs. */
+  const [llmChoice, setLlmChoice] = useState<string | null>(null);
+  const [layaOn, setLayaOn] = useState(true);
+  const [voiceDone, setVoiceDone] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [stepNote, setStepNote] = useState("");
 
@@ -155,6 +171,9 @@ export function Onboarding({
   const [micDetail, setMicDetail] = useState("");
   /** Undefined until it has been asked, because asking is what shows the prompt. */
   const [micGranted, setMicGranted] = useState<boolean | undefined>(undefined);
+
+  /** Asked on the first step that crosses the house's network, rather than left to the doctor at the end. */
+  const lan = useLocalNetwork();
 
   const askingRef = useRef(false);
   /** A microphone chosen while an ask was still up, waiting its turn. */
@@ -366,7 +385,14 @@ export function Onboarding({
       }
       running = "setup";
       setJob(running);
-      setActivity("Getting started. The models are large, so this takes a while.");
+      // The check at the end of init sends a Bonjour question, which is what
+      // raises the macOS prompt. Asked here first, the prompt arrives beside
+      // the card that says why, rather than in the middle of a download.
+      if (lan.state.kind === "unasked") {
+        setActivity("Asking macOS for the local network first.");
+        await lan.ask();
+      }
+      setActivity("Getting started. This downloads the speech tools.");
       const ok = await runSetup(true);
       current = await refresh();
       if (!ok || !current.installed) {
@@ -378,6 +404,86 @@ export function Onboarding({
       setActivity("");
     } catch (error) {
       setFailed(running ?? "setup");
+      setLogOpen(true);
+      setActivity(String(error));
+    } finally {
+      setJob(null);
+    }
+  };
+
+  // ------------------------------------------------------------------ models
+
+  /** What is downloaded and set up already, so the step offers only what is left. */
+  const loadModels = useCallback(async () => {
+    setModelsError(null);
+    try {
+      const [next, nextLaya] = await Promise.all([modelsStatus(), layaStatus()]);
+      setModels(next);
+      setLaya(nextLaya);
+      // The first answer is what is already set up, then the suggestion. A
+      // config naming a server somebody else runs is left pointing at it.
+      setLlmChoice(
+        (current) =>
+          current ??
+          (next.llm.managed
+            ? (next.llm.model ?? next.llm.suggested)
+            : next.llm.model
+              ? ELSEWHERE
+              : next.llm.suggested),
+      );
+      if (!nextLaya.supported) setLayaOn(false);
+      return { next, nextLaya };
+    } catch (error) {
+      setModelsError(String(error));
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (visible && screen === "models") void loadModels();
+  }, [visible, screen, loadModels]);
+
+  /**
+   * One button for all of it, in the order it matters: the voice first,
+   * because it is small and the house is mute without it, then the model that
+   * thinks, which is the long one, then laya. Each is the CLI doing what a
+   * terminal would, and a failure stops the run with its log open.
+   */
+  const downloadModels = async () => {
+    if (!models || !llmChoice) return;
+    setLog("");
+    setFailed(null);
+    const work = modelWork(models, laya, llmChoice, layaOn, voiceDone);
+    let running: Job = null;
+    try {
+      for (const next of work) {
+        running = next;
+        setJob(next);
+        let ok: boolean;
+        if (next === "voice") {
+          setActivity("Downloading the wake word, whisper and the voice");
+          ok = await parlourStream(["models", "fetch", "--wake", models.wake.word, "--voice"]);
+          if (ok) setVoiceDone(true);
+        } else if (next === "llm") {
+          setActivity("Downloading the local model. It is gigabytes, so this takes a while.");
+          ok = await runSetup(true, llmChoice);
+        } else {
+          setActivity("Setting up laya. The first time fetches MLX and its checkpoint.");
+          ok = await parlourStream(["laya", "setup"]);
+        }
+        if (!ok) {
+          setFailed(next);
+          setLogOpen(true);
+          setActivity("That did not finish. The details say why.");
+          await loadModels();
+          return;
+        }
+      }
+      setActivity("");
+      onSaved();
+      await loadModels();
+    } catch (error) {
+      setFailed(running);
       setLogOpen(true);
       setActivity(String(error));
     } finally {
@@ -538,7 +644,8 @@ export function Onboarding({
           </p>
           <ol className="mt-6 grid w-full max-w-[380px] gap-2 text-left">
             {[
-              ["Install", "The parlour command, speech tools and a local model."],
+              ["Install", "The parlour command and the speech tools."],
+              ["Models", "The voice, the model that thinks, and quick decisions with laya."],
               ["Voice", "Which microphone to listen on, and the word that wakes it."],
               ["Home", "Your Home Assistant, if you have one."],
               ["Extras", "Cloud help and other devices, both optional."],
@@ -646,12 +753,23 @@ export function Onboarding({
                   readiness.installed
                     ? "ffmpeg, whisper and the models are in place."
                     : missing
-                      ? `ffmpeg, whisper, a local model and its config. Still to do: ${missing}.`
-                      : "ffmpeg, whisper, a local model and its config."
+                      ? `ffmpeg, whisper and the config. Still to do: ${missing}.`
+                      : "ffmpeg, whisper and the config. The models come next."
                 }
               />
             </ul>
           )}
+
+          {/* Once there is a CLI to ask with. Before that, the install asks by itself between its two halves. */}
+          {readiness?.parlourOk && !(readiness.installed && lan.state.kind === "unasked") ? (
+            <div className="mt-3">
+              <LocalNetwork
+                state={lan.state}
+                onAsk={() => void lan.ask()}
+                why="Home Assistant, the phone app and other rooms all reach Parlour over your network."
+              />
+            </div>
+          ) : null}
 
           {activity ? (
             <p className="mt-3 flex items-start gap-2 text-muted-foreground" aria-live="polite">
@@ -690,13 +808,76 @@ export function Onboarding({
       );
 
       primary = readiness?.installed ? (
-        <Button onClick={() => go("voice")}>Continue</Button>
+        <Button onClick={() => go("models")}>Continue</Button>
       ) : (
         <Button disabled={busy || !readiness?.nodeOk} onClick={() => void install()}>
           {busy ? "Installing..." : failed ? "Try again" : "Install"}
         </Button>
       );
       secondary = <BackButton onClick={() => go("welcome")} disabled={busy} />;
+      break;
+    }
+
+    case "models": {
+      const work = models && llmChoice ? modelWork(models, laya, llmChoice, layaOn, voiceDone) : [];
+      const modelJob = job === "voice" || job === "llm" || job === "laya" ? job : null;
+      const modelFailed = failed === "voice" || failed === "llm" || failed === "laya" ? failed : null;
+
+      body = (
+        <>
+          <Heading title="The models">
+            Everything Parlour hears, thinks and says runs on this Mac. Each is downloaded once, and all of it
+            can be changed later in Settings.
+          </Heading>
+
+          {modelsError !== null ? (
+            <Row tone="bad" name="Could not look" detail={modelsError} />
+          ) : !models || !llmChoice ? (
+            <p className="text-muted-foreground">Looking at what is already here...</p>
+          ) : (
+            <Models
+              status={models}
+              laya={laya}
+              choice={llmChoice}
+              onChoice={setLlmChoice}
+              layaOn={layaOn}
+              onLaya={setLayaOn}
+              voiceDone={voiceDone}
+              job={modelJob}
+              failed={modelFailed}
+              disabled={busy}
+            />
+          )}
+
+          {activity ? (
+            <p className="mt-3 flex items-start gap-2 text-muted-foreground" aria-live="polite">
+              {busy ? <Mark tone="busy" /> : null}
+              {activity}
+            </p>
+          ) : null}
+
+          <Disclosure label="Show details" open={logOpen} onOpenChange={setLogOpen}>
+            {logBox}
+          </Disclosure>
+        </>
+      );
+
+      primary =
+        models && work.length === 0 ? (
+          <Button onClick={() => go("voice")}>Continue</Button>
+        ) : (
+          <Button disabled={busy || !models} onClick={() => void downloadModels()}>
+            {busy ? "Downloading..." : modelFailed ? "Try again" : "Download"}
+          </Button>
+        );
+      secondary = (
+        <>
+          <BackButton onClick={() => go("install")} disabled={busy} />
+          <Button variant="ghost" disabled={busy} onClick={() => go("voice")}>
+            Skip for now
+          </Button>
+        </>
+      );
       break;
     }
 
@@ -812,7 +993,7 @@ export function Onboarding({
           {micGranted === false ? "Continue anyway" : "Continue"}
         </Button>
       );
-      secondary = <BackButton onClick={() => go("install")} disabled={saving} />;
+      secondary = <BackButton onClick={() => go("models")} disabled={saving} />;
       break;
     }
 
@@ -823,6 +1004,16 @@ export function Onboarding({
             Parlour runs the lights, heating and everything else through Home Assistant. No Home Assistant?
             Skip this: timers, questions and search still work.
           </Heading>
+
+          {lan.state.kind === "allowed" ? null : (
+            <div className="mb-4">
+              <LocalNetwork
+                state={lan.state}
+                onAsk={() => void lan.ask()}
+                why="Home Assistant is on your network, and Parlour needs to be let onto it to reach it."
+              />
+            </div>
+          )}
 
           <div className="grid gap-3">
             <div className="grid gap-1">
@@ -923,6 +1114,15 @@ export function Onboarding({
                   ? "A shared token is already set. Devices holding it keep working."
                   : "A shared token is made for you, and a later step shows the code that pairs the iPhone app."}
               </p>
+              {lan.state.kind === "allowed" ? null : (
+                <div className="mt-3">
+                  <LocalNetwork
+                    state={lan.state}
+                    onAsk={() => void lan.ask()}
+                    why="Phones and satellites find Parlour over your network."
+                  />
+                </div>
+              )}
             </Optional>
           </div>
         </>
@@ -959,6 +1159,15 @@ export function Onboarding({
             Optional. The Parlour app on the iPhone is a remote for the house: push to talk from any room, and
             HomeKit from the phone.
           </Heading>
+          {hasToken && lan.state.kind !== "allowed" ? (
+            <div className="mb-4">
+              <LocalNetwork
+                state={lan.state}
+                onAsk={() => void lan.ask()}
+                why="The phone finds and reaches Parlour over your network."
+              />
+            </div>
+          ) : null}
           <PairPhone tokenSet={hasToken} onEnableNetwork={enableNetwork} />
         </>
       );

@@ -140,7 +140,16 @@ fn stream(app: &AppHandle, mut command: Command, what: &str) -> Result<bool, Str
 /// Runs Parlour's own `init`, which is the same thing a terminal runs, taking
 /// every default. Without a terminal it asks nothing, so the secrets and the
 /// choices are the window's to collect afterwards, through the CLI.
-pub fn run(app: &AppHandle, settings: &Settings, deps: bool) -> Result<bool, String> {
+///
+/// `local_model` answers the one question `--yes` will not take a default for,
+/// the local model: a download of gigabytes is said yes to, never assumed, so
+/// the window asks and passes the answer on.
+pub fn run(
+    app: &AppHandle,
+    settings: &Settings,
+    deps: bool,
+    local_model: Option<&str>,
+) -> Result<bool, String> {
     if !settings.looks_valid() {
         return Err(format!(
             "No parlour at {:?}. Install it first.",
@@ -157,7 +166,24 @@ pub fn run(app: &AppHandle, settings: &Settings, deps: bool) -> Result<bool, Str
     if cfg!(feature = "appstore") {
         command.arg("--no-service");
     }
+    if let Some(model) = local_model {
+        command.args(["--local-model", model]);
+    }
     stream(app, command, "parlour init")
+}
+
+/// Any `parlour` command that speaks `--porcelain`, streamed like `init`. The
+/// flag is added here so the caller cannot forget it and get prose to parse.
+pub fn run_streamed(app: &AppHandle, settings: &Settings, args: &[String]) -> Result<bool, String> {
+    if !settings.looks_valid() {
+        return Err(format!(
+            "No parlour at {:?}. Install it first.",
+            settings.parlour_bin
+        ));
+    }
+    let mut command = parlour_command(settings);
+    command.args(args).arg("--porcelain");
+    stream(app, command, "parlour")
 }
 
 /// `npm install -g parlour` at the app's own version, so the two are never

@@ -71,15 +71,7 @@ export const command: Command = {
           throw new UsageError(parsed.error.issues.map((issue) => issue.message).join("; "));
         }
 
-        updateConfig(paths, (raw) => {
-          const integrations = asRecord(raw.integrations) ?? defaultIntegrations();
-          const mcp = asRecord(integrations.mcp) ?? {};
-          const servers = asRecord(mcp.servers) ?? {};
-          if (name in servers) throw new Error(`There is already an MCP server called ${name}.`);
-          mcp.servers = { ...servers, [name]: parsed.data };
-          integrations.mcp = mcp;
-          raw.integrations = integrations;
-        });
+        updateConfig(paths, (raw) => putMcpServer(raw, name, parsed.data));
         process.stdout.write(`Added ${name} (${where(parsed.data)}). parlour restart to pick it up.\n`);
         return;
       }
@@ -98,6 +90,25 @@ export const command: Command = {
     }
   },
 };
+
+/**
+ * Writes one server into a raw config. Refuses a name already taken unless
+ * `replace` says the caller owns that entry, as `parlour laya setup` owns `laya`.
+ */
+export function putMcpServer(
+  raw: Record<string, unknown>,
+  name: string,
+  server: McpServerConfig,
+  replace = false,
+): void {
+  const integrations = asRecord(raw.integrations) ?? defaultIntegrations();
+  const mcp = asRecord(integrations.mcp) ?? {};
+  const servers = asRecord(mcp.servers) ?? {};
+  if (name in servers && !replace) throw new Error(`There is already an MCP server called ${name}.`);
+  mcp.servers = { ...servers, [name]: server };
+  integrations.mcp = mcp;
+  raw.integrations = integrations;
+}
 
 /** The parsed servers, so a hand-written entry is reported before it is printed. */
 function configured(config: { integrations: Record<string, unknown> }): Record<string, McpServerConfig> {

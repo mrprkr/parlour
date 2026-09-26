@@ -89,6 +89,33 @@ export interface Readiness {
   bundled: boolean;
 }
 
+/** What `parlour models status --json` prints. */
+export interface ModelsStatus {
+  wake: { word: string; ready: boolean };
+  whisper: { model: string; ready: boolean };
+  llm: {
+    /** Parlour runs the model server itself. False is a server somebody else runs, or none yet. */
+    managed: boolean;
+    model: string | null;
+    ready: boolean;
+    suggested: string;
+    memoryGb: number;
+    choices: { id: string; label: string; sizeGb: number; needsGb: number; note: string }[];
+  };
+}
+
+/** What `parlour laya status --json` prints. */
+export interface LayaStatus {
+  supported: boolean;
+  reason: string | null;
+  uv: string | null;
+  ready: boolean;
+  python: string;
+  decision: string;
+  mcp: boolean;
+  skill: boolean;
+}
+
 /** One line of `parlour doctor --json`. */
 export interface Check {
   name: string;
@@ -171,15 +198,23 @@ export const hostName = () => invoke<string>("host_name");
 export const audioDevices = () => invoke<string[]>("audio_devices");
 
 export const setupStatus = () => invoke<Readiness>("setup_status");
-/** `parlour init`, taking every default. `deps` lets it use Homebrew. */
-export const runSetup = (deps: boolean) => invoke<boolean>("run_setup", { deps });
+/**
+ * `parlour init`, taking every default. `deps` lets it use Homebrew, and
+ * `localModel` is the answer to the one question it will not assume: which
+ * local model to download, as a catalogue id.
+ */
+export const runSetup = (deps: boolean, localModel?: string) =>
+  invoke<boolean>("run_setup", { deps, localModel: localModel ?? null });
+/** A CLI command that takes `--porcelain`, reported into the same log as the setup. */
+export const parlourStream = (args: string[]) => invoke<boolean>("parlour_stream", { args });
 export const installCli = () => invoke<boolean>("install_cli");
 /** Whether the app opens at login, or null where the build does not offer it. */
 export const loginItem = () => invoke<boolean | null>("login_item");
 export const setLoginItem = (enabled: boolean) => invoke<boolean>("set_login_item", { enabled });
 
 export const microphoneCheck = (device: string | null) => invoke<Microphone>("microphone_check", { device });
-export const openPrivacySettings = () => invoke<void>("open_privacy_settings");
+export const openPrivacySettings = (pane: "microphone" | "local-network" = "microphone") =>
+  invoke<void>("open_privacy_settings", { pane });
 
 // -------------------------------------------------------------- through the CLI
 
@@ -205,6 +240,26 @@ export const runDoctor = async (): Promise<Check[]> => {
   if (!output.stdout.trimStart().startsWith("[")) throw new Error(failure(output));
   return JSON.parse(output.stdout) as Check[];
 };
+
+/**
+ * Whether macOS lets Parlour onto the local network. Asking is what raises the
+ * prompt the first time, and the answer to the prompt is not the answer to
+ * this: the question that raised it has already been refused by then, so the
+ * caller asks again until it comes back allowed.
+ */
+export const localNetworkCheck = async (): Promise<Check> => {
+  const output = await run(["doctor", "--network", "--json"]);
+  if (!output.stdout.trimStart().startsWith("[")) throw new Error(failure(output));
+  const [check] = JSON.parse(output.stdout) as Check[];
+  if (!check) throw new Error("the doctor said nothing about the local network");
+  return check;
+};
+
+export const modelsStatus = async (): Promise<ModelsStatus> =>
+  JSON.parse(await parlour(["models", "status", "--json"])) as ModelsStatus;
+
+export const layaStatus = async (): Promise<LayaStatus> =>
+  JSON.parse(await parlour(["laya", "status", "--json"])) as LayaStatus;
 
 export const getConnectors = async (): Promise<Connector[]> =>
   JSON.parse(await parlour(["connectors", "list", "--json"])) as Connector[];

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, afterEach, before, beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { LOCAL_MODELS } from "../core/localmodel.ts";
 import { AGENT_LABEL, WHISPER_LABEL } from "../core/services.ts";
 import { VERSION } from "../core/version.ts";
 
@@ -347,7 +348,11 @@ test("init --local-model answers the model question without a terminal", async (
   assert.equal(auto.code, 0, auto.stderr);
   const managed = read().llm.local;
   assert.equal(managed?.managed, true);
-  assert.match(String(managed?.model), /^qwen/, `a catalogue model: ${managed?.model}`);
+  // Which one depends on this machine's memory, so only that it is on the list.
+  assert.ok(
+    LOCAL_MODELS.some((model) => model.id === managed?.model),
+    `a catalogue model: ${managed?.model}`,
+  );
   // Its own port, so a running LM Studio on 1234 and this can both exist.
   assert.equal(managed?.baseUrl, "http://127.0.0.1:8920/v1");
 

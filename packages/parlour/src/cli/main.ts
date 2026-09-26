@@ -31,6 +31,7 @@ const COMMANDS: Record<string, () => Promise<{ command: Command }>> = {
   config: () => import("./config.ts"),
   secrets: () => import("./secrets.ts"),
   models: () => import("./models.ts"),
+  laya: () => import("./laya.ts"),
   pair: () => import("./pair.ts"),
 };
 

@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream } from "node:stream/web";
+import { loadConfig } from "../core/config.ts";
 import {
+  installedLocalModel,
   LOCAL_MODELS,
   type LocalModel,
   localModel,
@@ -14,13 +16,19 @@ import {
   suggestLocalModel,
   thisMachine,
 } from "../core/localmodel.ts";
+import { logger } from "../core/logger.ts";
+import type { Paths } from "../core/paths.ts";
+import { loadKokoro } from "../providers/tts/kokoro.ts";
 import { type Command, parseCli, subcommand } from "./args.ts";
-import { humanReporter, printJson, type Reporter, table } from "./output.ts";
+import { humanReporter, porcelainReporter, printJson, type Reporter, table } from "./output.ts";
 
 const USAGE = [
   "parlour models fetch [--wake w1,w2] [--whisper ggml-small.en.bin]   download what is missing",
   "parlour models fetch --llm auto      the local model this Mac should run, or an id from suggest",
+  "parlour models fetch --voice         the speaking voice now, rather than on the first reply",
+  "parlour models fetch ... --porcelain  one JSON line per event, for the desktop app",
   "parlour models suggest [--json]      which local model fits this machine",
+  "parlour models status [--json]       which models are here, and which local model fits",
 ];
 
 const OPENWAKEWORD = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1";
@@ -42,6 +50,8 @@ export interface FetchModelsOptions {
   whisper?: string | null;
   /** The GGUF for the bundled model server. Absent fetches none: it is gigabytes. */
   llm?: LocalModel | null;
+  /** Load Kokoro, which downloads it into the transformers.js cache when it is not there. */
+  voice?: boolean;
   report?: Reporter;
 }
 
@@ -68,7 +78,13 @@ export async function fetchModels(options: FetchModelsOptions): Promise<void> {
   if (whisper) await fetchFile(`${WHISPER}/${whisper}`, join(whisperDir, whisper), report);
   if (options.llm) await fetchLocalModel(options.modelsDir, options.llm, report);
 
-  report.ok("Kokoro downloads itself on first use, into the transformers.js cache.");
+  if (options.voice) {
+    report.ok("fetching the Kokoro voice, into the transformers.js cache");
+    await loadKokoro(logger("kokoro"));
+    report.ok("Kokoro is ready");
+  } else {
+    report.ok("Kokoro downloads itself on first use, into the transformers.js cache.");
+  }
 }
 
 /**
@@ -140,21 +156,102 @@ export const command: Command = {
       wake: { type: "string" },
       whisper: { type: "string" },
       llm: { type: "string" },
+      voice: { type: "boolean" },
       json: { type: "boolean" },
+      porcelain: { type: "boolean" },
     });
-    const sub = subcommand(positionals, ["fetch", "suggest"] as const, USAGE);
+    const sub = subcommand(positionals, ["fetch", "suggest", "status"] as const, USAGE);
     if (sub === "suggest") {
       suggest(values.json === true);
       return;
     }
-    await fetchModels({
-      modelsDir: paths.modelsDir,
-      wake: typeof values.wake === "string" ? values.wake.split(",").filter(Boolean) : undefined,
-      whisper: typeof values.whisper === "string" ? values.whisper : undefined,
-      llm: typeof values.llm === "string" ? chosenLocalModel(values.llm) : undefined,
-    });
+    if (sub === "status") {
+      const status = modelsStatus(paths);
+      if (values.json) printJson(status);
+      else process.stdout.write(`${table(statusRows(status))}\n`);
+      return;
+    }
+    const report = values.porcelain ? porcelainReporter() : humanReporter();
+    try {
+      await fetchModels({
+        modelsDir: paths.modelsDir,
+        wake: typeof values.wake === "string" ? values.wake.split(",").filter(Boolean) : undefined,
+        whisper: typeof values.whisper === "string" ? values.whisper : undefined,
+        llm: typeof values.llm === "string" ? chosenLocalModel(values.llm) : undefined,
+        voice: values.voice === true,
+        report,
+      });
+      report.done(false);
+    } catch (error) {
+      report.fail(error instanceof Error ? error.message : String(error));
+      report.done(true);
+      throw error;
+    }
   },
 };
+
+export interface ModelsStatus {
+  wake: { word: string; ready: boolean };
+  whisper: { model: string; ready: boolean };
+  llm: {
+    /** Parlour runs the model server itself, so the weights are its to fetch. */
+    managed: boolean;
+    /** What the config names, or null for a server somebody else runs. */
+    model: string | null;
+    ready: boolean;
+    suggested: string;
+    memoryGb: number;
+    choices: { id: string; label: string; sizeGb: number; needsGb: number; note: string }[];
+  };
+}
+
+/**
+ * What is on disk, read without loading anything, so the desktop app can
+ * say what a download would add before anyone presses it. The voice is not
+ * here: Kokoro lives in a cache transformers.js owns, and fetching it again
+ * when it is there costs a second.
+ */
+export function modelsStatus(paths: Paths): ModelsStatus {
+  const { config } = loadConfig(paths);
+  const word = config.wake.words[0] ?? DEFAULT_WAKE_WORDS[0] ?? "hey_jarvis";
+  const local = config.llm.local as { managed?: boolean; model?: string };
+  const managed = local.managed === true;
+  const machine = thisMachine();
+  return {
+    wake: { word, ready: existsSync(join(paths.modelsDir, "openwakeword", `${word}.onnx`)) },
+    whisper: {
+      model: DEFAULT_WHISPER_MODEL,
+      ready: existsSync(join(paths.modelsDir, "whisper", DEFAULT_WHISPER_MODEL)),
+    },
+    llm: {
+      managed,
+      model: local.model ?? null,
+      ready: managed ? installedLocalModel(paths.modelsDir, local.model)?.id === local.model : false,
+      suggested: suggestLocalModel(machine).id,
+      memoryGb: Math.round(machine.memoryGb),
+      choices: LOCAL_MODELS.map(({ id, label, sizeGb, needsGb, note }) => ({
+        id,
+        label,
+        sizeGb,
+        needsGb,
+        note,
+      })),
+    },
+  };
+}
+
+function statusRows(status: ModelsStatus): string[][] {
+  const mark = (ready: boolean) => (ready ? "have" : "missing");
+  return [
+    ["wake word", status.wake.word, mark(status.wake.ready)],
+    ["speech to text", status.whisper.model, mark(status.whisper.ready)],
+    [
+      "local model",
+      status.llm.managed ? (status.llm.model ?? "none") : "run elsewhere",
+      status.llm.managed ? mark(status.llm.ready) : "",
+    ],
+  ];
+}
 
 /** `--llm auto` is the suggestion for this machine; anything else names a catalogue entry. */
 function chosenLocalModel(id: string): LocalModel {
