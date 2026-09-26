@@ -61,7 +61,7 @@ def main() -> int:
             json.dumps(
                 {
                     "ready": False,
-                    "error": "laya_mlx is not installed. Run: pip install laya-mlx",
+                    "error": "laya_mlx is not installed. In a checkout run: pnpm exec nx run laya:setup; otherwise: pip install laya-mlx",
                 }
             ),
             flush=True,

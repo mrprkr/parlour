@@ -233,8 +233,10 @@ APIs, or want to put the SDK's own middleware in front of a model.
 [Laya MLX](https://github.com/mizorewww/laya-mlx) scores each task on your
 Mac and decides whether it needs the cloud. It runs after triage has split
 the request and before the local model takes its turn. It needs Apple silicon
-and `pip install laya-mlx`. The first load downloads the checkpoint into the
-Hugging Face cache.
+and `pip install laya-mlx`. From a checkout of the repository,
+`pnpm exec nx run laya:setup` makes a pinned environment in `packages/laya`
+instead, and Parlour uses it without further config. The first load downloads
+the checkpoint into the Hugging Face cache.
 
 - **Start with `"mode": "shadow"`.** The log shows `needs_cloud`, the intent
   and the confidence, but `ask_the_clever_one` still decides.

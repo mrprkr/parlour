@@ -1,0 +1,15 @@
+{
+  "name": "laya",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "targets": {
+    "setup": {
+      "command": "uv sync --frozen && uv run hf download aac6fef/laya-mlx",
+      "options": { "cwd": "packages/laya" }
+    },
+    "mcp": {
+      "command": "uv run python mcp_server.py",
+      "options": { "cwd": "packages/laya" }
+    }
+  }
+}
