@@ -75,16 +75,23 @@ back later, skipping the welcome.
 
 1. **Install.** One button installs `parlour` from npm if it is missing, then
    runs `parlour init --porcelain --yes` for the rest (ffmpeg and whisper from
-   Homebrew, the models, the config). The log stays folded away unless you ask
-   for it or something fails. **Already have parlour somewhere else?** takes a
-   path instead.
-2. **Voice.** Allow the microphone, choose the wake word, and optionally a
+   Homebrew, the wake word and whisper models, the config). Before `init` runs,
+   it asks macOS for the local network, with a sentence on why, so the prompt
+   does not arrive out of nowhere later. The log stays folded away unless you
+   ask for it or something fails. **Already have parlour somewhere else?**
+   takes a path instead.
+2. **Models.** One button downloads what is left: the wake word, whisper and
+   the Kokoro voice (`parlour models fetch --voice`), the local model you
+   choose from the catalogue, suggested by this Mac's memory (`parlour init
+   --local-model <id>`), and, on Apple silicon, laya-mlx for quick decisions
+   (`parlour laya setup`). **A model server I already run** downloads no model.
+3. **Voice.** Allow the microphone, choose the wake word, and optionally a
    different microphone.
-3. **Home.** The Home Assistant address and token. Skip it and timers,
+4. **Home.** The Home Assistant address and token. Skip it and timers,
    questions and search still work.
-4. **Extras.** Cloud help (the Anthropic key) and letting other devices in with
+5. **Extras.** Cloud help (the Anthropic key) and letting other devices in with
    an access token, each behind its own switch.
-5. **Finish.** The doctor's checks, and a button to start listening.
+6. **Finish.** The doctor's checks, and a button to start listening.
 
 ## The tabs
 
@@ -181,10 +188,10 @@ app find `parlour` again.
 - **So does the local network.** Since macOS 15, a process has to be allowed
   onto the local network before phones, satellites and Home Assistant can
   find or reach it, and until then Bonjour fails with "no route to host". The
-  doctor sends one Bonjour question, which brings up the prompt during setup
-  rather than when the phone first looks, and fails with the way to the
-  switch if it was refused: System Settings, Privacy & Security, Local
-  Network. The bundle carries `NSLocalNetworkUsageDescription` for it. The
+  setup asks for it on the Home step, before anything needs it, by sending one
+  Bonjour question (`parlour doctor --network`), and the doctor asks again at
+  the end and fails with the way to the switch if it was refused: System
+  Settings, Privacy & Security, Local Network. The bundle carries `NSLocalNetworkUsageDescription` for it. The
   Mac has no multicast entitlement to add: Apple's is for iOS, and on macOS
   the permission is the whole story.
 

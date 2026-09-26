@@ -274,20 +274,25 @@ test("building twice ships one copy of the phone page, not a copy nested inside 
 
   const root = mkdtempSync(join(tmpdir(), "parlour-build-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(join(root, "src/server/web"), { recursive: true });
-  writeFileSync(join(root, "src/server/web/index.html"), "<!doctype html>");
+  // The package sits beside packages/laya, whose project the build ships too.
+  const dir = join(root, "parlour");
+  mkdirSync(join(root, "laya"), { recursive: true });
+  for (const file of ["pyproject.toml", "uv.lock", "mcp_server.py"])
+    writeFileSync(join(root, "laya", file), "");
+  mkdirSync(join(dir, "src/server/web"), { recursive: true });
+  writeFileSync(join(dir, "src/server/web/index.html"), "<!doctype html>");
   // The Python workers are copied by the same step, so they have to be there too.
-  mkdirSync(join(root, "src/providers/decision"), { recursive: true });
-  writeFileSync(join(root, "src/providers/decision/laya-worker.py"), "");
-  mkdirSync(join(root, "src/providers/stt"), { recursive: true });
-  writeFileSync(join(root, "src/providers/stt/parakeet-worker.py"), "");
+  mkdirSync(join(dir, "src/providers/decision"), { recursive: true });
+  writeFileSync(join(dir, "src/providers/decision/laya-worker.py"), "");
+  mkdirSync(join(dir, "src/providers/stt"), { recursive: true });
+  writeFileSync(join(dir, "src/providers/stt/parakeet-worker.py"), "");
   // tsc has already written dist/server/ by the time the copy runs.
-  mkdirSync(join(root, "dist/server"), { recursive: true });
+  mkdirSync(join(dir, "dist/server"), { recursive: true });
 
   for (let build = 1; build <= 2; build++) {
-    execFileSync("sh", ["-c", steps.join(" && ")], { cwd: root, stdio: "pipe" });
-    assert.ok(existsSync(join(root, "dist/server/web/index.html")), `build ${build} has the page`);
-    assert.ok(!existsSync(join(root, "dist/server/web/web")), `build ${build} has no nested copy`);
+    execFileSync("sh", ["-c", steps.join(" && ")], { cwd: dir, stdio: "pipe" });
+    assert.ok(existsSync(join(dir, "dist/server/web/index.html")), `build ${build} has the page`);
+    assert.ok(!existsSync(join(dir, "dist/server/web/web")), `build ${build} has no nested copy`);
   }
 });
 

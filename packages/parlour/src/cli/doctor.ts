@@ -16,7 +16,10 @@ import { type Command, parseCli } from "./args.ts";
 import { formatChecks, printJson } from "./output.ts";
 import { describeState, parlourBin } from "./service.ts";
 
-const USAGE = ["parlour doctor [--json]   exit 1 when something it needs is broken"];
+const USAGE = [
+  "parlour doctor [--json]             exit 1 when something it needs is broken",
+  "parlour doctor --network [--json]   only whether macOS lets Parlour onto the local network",
+];
 
 /**
  * Checks every moving part and says which one is broken. They fail in ways
@@ -200,8 +203,11 @@ export const command: Command = {
   usage: USAGE,
 
   async run({ paths, argv }) {
-    const { values } = parseCli(argv, { json: { type: "boolean" } });
-    const checks = await diagnose(paths);
+    const { values } = parseCli(argv, { json: { type: "boolean" }, network: { type: "boolean" } });
+    // The network on its own is what the desktop app asks for before anything
+    // needs it: the question is what raises the macOS prompt, and the app asks
+    // it again until the prompt is answered, which the whole doctor is too slow for.
+    const checks = values.network ? [await localNetworkCheck()] : await diagnose(paths);
     const broken = checks.filter((check) => check.status === "fail").length;
     if (values.json) {
       printJson(checks);

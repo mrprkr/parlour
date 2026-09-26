@@ -35,7 +35,7 @@
   "scripts": {
     "dev": "node --experimental-strip-types --watch src/cli/main.ts start",
     "clean": "rm -rf dist",
-    "build": "pnpm clean && tsc -p tsconfig.build.json && mkdir -p dist/server/web dist/providers/decision dist/providers/stt && cp -R src/server/web/. dist/server/web/ && cp src/providers/decision/laya-worker.py dist/providers/decision/ && cp src/providers/stt/parakeet-worker.py dist/providers/stt/",
+    "build": "pnpm clean && tsc -p tsconfig.build.json && mkdir -p dist/server/web dist/providers/decision dist/providers/stt && cp -R src/server/web/. dist/server/web/ && cp src/providers/decision/laya-worker.py dist/providers/decision/ && cp src/providers/stt/parakeet-worker.py dist/providers/stt/ && mkdir -p dist/laya && cp ../laya/pyproject.toml ../laya/uv.lock ../laya/mcp_server.py dist/laya/",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
     "lint": "biome check ."

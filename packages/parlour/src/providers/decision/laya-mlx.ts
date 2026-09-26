@@ -24,7 +24,11 @@ import { defineProvider, type ProviderContext, registerProvider } from "../../co
 export const LayaMlxSchema = z.object({
   /** Hugging Face id or local path. Default is the English FP16 MLX checkpoint. */
   model: z.string().default("aac6fef/laya-mlx"),
-  python: z.string().default("python3"),
+  /**
+   * A Python that can import laya_mlx. Unset means the repository's own environment
+   * (packages/laya, made by `nx run laya:setup`) when running from a checkout, else python3.
+   */
+  python: z.string().optional(),
   dtype: z.enum(["float16", "float32"]).default("float16"),
   device: z.enum(["gpu", "cpu"]).default("gpu"),
   /** How long to wait for the worker to finish loading the checkpoint. */
@@ -158,7 +162,7 @@ export class LayaMlxDecisionModel implements DecisionModel {
         reject(error);
       };
 
-      const proc = spawn(this.#opts.python, [this.#workerPath], {
+      const proc = spawn(this.#opts.python ?? defaultPython(), [this.#workerPath], {
         stdio: ["pipe", "pipe", "pipe"],
         env: {
           ...process.env,
@@ -177,7 +181,7 @@ export class LayaMlxDecisionModel implements DecisionModel {
         proc.kill("SIGTERM");
         fail(
           new Error(
-            `Laya MLX did not become ready within ${this.#opts.loadTimeoutMs}ms. Is laya-mlx installed (pip install laya-mlx)?`,
+            `Laya MLX did not become ready within ${this.#opts.loadTimeoutMs}ms. Is laya-mlx installed (nx run laya:setup in a checkout, or pip install laya-mlx)?`,
           ),
         );
       }, this.#opts.loadTimeoutMs);
@@ -285,6 +289,15 @@ function defaultWorkerPath(): string {
   // Source: next to this file. Built: copied beside the compiled js.
   const here = dirname(fileURLToPath(import.meta.url));
   return join(here, "laya-worker.py");
+}
+
+/**
+ * From a checkout, source or built, this file sits four directories below packages/, where
+ * packages/laya holds the pinned laya-mlx environment. An npm install has no such directory.
+ */
+export function defaultPython(here = dirname(fileURLToPath(import.meta.url))): string {
+  const bundled = join(here, "..", "..", "..", "..", "laya", ".venv", "bin", "python");
+  return existsSync(bundled) ? bundled : "python3";
 }
 
 export function createLayaMlx(options: LayaMlxOptions, context: ProviderContext): LayaMlxDecisionModel {

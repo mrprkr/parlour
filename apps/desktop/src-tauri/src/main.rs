@@ -285,11 +285,18 @@ async fn microphone_check(device: Option<String>) -> Microphone {
 }
 
 /// Straight to the Privacy pane, for when the answer was no and the only way
-/// back is a checkbox in System Settings.
+/// back is a switch in System Settings. The window names the pane rather than
+/// passing the address, so it cannot open anything else.
 #[tauri::command]
-fn open_privacy_settings() {
+fn open_privacy_settings(pane: Option<String>) {
+    let anchor = match pane.as_deref() {
+        Some("local-network") => "Privacy_LocalNetwork",
+        _ => "Privacy_Microphone",
+    };
     let _ = Command::new("open")
-        .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+        .arg(format!(
+            "x-apple.systempreferences:com.apple.preference.security?{anchor}"
+        ))
         .spawn();
 }
 
@@ -324,9 +331,31 @@ async fn setup_status(state: State<'_, AppState>) -> Result<Readiness, String> {
 /// Installs everything that needs no answer, reporting as it goes. The work is
 /// `parlour init`, so the app and a terminal do the same thing.
 #[tauri::command]
-async fn run_setup(app: AppHandle, state: State<'_, AppState>, deps: bool) -> Result<bool, String> {
+async fn run_setup(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    deps: bool,
+    local_model: Option<String>,
+) -> Result<bool, String> {
     let settings = state.settings();
-    tauri::async_runtime::spawn_blocking(move || setup::run(&app, &settings, deps))
+    tauri::async_runtime::spawn_blocking(move || {
+        setup::run(&app, &settings, deps, local_model.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// A CLI command that reports as it goes under `--porcelain`, such as
+/// `models fetch` or `laya setup`, streamed into the same setup log as
+/// `init`. Nothing the `parlour` command cannot already run.
+#[tauri::command]
+async fn parlour_stream(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    args: Vec<String>,
+) -> Result<bool, String> {
+    let settings = state.settings();
+    tauri::async_runtime::spawn_blocking(move || setup::run_streamed(&app, &settings, &args))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -494,6 +523,7 @@ fn main() {
             host_name,
             setup_status,
             run_setup,
+            parlour_stream,
             install_cli,
             microphone_check,
             open_privacy_settings,
