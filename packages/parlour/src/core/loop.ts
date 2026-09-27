@@ -82,6 +82,7 @@ export async function runTurn(opts: {
     // Running them together costs the slowest rather than the sum, which is
     // the difference between two lights and one, and the results are still
     // appended in the order they were asked for.
+    const allowedToolNames = new Set(opts.tools.map((tool) => tool.name));
     const results = await Promise.all(
       completion.toolCalls.map((call) => {
         if (call.name === ESCALATE_TOOL) {
@@ -92,6 +93,12 @@ export async function runTurn(opts: {
           // to do instead of only what went wrong.
           log.debug("escalation asked for with no cloud model");
           return Promise.resolve(NO_CLOUD);
+        }
+        if (!allowedToolNames.has(call.name)) {
+          log.warn(`tool ${call.name} was not in the allowed list for this turn`);
+          return Promise.resolve(
+            `Tool ${call.name} is not available in this context. Available tools: ${[...allowedToolNames].join(", ") || "none"}.`,
+          );
         }
         log.debug("tool", call.name, call.args);
         return opts.registry.run(call.name, call.args);
