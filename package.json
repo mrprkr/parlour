@@ -30,7 +30,7 @@
     "release:version": "changeset version && node scripts/set-version.mjs --sync"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.13",
+    "@biomejs/biome": "^2.6.3",
     "@changesets/cli": "^3.0.3",
     "nx": "^23.2.1"
   }
