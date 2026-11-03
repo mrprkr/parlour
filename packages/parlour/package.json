@@ -51,7 +51,7 @@
     "onnxruntime-node": "1.21.0",
     "qrcode-generator": "^2.0.4",
     "ws": "^8.18.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@ai-sdk/provider": "^4.0.17",
